@@ -1,0 +1,116 @@
+---
+title: Routing
+description: How a backend maps method + path to code, plus path/query params, versioning and route design.
+minutes: 8
+level: junior
+---
+
+<Problem>
+A request arrives: `GET /users/42/orders?status=shipped&page=2`. Out of hundreds of handlers in your codebase, exactly one must run, and it needs `42`, `shipped` and `2` handed to it in a usable form. That's routing. It looks trivial, but URL design decisions made on day one live for years, because clients depend on them.
+</Problem>
+
+## What a router does
+
+A router is a lookup table from **(HTTP method, path pattern)** to **handler**:
+
+```text
+GET    /users              → listUsers
+POST   /users              → createUser
+GET    /users/:id          → getUser
+GET    /users/:id/orders   → listUserOrders
+DELETE /users/:id          → deleteUser
+```
+
+Internally most routers build a **trie (prefix tree)** of path segments so matching is fast regardless of how many routes exist. Static segments (`/users/me`) usually take priority over parameters (`/users/:id`). That's a common source of surprise when both exist.
+
+<MentalModel>
+Routing is a **building directory**. The method is *which elevator* (GET elevator, POST elevator), the path is *floor and room*. `/users/42` means "users floor, room 42". The directory doesn't care what happens inside the room; it just gets you there.
+</MentalModel>
+
+## Path params vs query params vs body
+
+| Where | Use for | Example |
+|---|---|---|
+| **Path params** | Identifying *which resource* | `/users/42/orders/7` |
+| **Query params** | Filtering, sorting, pagination, optional modifiers | `?status=shipped&sort=-createdAt&page=2` |
+| **Body** | The data you're creating/updating | `{"name": "Ada"}` on POST/PUT/PATCH |
+| **Headers** | Metadata about the request | auth, content type, idempotency key |
+
+```java
+@GetMapping("/users/{userId}/orders")
+List<OrderDto> list(@PathVariable long userId,
+                    @RequestParam(defaultValue = "ALL") Status status,
+                    @RequestParam(defaultValue = "0") int page) { ... }
+```
+
+A rule of thumb: if removing it changes **what thing** you're talking about, it's a path param. If it changes **how you view** the collection, it's a query param.
+
+## Designing good routes (REST style)
+
+- Use **nouns for resources**, methods for verbs: `POST /orders`, not `POST /createOrder`.
+- Use **plural collections**: `/orders`, `/orders/{id}`.
+- **Nest only for ownership**, and only one or two levels: `/users/{id}/orders` is fine; `/a/1/b/2/c/3/d` is not.
+- For actions that don't fit CRUD, a sub-resource verb is pragmatic: `POST /orders/{id}/cancel`.
+- Be consistent with casing (`kebab-case` paths, `camelCase` JSON is common).
+
+## Versioning
+
+Clients you don't control (mobile apps that never update) will call your API for years. Common strategies:
+
+- **URL versioning**: `/v1/orders`, `/v2/orders`. Explicit, easy to route and cache. Most common.
+- **Header versioning**: `Accept: application/vnd.shop.v2+json`. Cleaner URLs, harder to test in a browser.
+- **No versions, only additive changes**: never remove or change fields, only add. Works surprisingly far.
+
+Breaking changes include removing fields, renaming fields, changing types, and making optional fields required. Adding an optional field is not a breaking change.
+
+<Quiz
+  question="You want an endpoint that lists a user's orders, filtered to only shipped ones. Which design is most conventional?"
+  options={[
+    "POST /getShippedOrders with userId in the body",
+    "GET /users/42/orders?status=shipped",
+    "GET /users/42/orders/shipped/list",
+    "GET /orders/shipped/42",
+  ]}
+  answer={1}
+  explanation="The user and the collection identify the resource (path); the status is a filter on that collection (query). GET because it's a read."
+/>
+
+## Under the hood in Spring
+
+Spring's `DispatcherServlet` is the front controller. On startup it scans `@RequestMapping`/`@GetMapping` annotations and builds a `HandlerMapping`. Per request it finds the handler, resolves arguments (`@PathVariable`, `@RequestParam`, `@RequestBody`) and invokes the method. If nothing matches → `404`. If the path matches but the method doesn't → `405 Method Not Allowed`.
+
+<Tradeoffs
+  good={[
+    "Predictable resource-oriented routes are self-documenting",
+    "URL versioning makes breaking changes explicit and safe",
+    "Query params keep one endpoint flexible for filtering and paging",
+  ]}
+  bad={[
+    "Deep nesting couples URLs to your data model",
+    "Versioning means maintaining old versions longer than you'd like",
+    "Ambiguous routes (static vs param) cause confusing matches",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses correct methods, path vs query params, and consistent naming."
+  mid="Designs resource hierarchies and pagination/filtering conventions; avoids breaking changes."
+  senior="Plans API evolution and deprecation; designs routes that survive data model changes."
+  lead="Owns API guidelines (naming, versioning, deprecation policy) for the organization."
+/>
+
+<SeniorLens>
+URLs are a **public contract**. Seniors design them from the client's perspective (what resources exist?), not from the database's (what tables exist?). And they treat removing anything from a public API as a project with a deprecation window and usage metrics, not a quick PR.
+</SeniorLens>
+
+<KeyTakeaways>
+- Routing maps (method, path pattern) → handler, usually via a trie.
+- Path = which resource, query = how to filter/view, body = data, headers = metadata.
+- Nouns + HTTP methods; shallow nesting; consistent naming.
+- Version (or only add) to avoid breaking clients.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the routing episode of *Backend from First Principles*.
+- **[Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines)** and **[Google API Design Guide](https://cloud.google.com/apis/design)**.
+</GoDeeper>

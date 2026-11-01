@@ -1,0 +1,170 @@
+---
+section: Interview problems
+title: "LLD Interview: Approach + Parking Lot"
+description: How to tackle low-level design interviews, worked through on the classic parking lot problem.
+minutes: 14
+level: mid
+---
+
+<Problem>
+"Design a parking lot system." In 45 minutes, you're expected to produce clean classes, sensible relationships, extensible rules and working core logic, while talking through decisions. Candidates fail by jumping into code without clarifying, by drawing 30 classes nobody needs, or by producing a rigid design where adding "electric vehicle spots" means rewriting everything.
+</Problem>
+
+## The LLD approach
+
+1. **Clarify requirements** (5 min): actors, core use cases, constraints. Write them down.
+2. **Identify entities** (nouns) and **behaviors** (verbs).
+3. **Define relationships and responsibilities**: who owns what, who does what.
+4. **Spot variation points**: where will requirements change? Use patterns there (strategy, state, factory).
+5. **Write core classes/interfaces and key methods** in code; focus on the main flow.
+6. **Handle concurrency and edge cases** (two cars, one spot).
+7. **Walk through a scenario** end to end; discuss extensions.
+
+## 1. Requirements (clarified)
+
+- Multiple floors; spots of types: MOTORCYCLE, COMPACT, LARGE, EV.
+- Vehicles: motorcycle, car, truck, EV car. A vehicle fits certain spot types.
+- Entry: issue a ticket and assign the nearest suitable free spot. Exit: compute fee, take payment, free the spot.
+- Fees vary by vehicle type and duration (hourly with first-hour rate); likely to change.
+- Show free spot counts per type per floor.
+- Multiple entry gates concurrently.
+
+## 2–4. Entities, responsibilities, variation points
+
+```text
+ParkingLot (facade) ── has ──▶ Floor* ── has ──▶ ParkingSpot*
+     │ uses                                       (id, type, occupiedBy)
+     ├─ SpotAllocationStrategy  ← variation: nearest-first, by-floor, EV-priority
+     ├─ PricingStrategy         ← variation: hourly, weekend, dynamic
+     ├─ PaymentProcessor        ← variation: cash, card, UPI
+     └─ TicketRepository
+Vehicle (type, plate) · Ticket (id, vehicle, spot, entryTime, exitTime, status)
+```
+
+## 5. Core code
+
+```java
+enum SpotType { MOTORCYCLE, COMPACT, LARGE, EV }
+enum VehicleType {
+    MOTORCYCLE(Set.of(SpotType.MOTORCYCLE, SpotType.COMPACT, SpotType.LARGE)),
+    CAR(Set.of(SpotType.COMPACT, SpotType.LARGE)),
+    EV_CAR(Set.of(SpotType.EV, SpotType.COMPACT, SpotType.LARGE)),
+    TRUCK(Set.of(SpotType.LARGE));
+    final Set<SpotType> fits;
+    VehicleType(Set<SpotType> fits) { this.fits = fits; }
+}
+
+record Vehicle(String plate, VehicleType type) {}
+
+class ParkingSpot {
+    private final String id; private final SpotType type; private final int floor;
+    private Vehicle occupant;                                         // guarded by allocation lock
+    boolean isFree() { return occupant == null; }
+    void occupy(Vehicle v) { if (!isFree()) throw new IllegalStateException("spot taken"); occupant = v; }
+    void release() { occupant = null; }
+    // getters...
+}
+
+interface SpotAllocationStrategy { Optional<ParkingSpot> find(List<Floor> floors, Vehicle v); }
+
+class NearestFirstAllocation implements SpotAllocationStrategy {
+    public Optional<ParkingSpot> find(List<Floor> floors, Vehicle v) {
+        return floors.stream()
+            .flatMap(f -> f.spots().stream())
+            .filter(ParkingSpot::isFree)
+            .filter(s -> v.type().fits.contains(s.type()))
+            .findFirst();                                      // floors/spots pre-sorted by distance to entry
+    }
+}
+
+interface PricingStrategy { Money fee(Ticket t, Instant exit); }
+
+class HourlyPricing implements PricingStrategy {
+    private final Map<VehicleType, Money> firstHour, perHour;
+    public Money fee(Ticket t, Instant exit) {
+        long hours = Math.max(1, (long) Math.ceil(Duration.between(t.entryTime(), exit).toMinutes() / 60.0));
+        return firstHour.get(t.vehicle().type()).plus(perHour.get(t.vehicle().type()).times(hours - 1));
+    }
+}
+
+class ParkingLot {
+    private final List<Floor> floors;
+    private final SpotAllocationStrategy allocation;
+    private final PricingStrategy pricing;
+    private final PaymentProcessor payments;
+    private final Map<String, Ticket> activeTickets = new ConcurrentHashMap<>();
+    private final ReentrantLock allocationLock = new ReentrantLock();
+
+    public Ticket enter(Vehicle v) {
+        allocationLock.lock();                  // gates run concurrently: find + occupy must be atomic
+        try {
+            ParkingSpot spot = allocation.find(floors, v).orElseThrow(() -> new LotFullException(v.type()));
+            spot.occupy(v);
+            Ticket t = Ticket.issue(v, spot, Instant.now());
+            activeTickets.put(t.id(), t);
+            return t;
+        } finally { allocationLock.unlock(); }
+    }
+
+    public Receipt exit(String ticketId, PaymentMethod method) {
+        Ticket t = Optional.ofNullable(activeTickets.get(ticketId)).orElseThrow(InvalidTicket::new);
+        Money fee = pricing.fee(t, Instant.now());
+        payments.charge(method, fee);           // only free the spot after successful payment
+        t.close(Instant.now(), fee);
+        t.spot().release();
+        activeTickets.remove(ticketId);
+        return new Receipt(t, fee);
+    }
+}
+```
+
+## 6. Concurrency and edge cases
+
+- Two gates assigning the same spot → **atomic find-and-occupy** (single lock here; per-floor locks or `compareAndSet` on spot state for more throughput; in a real distributed system, a conditional DB update).
+- Payment fails → spot stays occupied, ticket stays active.
+- Lost ticket → lookup by plate, max-day fee policy.
+- Display boards → observers notified on occupy/release (Observer pattern), or counters per floor/type.
+
+## 7. Extensions to discuss
+
+EV charging billing (decorate pricing), reservations (new spot state RESERVED → State pattern), monthly passes (pricing strategy), multiple lots (ParkingLot per site + central service), persistence (repositories), sensors updating occupancy (events).
+
+<MentalModel>
+An LLD interview is like **designing a board game's rulebook and pieces**. You define the pieces (classes), what each can do (methods), the rules that must always hold (invariants), and which rules are likely to get "house rule" variations (strategies). A good design lets someone add a new house rule without reprinting the whole rulebook.
+</MentalModel>
+
+<Quiz
+  question="The interviewer adds: 'weekend rates are 50% off, and holidays have a flat fee.' With the design above, what changes?"
+  options={[
+    "Rewrite ParkingLot.exit()",
+    "Add new PricingStrategy implementations (or compose them) and select via configuration; ParkingLot is unchanged",
+    "Add a weekend flag to every Ticket",
+    "Create a WeekendParkingLot subclass",
+  ]}
+  answer={1}
+  explanation="Pricing was identified as a variation point and isolated behind a strategy. That's exactly the payoff interviewers want to see."
+/>
+
+<LevelTags
+  junior="Identifies entities and writes clean classes for the main flow."
+  mid="Isolates variation with strategies, handles concurrency of spot assignment, covers edge cases."
+  senior="Drives scope crisply, justifies every abstraction, discusses scaling to a distributed multi-lot system."
+  lead="Uses the same structured approach to guide team design sessions."
+/>
+
+<SeniorLens>
+The best LLD answers are **small and sharp**: a handful of well-named classes, 2–3 strategies at genuine variation points, explicit concurrency handling, and a confident walkthrough. Resist drawing every noun as a class. Interviewers reward judgment about what *not* to model.
+</SeniorLens>
+
+<KeyTakeaways>
+- Clarify → entities → responsibilities → variation points → core code → concurrency → walkthrough.
+- Strategies for allocation, pricing and payments keep the core stable.
+- Make find-and-occupy atomic; free spots only after payment.
+- Discuss extensions to show the design flexes.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[awesome-low-level-design](https://github.com/ashishps1/awesome-low-level-design)**: many problems with solutions.
+- **Grokking the Object Oriented Design Interview** (Educative).
+- **Refactoring.Guru:** strategy and state patterns.
+</GoDeeper>

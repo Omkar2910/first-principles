@@ -1,0 +1,90 @@
+---
+title: Consistent Hashing
+description: Distributing keys across a changing set of servers while moving as few keys as possible.
+minutes: 10
+level: senior
+---
+
+<Problem>
+You spread cache keys across 4 Redis nodes with `node = hash(key) % 4`. Traffic grows; you add a 5th node. Now `hash(key) % 5` gives a different answer for **~80% of keys**. Your cache hit rate collapses to near zero instantly, and the database gets flattened. The same problem hits sharded databases and partitioned services. **Consistent hashing** solves it: adding or removing a node moves only about `1/N` of the keys.
+</Problem>
+
+## The idea: a ring
+
+1. Hash the **servers** onto a circle of positions (e.g. 0 to 2³²).
+2. Hash each **key** onto the same circle.
+3. A key belongs to the **first server clockwise** from its position.
+
+When a server is added, it takes over only the keys between it and its predecessor. When one is removed, only its keys move to the next server. Everything else stays put.
+
+<HashRingSim />
+
+Try adding and removing servers with virtual nodes off, then on. Compare "keys moved" for consistent hashing vs `hash % N`, and look at how even the distribution is.
+
+<MentalModel>
+A **round table** with guests (servers) sitting at random seats and dishes (keys) placed around it. Each dish belongs to the next guest clockwise. When a new guest sits down, they only take the dishes between themselves and the previous guest. Nobody else at the table is disturbed. With `% N` hashing, adding one guest is like making everyone stand up and re-pick their seats.
+</MentalModel>
+
+## Virtual nodes
+
+With only a few servers on the ring, the gaps between them are uneven: one server may own 40% of the ring. And when a server leaves, **all** of its load goes to one neighbor.
+
+**Virtual nodes** fix both: each physical server is placed on the ring many times (100–200 positions, by hashing `server-1#0`, `server-1#1`, …). Load averages out, and a departing server's keys spread across many others. Virtual nodes also allow **weighting**: a bigger machine gets more virtual nodes.
+
+## Where it's used
+
+- **Distributed caches**: Memcached clients (ketama), Redis client-side sharding.
+- **Databases**: Cassandra and DynamoDB partition data across nodes on a token ring.
+- **Load balancers**: hash-based routing (Envoy ring hash / Maglev) for cache locality or sticky routing.
+- **CDNs**: mapping content to cache servers within a PoP.
+
+(Redis Cluster uses a related approach: 16,384 fixed **hash slots** assigned to nodes. Moving a slot moves only its keys. Same goal, simpler bookkeeping.)
+
+## Alternatives worth knowing
+
+- **Rendezvous (highest random weight) hashing**: for each key, compute `hash(key, server)` for every server and pick the highest. No ring, minimal movement, simple, O(N) per lookup.
+- **Jump consistent hash** (Google): tiny, fast, perfectly balanced, but servers can only be added/removed at the end (good for numbered shards).
+
+<Quiz
+  question="You have 10 cache servers using consistent hashing with virtual nodes, and one dies. Roughly what fraction of keys must be re-fetched?"
+  options={["~100%", "~50%", "~10%, only the dead server's keys, spread across the survivors", "0%"]}
+  answer={2}
+  explanation="Only keys that lived on the failed node move, about 1/N of them. Thanks to virtual nodes, those keys spread across many surviving servers rather than doubling one neighbor's load."
+/>
+
+<Tradeoffs
+  good={[
+    "Adding/removing nodes moves ~1/N of keys instead of nearly all",
+    "Virtual nodes give even load and weighted capacity",
+    "No central directory needed: any client can compute placement",
+  ]}
+  bad={[
+    "More complex than modulo hashing",
+    "Still uneven without enough virtual nodes",
+    "Doesn't solve hot keys: one hugely popular key still lands on one node",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows why hash % N breaks when N changes."
+  mid="Explains the ring, clockwise ownership and virtual nodes."
+  senior="Applies it to cache, shard and LB design; knows alternatives (hash slots, rendezvous) and hot-key limits."
+  lead="Recognizes where data placement strategy affects reliability and cost across systems."
+/>
+
+<SeniorLens>
+In interviews, consistent hashing is a means, not an end. Bring it up **when the design needs to add/remove nodes without reshuffling data** (distributed cache, sharded storage, partitioned workers), explain virtual nodes in one sentence, and immediately mention its blind spot: **hot keys**, which need separate handling (replication, local caching, key splitting).
+</SeniorLens>
+
+<KeyTakeaways>
+- Modulo hashing remaps most keys when N changes; consistent hashing remaps ~1/N.
+- Servers and keys share a hash ring; keys go to the next server clockwise.
+- Virtual nodes balance load and spread failover.
+- Used in caches, Cassandra/Dynamo, load balancers; hash slots and rendezvous hashing are cousins.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Karger et al., *Consistent Hashing and Random Trees*** (1997): the original paper.
+- **Amazon's *Dynamo* paper (2007)**: consistent hashing in a real database.
+- **Google, *A Fast, Minimal Memory, Consistent Hash Algorithm*** (Jump hash).
+</GoDeeper>

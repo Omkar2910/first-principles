@@ -1,0 +1,95 @@
+---
+section: Across all levels
+title: Promotions, Brag Documents and Visibility
+description: How promotion decisions are really made, and how to make your impact legible without self-promotion theater.
+minutes: 10
+level: mid
+---
+
+<Problem>
+You did great work all year: fixed a nasty production issue, mentored a new hire, led a migration. At promotion time, your manager writes "solid contributor, delivered features" because they forgot half of it, and the committee members have never heard of you. Promotion isn't only about doing the work. It's about **making the work visible and legible** to the people who decide.
+</Problem>
+
+## How promotions usually work
+
+At most mid-to-large companies:
+1. Your **manager** (often with you) writes a promotion case against the **next level's** expectations.
+2. Evidence: projects, impact, peer feedback, often specific examples of each competency.
+3. A **calibration** or **promotion committee** (managers/senior engineers, often not on your team) reviews cases across teams for consistency.
+4. Decision is based on whether you've been **consistently operating at the next level** for a sustained period (often 6+ months).
+
+Implications: committees only know what's **written down**; impact must be **clear to outsiders**; and your **manager is your advocate**, so equip them.
+
+<MentalModel>
+A promotion case is like a **legal case presented to a jury who wasn't there**. The jury (committee) can only judge the evidence in front of them. Great work without documentation is like a witness who never testifies. Your brag document is the evidence file your advocate (manager) brings to court.
+</MentalModel>
+
+## The brag document
+
+A running, private document where you log your work and its impact. **Update it weekly or biweekly**; memory fades fast.
+
+```markdown
+# Brag doc: 2026 H2
+
+## Goals this half
+- Grow toward Senior: lead a cross-team project; improve written design skills
+
+## Projects (with impact)
+- **Order events via outbox** (Aug–Oct), led design + implementation (design doc, ADR-014)
+  - Eliminated lost order events (was ~40/week → 0); unblocked analytics + loyalty teams
+  - Coordinated 3 teams; drove consumer migration
+- **Checkout latency**: p99 1.2s → 450ms by fixing N+1 + caching (dashboard link)
+
+## Production / operations
+- Incident commander for INC-231 (45 min mitigation); postmortem actions completed
+
+## Collaboration & mentoring
+- Mentored Ana through first on-call and first design doc
+- Reviewed ~120 PRs; wrote "Idempotency guide" (used by 4 teams)
+
+## Learning
+- Completed distributed systems track; ran a lunch-and-learn on Kafka
+
+## Feedback received
+- "Arjun's outbox doc was the clearest design doc I've reviewed this year." (Staff eng, payments)
+```
+
+Tips:
+- Write **impact, not activity**: numbers, before/after, who benefited. "Built X" < "Built X, which reduced Y by Z for team W."
+- Include the **glue work** (onboarding, docs, process improvements, incident follow-ups). It's real impact and often invisible.
+- Link **evidence**: docs, dashboards, PRs, messages of thanks.
+- Map items to your **ladder's competencies**.
+
+## Visibility without bragging
+
+- **Share work in progress and results**: short write-ups in team channels, demos, engineering all-hands.
+- **Write design docs and postmortems**; they're visible artifacts of senior-level thinking.
+- **Present at internal tech talks** or design reviews.
+- **Help other teams**; their leads become your peer feedback.
+- **Talk to your manager about promotion explicitly**: "I want to reach senior in the next 12 months. Where do you see gaps? What opportunities could demonstrate those skills?"
+
+## When it doesn't happen (yet)
+
+Ask for **specific, evidence-based feedback**: which competencies fell short, and what evidence would close the gap. Turn it into a plan with your manager. Sometimes the answer is scope: you need a bigger project, so ask for one.
+
+<Scenario
+  situation="Promotion cycle starts in 2 weeks. You haven't discussed it with your manager, and you have no notes about your work this year. What's the best move now (and for the future)?"
+  choices={[
+    { text: "Say nothing and hope your manager remembers everything", feedback: "Managers juggle many people; even supportive ones forget details. Unlikely to produce a strong case." },
+    { text: "Reconstruct your year from PRs, docs, tickets, incidents and messages into a concise impact summary mapped to the next level; meet your manager to discuss; then start a brag doc you update every two weeks", feedback: "You give your advocate the evidence they need now, and fix the process so next time is easy.", best: true },
+    { text: "Send a long list of every ticket you closed", feedback: "Activity lists without impact don't help a committee judge level. Synthesize into outcomes." },
+  ]}
+/>
+
+<KeyTakeaways>
+- Promotions recognize sustained next-level performance, judged from written evidence.
+- Keep a brag doc: impact with numbers, glue work, evidence links, mapped to competencies.
+- Make work visible through docs, demos and helping other teams.
+- Discuss promotion goals explicitly with your manager; turn feedback into a plan.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Julia Evans, *Get your work recognized: write a brag document*** (blog post and template).
+- **Tanya Reilly, *Being Glue***.
+- **Your company's promotion guidelines**: read them closely.
+</GoDeeper>

@@ -1,0 +1,137 @@
+---
+title: Distributed Transactions and Sagas
+description: Keeping data consistent across services. Two-phase commit, sagas, compensation, choreography vs orchestration.
+minutes: 13
+level: senior
+---
+
+<Problem>
+Placing an order now spans three services with three databases: **Order** (create order), **Payment** (charge card), **Inventory** (reserve stock). In a monolith, one `@Transactional` made it atomic. Now, if payment succeeds but inventory fails, you've charged a customer for an item you can't ship. There's no single database transaction that spans all three. How do you keep them consistent?
+</Problem>
+
+## Option 1: Two-phase commit (2PC)
+
+A **coordinator** runs a protocol across participants:
+
+```text
+Phase 1 (prepare): Coordinator → all: "Can you commit?"   Each participant locks resources, votes YES/NO
+Phase 2 (commit):  If all YES → "Commit!"   else → "Abort!"
+```
+
+It gives atomicity across resources, but:
+- **Blocking**: if the coordinator dies after prepare, participants hold locks indefinitely waiting.
+- **Latency**: multiple round trips with locks held.
+- **Availability**: every participant must be up; any one can stall the whole thing.
+- Most modern services, message brokers and SaaS APIs (Stripe!) **don't support XA/2PC** at all.
+
+2PC still lives inside some databases (e.g. distributed SQL like Spanner, using consensus to make the coordinator fault-tolerant), but across microservices it's generally avoided.
+
+## Option 2: Sagas
+
+A **saga** is a sequence of **local transactions**, each in one service. If a step fails, previously completed steps are undone by **compensating transactions**.
+
+```text
+1. Order:     create order (PENDING)          ↩ compensate: cancel order
+2. Payment:   charge card                     ↩ compensate: refund
+3. Inventory: reserve stock   ✗ FAILS
+   → run compensations in reverse: refund payment, cancel order
+```
+
+Sagas give up **isolation**: other transactions can see intermediate states (the order is visibly PENDING; the money was briefly charged). You design around that with **semantic locks** (status fields like `PENDING`), commutative updates and careful ordering (do the most-likely-to-fail or hardest-to-compensate steps first, e.g. reserve inventory before charging).
+
+<MentalModel>
+Booking a trip yourself: flight, hotel, car. There's no "book all three atomically" button. You book the flight, then the hotel; the car rental is sold out, so you **cancel the hotel and the flight** (compensations), maybe paying a cancellation fee. A saga is exactly that, automated, and it means some steps must be designed to be **cancellable**.
+</MentalModel>
+
+## Choreography vs orchestration
+
+**Choreography**: services react to each other's events; no central controller.
+
+```text
+Order ──OrderCreated──▶ Payment ──PaymentCaptured──▶ Inventory ──StockReserved──▶ Order (CONFIRMED)
+                                                             └──StockFailed──▶ Payment (refund) ──▶ Order (CANCELLED)
+```
+
+Loose coupling and simple for 2–3 steps, but the overall flow is **implicit**, scattered across services, and hard to see, debug or change.
+
+**Orchestration**: a central **orchestrator** (a service or workflow engine) tells each participant what to do and handles failures.
+
+```java
+// Pseudocode for an orchestrated saga (e.g. with Temporal)
+public void placeOrder(Order o) {
+    orders.create(o);
+    try {
+        inventory.reserve(o.items());
+        try {
+            payments.charge(o.payment(), idempotencyKey(o));
+        } catch (PaymentFailed e) {
+            inventory.release(o.items());       // compensate
+            throw e;
+        }
+        orders.confirm(o.id());
+    } catch (Exception e) {
+        orders.cancel(o.id());                  // compensate
+    }
+}
+```
+
+Explicit, testable, observable flow; the orchestrator is an extra component (but workflow engines like **Temporal**, **AWS Step Functions** or **Camunda** handle durability, retries and timers for you).
+
+Rule of thumb: choreography for simple, stable flows; orchestration once there are more than ~3 steps, branching or human/timeouts involved.
+
+## Making sagas robust
+
+- Every step and compensation must be **idempotent** (they will be retried).
+- Compensations must be able to **eventually succeed** (retry until they do; alert if stuck).
+- Use **timeouts** for steps waiting on external events (payment confirmation webhooks).
+- Persist saga state durably so a crash mid-saga can resume.
+- Some actions **can't be compensated** (an email sent, goods shipped). Put them last, after everything that can fail.
+
+<Quiz
+  question="In an order saga, which step should generally come LAST?"
+  options={[
+    "Reserve inventory",
+    "Charge the card",
+    "Ship the package / send the confirmation email (non-compensatable actions)",
+    "Create the order record",
+  ]}
+  answer={2}
+  explanation="Actions that can't be undone should happen only after every step that might fail has succeeded. Otherwise you'd need to 'un-ship' a package."
+/>
+
+<Tradeoffs
+  good={[
+    "Sagas: no distributed locks, services stay autonomous and available",
+    "Orchestration: explicit, observable, testable workflows",
+    "Choreography: loose coupling for simple flows",
+  ]}
+  bad={[
+    "No isolation: intermediate states are visible",
+    "Compensation logic is real business logic to design and test",
+    "Choreography becomes hard to follow; orchestration adds a central component",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows a DB transaction can't span multiple services."
+  mid="Implements simple choreographed flows with idempotent handlers and compensations."
+  senior="Designs sagas: step ordering, compensations, semantic locks, orchestration with a workflow engine."
+  lead="Chooses service boundaries to minimize sagas in the first place, and standardizes workflow tooling."
+/>
+
+<SeniorLens>
+The best saga is the one you don't need. If two pieces of data must change atomically all the time, that's a strong hint they belong in **the same service and database**. Seniors draw service boundaries around transactional consistency needs, and reach for sagas only where business processes truly span domains.
+</SeniorLens>
+
+<KeyTakeaways>
+- 2PC gives atomicity but is blocking, slow and unsupported across most services.
+- Sagas = local transactions + compensations; they sacrifice isolation.
+- Choreography (events) for simple flows; orchestration (workflow engine) for complex ones.
+- Idempotent steps, durable state, non-compensatable steps last.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Chris Richardson, *Microservices Patterns***, saga chapter, and **[microservices.io/patterns/data/saga](https://microservices.io/patterns/data/saga.html)**.
+- **Garcia-Molina & Salem, *Sagas* (1987)**: the original paper, short.
+- **[Temporal docs](https://docs.temporal.io/)**: durable execution for orchestration.
+</GoDeeper>

@@ -1,0 +1,110 @@
+---
+title: DNS: The Internet's Phone Book
+description: How names become IP addresses, record types you'll configure, and why "it's always DNS".
+minutes: 9
+level: junior
+---
+
+<Problem>
+You migrate your API to a new load balancer and update the DNS record. Half your users hit the new one, half still hit the old one, for hours. Or: a service can't reach `payments.internal` after a deploy, and everything else looks healthy. DNS is invisible when it works and baffling when it doesn't. There's a reason "it's always DNS" is an SRE meme.
+</Problem>
+
+## What DNS does
+
+DNS maps **names** to **records**, most commonly an IP address. It's a globally distributed, heavily cached, hierarchical database.
+
+<MentalModel>
+Asking for directions in an unfamiliar city. You ask a local guide (the **recursive resolver**). If they don't know, they ask the national tourism office (**root**), which says "for .com addresses, ask the .com office" (**TLD server**), which says "for shop.com, ask their own receptionist" (**authoritative nameserver**), who gives the exact address. The guide remembers the answer for a while (**TTL**) so the next person gets it instantly.
+</MentalModel>
+
+## Resolution, step by step
+
+```text
+Browser cache → OS cache → Recursive resolver (ISP, 8.8.8.8, VPC resolver)
+                                 │ cache miss
+                                 ├─→ Root server:        "ask .com servers"
+                                 ├─→ .com TLD server:    "ask ns1.shop-dns.com"
+                                 └─→ Authoritative NS:   "api.shop.com = 203.0.113.10, TTL 300"
+```
+
+Every layer caches. A cold lookup might take 50–100 ms; a cached one is effectively free.
+
+## Record types you'll actually use
+
+| Record | Maps | Example / use |
+|---|---|---|
+| **A** | name → IPv4 | `api.shop.com → 203.0.113.10` |
+| **AAAA** | name → IPv6 | same, for IPv6 |
+| **CNAME** | name → another name | `www.shop.com → shop.com`, `cdn.shop.com → d123.cloudfront.net` |
+| **ALIAS / ANAME** | apex name → another name (provider feature) | `shop.com → my-lb.aws.com` (CNAME not allowed at the root) |
+| **MX** | domain → mail servers | email delivery |
+| **TXT** | arbitrary text | domain verification, SPF/DKIM email auth |
+| **NS** | zone → its nameservers | delegation |
+| **SRV** | service → host + port | some service discovery systems |
+
+## TTL: the knob that bites
+
+The **TTL** (time to live, in seconds) says how long resolvers may cache an answer.
+
+- **Long TTL** (hours/days): fewer lookups, faster, but changes propagate slowly.
+- **Short TTL** (30–60 s): quick failover and migrations, more query load and slightly more latency.
+
+The pro move for migrations: **lower the TTL a day before**, do the switch, then raise it again. And remember some clients (notably older JVMs and some libraries) cache DNS longer than the TTL. Java's `networkaddress.cache.ttl` setting has bitten many teams during failovers.
+
+<Quiz
+  question="Your DNS record has TTL 86400 (24h). You need to move traffic to a new IP in an emergency. What happens after you update the record?"
+  options={[
+    "All users switch within seconds",
+    "Users switch gradually over up to ~24 hours as caches expire",
+    "Nobody switches until you restart the DNS server",
+    "DNS ignores TTL for emergencies",
+  ]}
+  answer={1}
+  explanation="Every resolver that cached the old answer keeps using it until its TTL expires. That's why critical endpoints use short TTLs, or sit behind a stable load balancer IP / anycast address that never changes."
+/>
+
+## DNS inside your infrastructure
+
+DNS isn't just for the public internet. Inside clusters, it's the primary **service discovery** mechanism:
+- Kubernetes gives every Service a name like `orders.default.svc.cluster.local`.
+- AWS has private hosted zones for internal names.
+- Cloud load balancers give you a DNS name (not a fixed IP) because their IPs change as they scale.
+
+DNS-based load balancing (returning multiple A records, or different answers per region via **GeoDNS**/latency-based routing) is how global traffic gets steered to the nearest region.
+
+<Tradeoffs
+  good={[
+    "Massively scalable thanks to hierarchy and caching",
+    "Decouples names from IPs, so servers can move without clients changing",
+    "Enables geo-routing and simple failover",
+  ]}
+  bad={[
+    "Caching makes changes slow and unpredictable to propagate",
+    "Clients may ignore TTLs or cache too long",
+    "A DNS outage makes healthy services unreachable",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows A vs CNAME and that DNS answers are cached for the TTL."
+  mid="Plans DNS changes (lower TTL first), uses dig/nslookup to debug, understands internal service discovery names."
+  senior="Designs failover and multi-region routing with DNS, knows its limits (client caching) and when to prefer anycast or LB-level failover."
+  lead="Owns DNS hygiene: who can change records, how changes are reviewed, and runbooks for DNS-related incidents."
+/>
+
+<SeniorLens>
+Rule of thumb: **never make DNS changes the critical path of failover if you can avoid it**. Put a stable entry point (load balancer, anycast IP, global accelerator) in front and fail over *behind* it, where you control timing. When you must use DNS, short TTLs plus health-checked records give you minutes, not hours.
+</SeniorLens>
+
+<KeyTakeaways>
+- DNS resolves names through root → TLD → authoritative servers, with caching at every step.
+- A, CNAME, ALIAS, MX, TXT are the records you'll touch most.
+- TTL trades propagation speed for lookup load; lower it before migrations.
+- Inside clusters, DNS is how services find each other.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[How DNS works (comic)](https://howdns.works/)**: a gentle visual intro.
+- **Julia Evans, *How DNS Works*** zine and the **[Mess with DNS](https://messwithdns.net/)** playground.
+- **Cloudflare Learning Center: What is DNS?**
+</GoDeeper>

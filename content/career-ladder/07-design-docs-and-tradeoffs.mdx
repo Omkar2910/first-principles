@@ -1,0 +1,101 @@
+---
+section: Level 2 · Mid → Senior (SDE2 → SDE3)
+title: "Mid → Senior: Design Docs and Tradeoff Thinking"
+description: Writing design docs that drive decisions, and reasoning about tradeoffs like a senior engineer.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Mid-level engineers design features. Senior engineers design **systems**, often with several viable approaches, incomplete information and stakeholders who disagree. The skill that unlocks this is **structured tradeoff thinking**, and the tool that makes it visible and scalable is the **design doc**. Many promotion cases to senior hinge on "led the design of X". That's this lesson.
+</Problem>
+
+## Tradeoff thinking
+
+There are no best solutions, only tradeoffs relative to goals. Senior reasoning sounds like:
+
+> "Option A (sync API call) is simpler and gives immediate consistency, but couples checkout availability to the loyalty service. Option B (event) decouples them at the cost of a few seconds' delay in points showing up. Since checkout availability is our top priority and nobody needs points instantly, I recommend B."
+
+The pattern: **goals → options → how each option scores against the goals → recommendation → what would change our mind**.
+
+Common axes: consistency vs availability, latency vs cost, simplicity vs flexibility, build vs buy, speed now vs maintainability later, reversible vs irreversible decisions.
+
+**Reversibility** is a powerful lens (Amazon's "one-way vs two-way doors"): reversible decisions should be made quickly by small groups; irreversible ones (data models, public APIs, vendor lock-in) deserve rigor.
+
+<MentalModel>
+A design doc is an **architect's proposal before construction**. It's far cheaper to move a wall on paper than after the concrete is poured. The proposal shows the plan, the alternatives considered, why this one was chosen, and the risks, so others can spot the problem you missed while it still costs nothing to fix.
+</MentalModel>
+
+## Anatomy of a design doc
+
+```markdown
+# Title: Async loyalty points via order events
+Author · Reviewers · Status (Draft / In review / Approved) · Last updated
+
+## Context & problem
+What's happening, why it matters now, with data. (Checkout p99 +400ms and 0.3% failures
+caused by synchronous loyalty calls during loyalty-service incidents.)
+
+## Goals / Non-goals
+Goals: checkout must not depend on loyalty availability; points visible within 1 min.
+Non-goals: redesigning the points calculation; real-time points in the checkout UI.
+
+## Proposed design
+Architecture, data flow, APIs, data model changes, diagrams. Enough detail to build and review.
+
+## Alternatives considered
+Option B (retry + circuit breaker on sync call), Option C (nightly batch). Why not chosen.
+
+## Tradeoffs, risks & mitigations
+Eventual consistency (UI shows "points pending"), duplicate events → idempotent consumer, ...
+
+## Operational concerns
+Monitoring, alerts, SLOs, failure modes, rollout & rollback plan, migration/backfill.
+
+## Security & privacy · Cost
+
+## Open questions
+## Timeline / milestones
+```
+
+## Writing tips
+
+- **Lead with the problem and the recommendation.** Busy readers should get it in the first paragraph.
+- **Right-size it**: 1–2 pages for a medium feature; longer only for big, irreversible decisions.
+- **Use data** (metrics, estimates) rather than adjectives.
+- **Show the alternatives honestly**; a doc with no alternatives looks like a decision looking for approval.
+- **Write for skimmers**: headings, bullets, diagrams, tables.
+- **Circulate early drafts** to key reviewers 1:1 before a big review meeting. Fewer surprises, better feedback.
+- **Record the decision** and keep the doc as history; link it from code and tickets.
+
+## Running a design review
+
+- Send the doc ahead; ask reviewers to comment async.
+- In the meeting, focus on **open questions and disagreements**, not reading the doc aloud.
+- Decide explicitly ("we're going with B; Ana owns the follow-up on X"), or define what information is needed to decide.
+
+<Scenario
+  situation="In a design review, a respected staff engineer strongly prefers a different approach than your recommendation. You still believe yours is better for your goals. What's the senior move?"
+  choices={[
+    { text: "Defer immediately; they're more senior", feedback: "Seniority isn't an argument. You might be right, and your reasoning deserves a hearing." },
+    { text: "Restate the goals, compare both options against them with data, acknowledge where their option is stronger, and propose a way to decide (e.g. a quick spike measuring the key uncertainty)", feedback: "This turns opinion into evaluation against shared goals, shows you listened, and gives a path to resolution. It's exactly how senior engineers handle technical disagreement.", best: true },
+    { text: "Argue harder until they give up", feedback: "Winning the argument isn't the goal; reaching the best decision with buy-in is." },
+  ]}
+/>
+
+<SeniorLens>
+The point of a design doc isn't the document; it's **better decisions and alignment**. Seniors measure success by questions like: did reviewers find the issues before we built it? Do the teams affected agree with the plan? Six months later, can someone understand why we did this? Writing clearly is one of the highest-leverage skills an engineer can build.
+</SeniorLens>
+
+<KeyTakeaways>
+- Tradeoff thinking: goals → options → evaluation → recommendation → what would change our mind.
+- Weigh reversibility: move fast on two-way doors, carefully on one-way doors.
+- Design docs: problem, goals/non-goals, design, alternatives, risks, operations, open questions.
+- Lead with the recommendation; use data; review async; record decisions.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Malte Ubl, *Design Docs at Google*** (industrialempathy.com).
+- **Will Larson, *Writing an engineering strategy*** and *Staff Engineer* chapters on design.
+- Templates for this and more: Career lesson 20.
+</GoDeeper>

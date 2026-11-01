@@ -1,0 +1,114 @@
+---
+title: Designing LLM-Powered Systems
+description: Gateways, model routing, caching, streaming, cost and latency engineering, and reliability for AI features at scale.
+minutes: 13
+level: senior
+---
+
+<Problem>
+Your AI feature is a hit. Now it has 50,000 users, costs $40,000 a month, has a p95 latency of 12 seconds, fails whenever the provider has a hiccup, and three teams are each calling LLM APIs differently with keys in their configs. Building **production LLM systems** is mostly classic backend engineering (gateways, caching, queues, retries, observability) applied to a new kind of dependency that is **slow, expensive, non-deterministic and rate-limited**.
+</Problem>
+
+## The LLM as a dependency
+
+Treat the model API like any critical external dependency, with special properties:
+- **Latency**: seconds, dominated by output tokens. Users need **streaming**.
+- **Cost**: per token, and large contexts are expensive. Cost is a design constraint.
+- **Rate limits**: tokens/requests per minute per key/organization.
+- **Variability**: outputs differ; providers have incidents; models get deprecated.
+
+## Reference architecture
+
+```text
+Clients ──▶ Your API / BFF ──▶ LLM Gateway (internal service or proxy)
+                                 ├─ auth, per-team keys & quotas, budget alerts
+                                 ├─ routing: task → model tier; fallback provider/model on errors
+                                 ├─ caching: provider prompt caching + response cache for repeat queries
+                                 ├─ retries w/ backoff on 429/5xx, timeouts, circuit breaker
+                                 ├─ PII redaction / guardrails (in & out)
+                                 └─ logging, tracing, token & cost metrics (per feature/team)
+                              ──▶ Model providers (multiple)
+          Retrieval (vector + keyword) · Tools/MCP servers · Eval & monitoring pipeline
+```
+
+<Flow nodes={["App", "LLM gateway", "Router", "Cache", "Model provider(s)"]} caption="Centralize keys, quotas, routing, caching, retries and observability in one place." />
+
+## Cost engineering
+
+<LlmCostCalculator />
+
+Levers, roughly in order of impact:
+1. **Context size**: retrieve fewer, better chunks; summarize long histories; don't send what isn't needed.
+2. **Prompt caching**: providers can cache a long, stable prompt prefix (system prompt, tool definitions, documents) and bill cached reads at a large discount with lower latency. Structure prompts so the **stable part comes first** and the variable part last.
+3. **Model routing**: use smaller, faster models for simple tasks (classification, extraction, routing) and the most capable models only where they're needed. Evals tell you where the cheaper model is good enough.
+4. **Output length**: ask for concise outputs; set max tokens.
+5. **Batch APIs** for offline workloads (often discounted), and response caching for repeated identical queries.
+
+## Latency engineering
+
+- **Stream tokens** to the UI (SSE) so users see progress immediately; time-to-first-token is what users feel.
+- **Parallelize** independent calls (retrieve and classify concurrently).
+- Smaller models for intermediate steps; fewer sequential round trips in workflows.
+- Prompt caching also reduces time-to-first-token for long prompts.
+- Move non-interactive work to **async jobs** (summaries generated after upload, not on page load).
+
+## Reliability
+
+- **Timeouts** appropriate to generation length; **retries** with backoff on 429/5xx (idempotent operations only).
+- **Fallbacks**: alternate model/provider, cached answer, or graceful degradation ("AI summary unavailable") so the core product works without the AI feature.
+- **Queue + workers** for bulk processing to respect rate limits.
+- **Validate outputs** (schemas, business rules) before acting on them.
+- Pin model versions; run evals before upgrades; track deprecation dates.
+
+## Observability for AI
+
+Log/trace per request: prompt version, model, token counts (input/cached/output), latency (TTFT and total), cost, tool calls, retrieval results, and quality signals (user feedback, judge scores). Attribute cost per feature/team/customer. That's how you find the feature quietly burning 60% of the budget.
+
+<Quiz
+  question="A support assistant sends a 6,000-token system prompt (policies + tool definitions) followed by the user's message on every request. What's the highest-leverage cost and latency optimization?"
+  options={[
+    "Switch providers",
+    "Prompt caching: keep the stable 6,000-token prefix identical and first, so it's cached and billed at a discount with faster time-to-first-token",
+    "Remove the policies",
+    "Increase max output tokens",
+  ]}
+  answer={1}
+  explanation="A large, stable prefix repeated on every call is the ideal case for prompt caching, which cuts cost and latency without changing behavior."
+/>
+
+<Tradeoffs
+  good={[
+    "Gateway centralizes keys, quotas, routing, caching and observability",
+    "Routing and caching cut costs dramatically",
+    "Streaming and async patterns make slow models feel fast",
+  ]}
+  bad={[
+    "Gateway is another critical component to run",
+    "Routing to cheaper models needs evals to avoid quality loss",
+    "Caching and fallbacks add complexity and potential staleness",
+  ]}
+/>
+
+<LevelTags
+  junior="Calls LLM APIs with timeouts, streaming and structured outputs."
+  mid="Implements caching, retries, fallbacks, cost/latency metrics for a feature."
+  senior="Designs the LLM platform: gateway, routing, prompt caching strategy, async pipelines, cost attribution."
+  lead="Owns AI infrastructure strategy, provider relationships, budgets and governance."
+/>
+
+<SeniorLens>
+Seniors design AI features so **the product survives the model failing**: degraded modes, async processing, cached results. And they put unit economics on the table early: "$0.03 per conversation × 2M conversations/month = $60k; with caching and routing, $15k." That number shapes the feature as much as any UX decision.
+</SeniorLens>
+
+<KeyTakeaways>
+- Treat LLMs as slow, costly, rate-limited, variable dependencies.
+- An LLM gateway centralizes auth, quotas, routing, caching, retries and observability.
+- Biggest cost levers: context size, prompt caching, model routing, output length, batching.
+- Stream for perceived latency; async for non-interactive work; degrade gracefully.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic docs:** prompt caching, streaming, batch processing, rate limits.
+- **Chip Huyen, *AI Engineering*** (O'Reilly).
+- **Eugene Yan:** *Patterns for Building LLM-based Systems & Products*.
+</GoDeeper>

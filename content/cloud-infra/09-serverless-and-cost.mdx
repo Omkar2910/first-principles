@@ -1,0 +1,101 @@
+---
+title: Serverless and Cloud Cost Engineering
+description: When functions and fully managed services shine, their sharp edges, and how to design for cost.
+minutes: 10
+level: senior
+---
+
+<Problem>
+A team runs 12 always-on servers for an internal tool used 2 hours a day. Another team moved a high-traffic API to Lambda and their bill tripled. A third discovers a NAT gateway is their largest line item. **Serverless** can be wonderfully cheap and simple, or the wrong tool. And in the cloud, **cost is an architectural property** you design, not an accident you discover.
+</Problem>
+
+## What "serverless" means
+
+You deploy code or use a service without managing servers; it **scales automatically (including to zero)** and you **pay per use**. Examples: Lambda/Cloud Functions, Cloud Run/Fargate (serverless containers), DynamoDB on-demand, S3, SQS, EventBridge, Step Functions, API Gateway.
+
+## Where it shines
+
+- **Spiky or low/unpredictable traffic**: internal tools, webhooks, cron jobs, prototypes.
+- **Event-driven glue**: "when a file lands in S3, generate a thumbnail"; "when a message arrives, process it".
+- **Scale-to-zero** environments (preview/dev environments).
+- Small teams that want minimal operations.
+
+## Sharp edges
+
+- **Cold starts**: the first request to a new instance waits for initialization (JVM especially; mitigate with SnapStart, GraalVM native images, provisioned concurrency, or lighter runtimes).
+- **Limits**: execution time (Lambda max 15 min), payload sizes, concurrency quotas.
+- **Downstream overload**: 1,000 concurrent functions can open 1,000 DB connections. Use RDS Proxy/pools and concurrency limits.
+- **Cost at sustained high load**: per-request pricing beats servers at low utilization, but **steady heavy traffic is usually cheaper on containers/VMs**.
+- **Local testing and observability** take extra effort; logic spread across many functions can become hard to follow.
+
+<MentalModel>
+Serverless is **ride-hailing**; servers are **owning a car**. For occasional trips, ride-hailing is cheaper and you never think about maintenance. If you drive 4 hours every day, owning a car wins on cost, though now you handle insurance and oil changes. Many people use both, depending on the trip.
+</MentalModel>
+
+## Cost engineering: the main levers
+
+| Driver | What to do |
+|---|---|
+| **Idle capacity** | Autoscaling, scale-to-zero for non-prod, shut down dev at night |
+| **Over-provisioning** | Right-size from real utilization (most instances run at 10–20% CPU) |
+| **Commitment discounts** | Savings Plans / Reserved Instances for steady baseline load |
+| **Spot / preemptible** | Batch jobs, CI runners, stateless workers (up to ~70–90% cheaper) |
+| **Data transfer** | Watch egress to internet, cross-region and cross-AZ traffic; use CDNs and VPC endpoints |
+| **Storage** | Lifecycle policies (S3 → Infrequent Access → Glacier), delete orphaned snapshots/volumes |
+| **Observability costs** | Logs and metrics cardinality can explode; sample, set retention, drop noise |
+| **Managed service pricing models** | On-demand vs provisioned (DynamoDB), per-request vs per-hour |
+
+**FinOps** practices: tag every resource with owner/service/env, show teams their own costs, set budgets and anomaly alerts, and review cost in design docs ("this design costs ~$X/month at expected load").
+
+## Unit economics
+
+Track **cost per business unit**: cost per order, per active user, per 1,000 API calls. It tells you whether growth is efficient and makes cost a product conversation ("this feature costs $0.02 per use in LLM calls").
+
+<Quiz
+  question="An API handles a steady ~2,000 requests/second, 24/7, on Lambda. The bill is high. What's usually the better fit?"
+  options={[
+    "More Lambda memory",
+    "Containers (ECS/EKS/Cloud Run with min instances) on right-sized, committed capacity; steady high utilization favors provisioned compute",
+    "Moving to a different region",
+    "Adding a CDN to POST requests",
+  ]}
+  answer={1}
+  explanation="Per-invocation pricing is great for spiky or low traffic. At steady high load, always-on containers with savings plans are typically much cheaper per request."
+/>
+
+<Tradeoffs
+  good={[
+    "Serverless: no servers to manage, automatic scaling, pay-per-use",
+    "Cost engineering: same product for a fraction of the spend",
+    "Unit economics connect engineering to business outcomes",
+  ]}
+  bad={[
+    "Serverless: cold starts, limits, cost at scale, harder local dev",
+    "Cost optimization takes engineering time and can add complexity",
+    "Over-optimizing early can slow product delivery",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows serverless pay-per-use vs always-on servers; turns off unused resources."
+  mid="Chooses serverless for event-driven/spiky work; handles cold starts and connection limits."
+  senior="Estimates cost in designs, right-sizes, uses spot/commitments, designs data transfer efficiently."
+  lead="Builds FinOps culture: tagging, showback, budgets, unit economics in planning."
+/>
+
+<SeniorLens>
+Seniors include a **cost section in every design doc**: expected monthly cost at launch and at 10× scale, the biggest cost drivers, and how cost scales with usage. It's frequently the section leadership reads most carefully, and it catches designs where cost grows faster than revenue.
+</SeniorLens>
+
+<KeyTakeaways>
+- Serverless = no servers, auto-scale, pay per use; great for spiky and event-driven work.
+- Watch cold starts, limits, downstream connections and cost at steady high load.
+- Main cost levers: idle, right-sizing, commitments, spot, data transfer, storage tiers, observability.
+- Track unit economics; put cost in design docs.
+</KeyTakeaways>
+
+<GoDeeper>
+- **AWS Well-Architected:** Cost Optimization and Serverless Lens.
+- **[FinOps Foundation](https://www.finops.org/)** framework.
+- **Yan Cui (theburningmonk)** blog on serverless patterns and pitfalls.
+</GoDeeper>

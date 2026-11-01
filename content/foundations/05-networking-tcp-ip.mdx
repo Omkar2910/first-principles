@@ -1,0 +1,117 @@
+---
+title: "Networking: IP, TCP and UDP"
+description: How bytes actually get from one machine to another, and why TCP's guarantees shape backend performance.
+minutes: 12
+level: junior
+---
+
+<Problem>
+"Connection reset by peer." "Connection timed out." "Too many open files." "Address already in use." These errors show up in every backend engineer's life, and they're all networking. Beyond debugging, design questions like *"should this be TCP or UDP?"*, *"why is the first request slow?"* and *"why does the load balancer need health checks?"* all come back to how the network layers work.
+</Problem>
+
+## Layers: each one solves one problem
+
+Networking is built as a stack. Each layer relies on the one below and hides its details from the one above.
+
+| Layer | Job | Examples | Addresses by |
+|---|---|---|---|
+| Application | What the bytes *mean* | HTTP, gRPC, DNS, SMTP | URLs, methods |
+| Transport | Reliable (or fast) delivery between *programs* | TCP, UDP, QUIC | **Port** (e.g. 443) |
+| Network | Routing packets between *machines* across networks | IP (v4, v6) | **IP address** |
+| Link | Moving frames on one physical network | Ethernet, Wi-Fi | MAC address |
+
+<MentalModel>
+Sending a letter. **IP** is the postal system: it gets an envelope to the right *building* (IP address) but might lose it, delay it or deliver two letters out of order. **The port** is the *apartment number*: which program inside the building gets it. **TCP** is a careful assistant who numbers every page, waits for confirmation of each, resends lost ones and reassembles them in order. **UDP** is just dropping postcards in the mailbox: fast, no confirmation.
+</MentalModel>
+
+## IP: best-effort delivery
+
+IP splits data into **packets** (~1500 bytes each) and routes each one independently through routers toward the destination IP. IP promises nothing: packets may be **dropped** (congested router), **reordered** (took different paths) or **duplicated**.
+
+Some IP facts you'll use constantly:
+- **Private ranges** (`10.x`, `172.16–31.x`, `192.168.x`) aren't routable on the internet; your VPC uses them.
+- **NAT** lets many private machines share one public IP (your home router, a cloud NAT gateway).
+- `127.0.0.1` / `localhost` is the machine itself. `0.0.0.0` in a server config means "listen on all interfaces". This is why your Docker container needs it.
+
+## TCP: a reliable byte stream
+
+TCP turns unreliable packets into a reliable, ordered **stream of bytes** between two programs. It adds:
+
+1. **Connection setup**: the three-way handshake (`SYN`, `SYN-ACK`, `ACK`), costing 1 round trip.
+2. **Sequence numbers + acknowledgements**: the receiver confirms what arrived; the sender retransmits what didn't.
+3. **Ordering**: out-of-order packets are buffered and reassembled.
+4. **Flow control**: the receiver says how much it can buffer, so a fast sender can't overwhelm a slow receiver.
+5. **Congestion control**: the sender starts slow (*slow start*) and ramps up, backing off when it detects loss. New connections are therefore slower than warmed-up ones.
+
+The costs: handshake latency, and **head-of-line blocking**. If packet #3 is lost, packets #4–#10 sit in a buffer until #3 is retransmitted, even if they're unrelated data.
+
+## UDP: just send it
+
+UDP adds only ports and a checksum on top of IP. No handshake, no retransmission, no ordering. Use it when **late data is worthless** (live video, voice, game state) or when you'll build your own reliability on top. DNS uses UDP for small queries. **QUIC** (the basis of HTTP/3) is built on UDP precisely to escape TCP's head-of-line blocking and do faster handshakes.
+
+<Quiz
+  question="A multiplayer game sends player positions 30 times a second. Packet 41 is lost. What should happen?"
+  options={[
+    "Retransmit packet 41 before showing packet 42 (TCP behavior)",
+    "Ignore it; packet 42 already has a newer position (UDP behavior)",
+    "Close the connection and reconnect",
+    "Pause the game",
+  ]}
+  answer={1}
+  explanation="Stale position data is useless once a newer update exists. TCP would hold back fresh data waiting for the stale packet, adding lag. That's exactly the head-of-line blocking UDP avoids."
+/>
+
+## Sockets and ports in practice
+
+A **socket** is the OS handle for one end of a connection. A TCP connection is uniquely identified by the 4-tuple **(client IP, client port, server IP, server port)**. Your server *listens* on one port (8080) but can hold thousands of connections, each with a different client IP and port pair.
+
+Every socket is a **file descriptor**. That's why "Too many open files" often means *too many connections*, and why the `ulimit` setting matters on busy servers.
+
+**Connection reuse** is the big performance lever: opening a TCP+TLS connection costs 2 round trips and starts in slow-start. That's why HTTP keep-alive, **DB connection pools** (HikariCP), and **HTTP client pools** exist. Creating a new `HttpClient` or DB connection per request is a classic performance bug.
+
+```java
+// ❌ New connection pool per call: handshake every time, sockets pile up
+String fetch(String url) {
+    return HttpClient.newHttpClient().send(...).body();
+}
+
+// ✅ One shared client for the app: connections are pooled and reused
+private static final HttpClient CLIENT = HttpClient.newHttpClient();
+```
+
+<Tradeoffs
+  good={[
+    "TCP: reliable, ordered, congestion-aware; right for almost all backend traffic",
+    "UDP: minimal latency, no head-of-line blocking, good for real-time data",
+    "Layering: you can change Wi-Fi to fiber without touching HTTP",
+  ]}
+  bad={[
+    "TCP: handshake cost, slow start, head-of-line blocking",
+    "UDP: you handle loss, ordering and congestion yourself",
+    "Each connection consumes a file descriptor and memory on both ends",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows IP vs port, TCP vs UDP, and why servers bind to 0.0.0.0 in containers."
+  mid="Reuses connections deliberately (pools, keep-alive), sets connect/read timeouts, reads netstat/ss output."
+  senior="Diagnoses connection exhaustion, TIME_WAIT buildup and retransmits; understands how LBs and proxies terminate connections."
+  lead="Shapes network architecture choices (service mesh, HTTP/2 or gRPC between services, region topology) with latency in mind."
+/>
+
+<SeniorLens>
+A huge fraction of production incidents are really **connection management** problems: pools too small (requests queue), too large (DB overwhelmed), missing timeouts (threads hang forever on a dead peer), or connections never reused (CPU burned on TLS). Whenever you add a network call, ask: *what's the connect timeout, the read timeout, and is the connection pooled?*
+</SeniorLens>
+
+<KeyTakeaways>
+- IP moves packets between machines with no guarantees; ports identify programs.
+- TCP adds reliability, ordering, flow and congestion control, at the cost of handshakes and head-of-line blocking.
+- UDP is fire-and-forget; QUIC/HTTP3 builds a better TCP on top of it.
+- Reuse connections. Always set timeouts.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[High Performance Browser Networking](https://hpbn.co/)**, chapters 2–3 (TCP, UDP).
+- **Sriniously:** the networking/HTTP episodes of *Backend from First Principles*.
+- **Julia Evans' networking zines** for approachable deep dives into tcpdump, DNS and more.
+</GoDeeper>

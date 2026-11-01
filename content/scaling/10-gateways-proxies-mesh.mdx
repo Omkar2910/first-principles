@@ -1,0 +1,106 @@
+---
+title: Reverse Proxies, API Gateways and Service Meshes
+description: The layers that sit between clients and services, and between services, and which concerns belong in each.
+minutes: 10
+level: senior
+---
+
+<Problem>
+You have 25 services. Each one implements its own TLS, auth token validation, rate limiting, retries, timeouts, metrics and request logging, each slightly differently and some with bugs. Clients need to know 25 hostnames. Rolling out mTLS means changing 25 codebases. **Proxies, gateways and meshes** pull these cross-cutting network concerns out of application code and into infrastructure.
+</Problem>
+
+## The layers
+
+```text
+Clients ──▶ [CDN/WAF] ──▶ [API Gateway] ──▶ [Ingress / reverse proxy] ──▶ Service A ──(mesh sidecar)──▶ Service B
+              edge          north–south        cluster entry                    east–west traffic
+```
+
+| Component | Sits | Typical responsibilities | Examples |
+|---|---|---|---|
+| **Reverse proxy** | In front of servers | TLS termination, load balancing, compression, static files, buffering slow clients | Nginx, HAProxy, Envoy, Caddy |
+| **API gateway** | Edge of your API (north–south) | Routing to services, authN (token validation), rate limits/quotas, API keys, request transformation, developer portal | Kong, AWS API Gateway, Apigee, Spring Cloud Gateway |
+| **BFF (backend for frontend)** | Behind gateway, per client type | Aggregating calls and shaping responses for web/mobile | Custom service, GraphQL server |
+| **Service mesh** | Between services (east–west) | mTLS, retries, timeouts, circuit breaking, traffic splitting, telemetry, without app changes | Istio, Linkerd, Consul; Envoy sidecars or ambient/ eBPF modes |
+
+<MentalModel>
+A large office building. The **reverse proxy** is the **front-door receptionist** who checks you in and points you to the right elevator. The **API gateway** is **security plus a concierge**: checks your badge, enforces visitor limits, and routes you to the right department. The **service mesh** is the **internal mail and phone system with built-in encryption and call logging**: departments talk to each other through it without each one hiring its own switchboard operator.
+</MentalModel>
+
+## What belongs where
+
+**In the gateway** (coarse, client-facing, uniform):
+- Authentication (validating tokens), API keys, quotas/rate limits per client
+- Routing by path/host/version, canary routing
+- Request size limits, CORS, basic schema validation
+- Logging/metrics for external traffic
+
+**In the service** (domain-specific):
+- **Authorization decisions about data** ("can user 42 see invoice 1001?")
+- Business validation and rules
+- Anything that needs domain knowledge
+
+**In the mesh** (service-to-service reliability and security):
+- mTLS identity between services, service-level access policies
+- Timeouts, retries (carefully!), circuit breaking, outlier detection
+- Uniform golden-signal metrics and trace propagation
+- Traffic shifting for canaries
+
+A classic anti-pattern is the **"smart gateway"**: business logic creeping into gateway config or plugins until it becomes an unowned, untestable monolith in YAML. Keep gateways dumb about the domain.
+
+## Retries in the mesh: a warning
+
+Meshes make retries trivial to enable, which makes **retry storms** trivial to create. If each of 4 layers retries 3 times, one user request can become 3⁴ = 81 requests to the bottom service during an outage. Retry at **one** layer, with budgets and backoff (Track 4).
+
+## Do you need a mesh?
+
+A mesh adds real operational complexity (control plane, sidecars or node agents, upgrades, debugging another layer). Strong reasons: many services (dozens+), multiple languages, a zero-trust/mTLS requirement, need for uniform traffic management. For 5 services in one language, a good shared library plus a gateway is often enough.
+
+<Quiz
+  question="Where should the rule 'only the document's owner or their team admins can edit it' be enforced?"
+  options={[
+    "In the API gateway config",
+    "In the service mesh policy",
+    "In the document service, which has the domain data to decide",
+    "In the CDN",
+  ]}
+  answer={2}
+  explanation="Gateways and meshes handle coarse identity and service-level policy. Data-level authorization needs domain data and belongs in the owning service."
+/>
+
+<Tradeoffs
+  good={[
+    "Cross-cutting concerns implemented once, consistently",
+    "Single entry point simplifies clients and security perimeter",
+    "Mesh gives mTLS, telemetry and traffic control without code changes",
+  ]}
+  bad={[
+    "Extra hops add latency and potential failure points",
+    "Gateways can become dumping grounds for business logic",
+    "Meshes are operationally complex and harder to debug",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what a reverse proxy and API gateway are for."
+  mid="Configures gateway routes, auth and rate limits; understands ingress in Kubernetes."
+  senior="Decides what lives in gateway vs service vs mesh; designs retry/timeouts so layers don't amplify failures."
+  lead="Chooses platform components (gateway, mesh) and ownership model for the organization's network layer."
+/>
+
+<SeniorLens>
+Seniors evaluate infrastructure layers by asking **"who owns this, how is it tested, and how does it fail?"** A gateway with untested Lua plugins written by a team that left is a liability. A mesh nobody on-call understands turns every incident into "is it the app or the mesh?". Adopt these layers with clear ownership and runbooks, or not at all.
+</SeniorLens>
+
+<KeyTakeaways>
+- Reverse proxies terminate and balance; gateways manage the API edge; meshes handle service-to-service.
+- Keep domain logic (especially data authorization) in services.
+- Retry at one layer only to avoid storms.
+- Adopt a mesh for scale, polyglot and zero-trust needs, not by default.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Envoy architecture overview](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/arch_overview)**.
+- **Sam Newman, *Building Microservices* (2nd ed.)**: chapters on communication and gateways.
+- **Istio / Linkerd docs:** concepts sections.
+</GoDeeper>

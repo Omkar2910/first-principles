@@ -1,0 +1,122 @@
+---
+title: Rate Limiting
+description: Protecting services from abuse and overload with token buckets, sliding windows, and distributed counters.
+minutes: 11
+level: mid
+---
+
+<Problem>
+A partner's misbehaving script sends 5,000 requests per second to your API. A bot tries 10 million passwords against your login endpoint. One heavy customer's batch job starves everyone else. Without **rate limiting**, a single client can degrade the service for all clients, or run up your cloud bill.
+</Problem>
+
+## What rate limiting does
+
+Rate limiting caps how many requests a **client** (API key, user, IP, tenant) can make in a period, and rejects the excess with **`429 Too Many Requests`** (ideally with a `Retry-After` header).
+
+Purposes:
+- **Fairness**: one tenant can't starve others.
+- **Abuse prevention**: brute force, scraping, spam.
+- **Cost control**: expensive endpoints (LLM calls!) and third-party API quotas.
+- **Protection**: keep load within what the system can serve.
+
+## Algorithms
+
+Play with the token bucket: set traffic just above the refill rate, then try bursts.
+
+<TokenBucketSim />
+
+| Algorithm | How it works | Pros | Cons |
+|---|---|---|---|
+| **Token bucket** | Bucket of capacity B refills at R/sec; each request takes a token | Allows bursts up to B, average rate R; tiny state | Two parameters to tune |
+| **Leaky bucket** | Requests queue and drain at a constant rate | Smooth output rate | Adds queueing delay; bursts wait |
+| **Fixed window counter** | Count per calendar window (e.g. per minute) | Simplest | Burst at boundaries: 2× limit across 12:00:59–12:01:00 |
+| **Sliding window log** | Store timestamps of recent requests | Exact | Memory per request |
+| **Sliding window counter** | Weighted blend of current and previous window counts | Accurate enough, cheap | Approximation |
+
+**Token bucket** is the most common choice (AWS API Gateway, Stripe, Nginx's `limit_req` is leaky-bucket-like).
+
+<MentalModel>
+A token bucket is a **ticket dispenser at an arcade**. It prints one ticket every few seconds and holds up to 10. Show up after a break and you can play 10 games in a row (burst), but if you play constantly you're limited to the print rate. No ticket, no game (429).
+</MentalModel>
+
+## Distributed rate limiting
+
+With 20 API instances, per-instance counters let a client get 20× the limit. Options:
+
+1. **Central store (Redis)**: atomic counters with expiry. Use a **Lua script** so the check-and-decrement is atomic:
+
+```lua
+-- KEYS[1] = bucket key, ARGV = capacity, refill_per_sec, now_ms
+local b = redis.call('HMGET', KEYS[1], 'tokens', 'ts')
+local tokens = tonumber(b[1]) or tonumber(ARGV[1])
+local ts = tonumber(b[2]) or tonumber(ARGV[3])
+tokens = math.min(tonumber(ARGV[1]), tokens + (tonumber(ARGV[3]) - ts) / 1000 * tonumber(ARGV[2]))
+local allowed = tokens >= 1
+if allowed then tokens = tokens - 1 end
+redis.call('HMSET', KEYS[1], 'tokens', tokens, 'ts', ARGV[3])
+redis.call('PEXPIRE', KEYS[1], 60000)
+return allowed and 1 or 0
+```
+
+2. **Approximate local limits**: each instance enforces `limit / instances`. No network hop, less accurate.
+3. **At the edge**: API gateway, CDN/WAF or service mesh (Envoy global rate limit service) so traffic is rejected before it reaches your services.
+
+Decide the **failure mode**: if Redis is down, do you **fail open** (allow everything; availability first) or **fail closed** (reject; protection first)? Most APIs fail open with a local fallback limit.
+
+## Good API citizenship
+
+Return headers so clients can behave well:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 12
+RateLimit-Limit: 100
+RateLimit-Remaining: 0
+RateLimit-Reset: 12
+```
+
+Clients should respond with **exponential backoff and jitter**, not immediate retries.
+
+<Quiz
+  question="With a fixed window of 100 requests/minute, how many requests can a client get through in ~1 second around a minute boundary?"
+  options={["100", "Up to 200", "50", "Unlimited"]}
+  answer={1}
+  explanation="100 at 12:00:59.9 (end of window 1) + 100 at 12:01:00.0 (start of window 2). Sliding windows or token buckets avoid this boundary burst."
+/>
+
+<Tradeoffs
+  good={[
+    "Protects availability and fairness under abuse or bugs",
+    "Controls cost of expensive operations",
+    "Token bucket allows natural bursts while capping averages",
+  ]}
+  bad={[
+    "Central counters add latency and a dependency on every request",
+    "Wrong limits throttle legitimate customers",
+    "Per-IP limits are unfair behind NATs and easy to evade with many IPs",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what 429 means and why rate limits exist."
+  mid="Implements token-bucket limits (gateway or Redis) with proper headers."
+  senior="Designs multi-dimensional limits (per user, tenant, endpoint cost), fail-open behavior, and edge enforcement."
+  lead="Aligns rate limits with product tiers/pricing and partner contracts; owns the abuse-prevention strategy."
+/>
+
+<SeniorLens>
+Rate limiting is also a **product feature**: limits often map to pricing tiers ("Pro: 1,000 req/min"). Seniors design limits with product and support, publish them, expose remaining-quota headers, and make sure support can see *why* a customer got throttled. A silent, mysterious limit is a support nightmare.
+</SeniorLens>
+
+<KeyTakeaways>
+- Rate limits protect fairness, cost and availability; reject with 429 + Retry-After.
+- Token bucket = burst capacity + steady refill; the common default.
+- Distributed limits need a shared atomic counter (Redis + Lua) or edge enforcement.
+- Decide fail-open vs fail-closed deliberately.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Stripe engineering:** *Scaling your API with rate limiters*.
+- **Cloudflare blog:** *How we built rate limiting capable of scaling to millions of domains* (sliding window counter).
+- **Alex Xu, *System Design Interview Vol. 1***: rate limiter chapter.
+</GoDeeper>

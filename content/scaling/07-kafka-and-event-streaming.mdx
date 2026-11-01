@@ -1,0 +1,116 @@
+---
+title: Kafka and Event Streaming
+description: Topics, partitions, offsets and consumer groups, and why a replayable log changes how systems are built.
+minutes: 13
+level: senior
+---
+
+<Problem>
+A traditional queue deletes a message once it's consumed. But what if a new analytics service needs last month's orders? What if a bug corrupted a downstream database and you want to reprocess yesterday's events? What if 15 different services all need the same stream of events, each at its own pace? **Kafka** treats messages not as tasks to delete but as an **append-only, replayable log**, and that shift underpins modern event-driven architecture.
+</Problem>
+
+## The core concepts
+
+- **Topic**: a named stream of events (`orders`, `payments`).
+- **Partition**: a topic is split into N partitions; each is an **ordered, append-only log**. Partitions are the unit of parallelism and ordering.
+- **Offset**: a message's position in its partition (0, 1, 2…). Messages are immutable.
+- **Producer**: appends messages. A message **key** determines the partition: `hash(key) % partitions`.
+- **Consumer group**: a set of consumers sharing work. **Each partition is read by exactly one consumer in the group.** Different groups read independently.
+- **Committed offset**: where a group has processed up to, per partition. Restart → resume from there.
+- **Retention**: messages are kept for a time/size limit (days, or forever with compaction), regardless of consumption.
+
+<KafkaSim />
+
+Try: 3 partitions with 5 consumers (two sit idle). Then produce several events for one user and see they always land in the same partition, in order.
+
+<MentalModel>
+Kafka is a set of **ledger books** (partitions) that only ever get new lines appended. Each team (consumer group) keeps its own **bookmark** in each book (offset). Accounting reads at its pace, analytics at another, and a new team can start reading from page one. Nobody tears pages out when they finish reading.
+</MentalModel>
+
+## Ordering and parallelism
+
+- Order is guaranteed **within a partition only**.
+- Key by the entity whose events must stay ordered (`orderId`, `userId`), so all its events go to one partition.
+- Max parallelism in a group = number of partitions. Choose partition counts with headroom (they're hard to reduce, and increasing them reshuffles key → partition mapping).
+- **Hot partitions** happen when one key dominates (a huge customer). Same problem as sharding.
+
+## Delivery semantics in practice
+
+- Consumers commit offsets **after** processing → at-least-once (duplicates on crash/rebalance). The default; use idempotent consumers.
+- Commit before processing → at-most-once.
+- **Exactly-once** exists *inside Kafka* (idempotent producers + transactions, read-process-write between topics, as in Kafka Streams). Effects on external systems still need idempotency.
+
+**Rebalances**: when consumers join or leave, partitions get reassigned. In-flight work may be redone. Keep processing idempotent and avoid very long processing per poll (or consumers get kicked out for being "dead").
+
+## What the log enables
+
+- **Replay**: reset a group's offset to reprocess history after a bug fix.
+- **Many independent consumers** of the same events: search indexer, analytics, notifications, fraud.
+- **Event sourcing**: the log of events *is* the source of truth; current state is derived by replaying.
+- **Change Data Capture**: tools like Debezium stream your DB's WAL into Kafka topics (Track 4).
+- **Stream processing**: Kafka Streams / Flink compute rolling aggregates, joins and windows in real time.
+- **Log compaction**: keep only the latest message per key, a durable changelog of current state.
+
+## Kafka vs a classic queue
+
+| | Kafka (log) | SQS/RabbitMQ (queue) |
+|---|---|---|
+| After consumption | Retained | Deleted |
+| Replay | Yes | No |
+| Multiple independent readers | Natural (groups) | Need fan-out setup |
+| Ordering | Per partition | Usually none (FIFO variants exist) |
+| Per-message routing, priorities, delays | Weak | Strong |
+| Operational weight | Heavier (managed: MSK, Confluent) | Lighter |
+
+Use Kafka for **event streams many systems consume**; use a queue for **tasks to be done once**.
+
+<Quiz
+  question="A topic has 6 partitions. You scale the consumer group from 6 to 12 instances to process faster. What happens?"
+  options={[
+    "Throughput doubles",
+    "6 consumers sit idle, because each partition is consumed by only one member of the group; you'd need more partitions",
+    "Messages get processed twice",
+    "Kafka automatically adds partitions",
+  ]}
+  answer={1}
+  explanation="Partitions cap parallelism within a group. Plan partition counts for your target throughput up front; increasing them later changes key-to-partition mapping."
+/>
+
+<Tradeoffs
+  good={[
+    "Durable, replayable, high-throughput event backbone",
+    "Many independent consumers at their own pace",
+    "Per-key ordering with horizontal parallelism",
+    "Enables CDC, stream processing and event sourcing",
+  ]}
+  bad={[
+    "Operationally heavier than a simple queue",
+    "Partition count decisions are sticky",
+    "Ordering only per partition; hot keys create hot partitions",
+    "Events become long-lived contracts that need schema governance",
+  ]}
+/>
+
+<LevelTags
+  junior="Understands topics, partitions, offsets and consumer groups."
+  mid="Chooses keys for ordering, builds idempotent consumers, monitors lag, handles rebalances."
+  senior="Designs event-driven architectures: partitioning strategy, schemas (Avro + registry), replay and CDC."
+  lead="Owns event platform strategy: topic ownership, naming, retention, schema governance across teams."
+/>
+
+<SeniorLens>
+Events published to Kafka become **APIs that you can't see the callers of**. Seniors treat event schemas like public APIs: owned by the producing team, versioned, compatibility-checked in CI with a schema registry, and documented. Otherwise one "harmless" field rename breaks six teams' consumers at 2am.
+</SeniorLens>
+
+<KeyTakeaways>
+- Kafka is a partitioned, append-only, replayable log.
+- Key determines partition; order is per partition; partitions cap group parallelism.
+- At-least-once by default, so consumers must be idempotent.
+- Use for event streams with many consumers; use queues for one-off tasks.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Jay Kreps, *The Log: What every software engineer should know about real-time data's unifying abstraction***: a classic essay.
+- **[Kafka documentation: design section](https://kafka.apache.org/documentation/#design)**.
+- **Confluent Developer** courses (free).
+</GoDeeper>

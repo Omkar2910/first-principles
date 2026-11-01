@@ -1,0 +1,130 @@
+---
+title: Validation and Transformation
+description: Rejecting bad input at the edge. Syntactic vs semantic validation, where each belongs, and good error responses.
+minutes: 8
+level: junior
+---
+
+<Problem>
+A client sends `{"qty": -5}`. Or `{"email": "not-an-email"}`. Or a 50 MB string as a username. Or a `birthDate` in the future. Without validation, bad data either crashes your service with a confusing 500, corrupts your database, or opens a security hole. The principle: **never trust input, and reject it as early as possible with a clear message**.
+</Problem>
+
+## Three kinds of checks
+
+1. **Syntactic (shape)**: is it valid JSON? Are the required fields present? Are the types right? Within length/range limits? Matching a format (email, UUID)?
+2. **Semantic (meaning)**: does it make sense? `endDate` after `startDate`; `birthDate` in the past; currency is one we support.
+3. **Business / state rules**: does it make sense *right now* given the system's state? Product is in stock; user hasn't exceeded their limit; coupon not already used.
+
+Checks 1 and 2 belong at the **edge** (request DTO validation), before any business logic. Check 3 needs data and belongs in the **service layer**.
+
+<MentalModel>
+Airport security has layers. The **check-in desk** verifies your ticket and passport format (syntactic). **Passport control** checks the visa matches the destination and isn't expired (semantic). The **gate agent** checks the flight isn't full and you're on the manifest (business/state). Each layer rejects early so the next one only deals with plausible passengers.
+</MentalModel>
+
+## Edge validation in Spring
+
+```java
+public record CreateOrderRequest(
+    @NotNull UUID productId,
+    @Min(1) @Max(100) int qty,
+    @NotBlank @Size(max = 200) String shippingAddress,
+    @Email String contactEmail
+) {}
+
+@PostMapping("/orders")
+ResponseEntity<OrderDto> create(@Valid @RequestBody CreateOrderRequest req) { ... }
+// Invalid input → MethodArgumentNotValidException → 400 before your code runs
+```
+
+Business rules live in the service, where you can query state:
+
+```java
+Order place(UserId user, CreateOrderRequest req) {
+    Product p = products.get(req.productId());
+    if (p.stock() < req.qty()) throw new BusinessRuleException("OUT_OF_STOCK", "Only %d left".formatted(p.stock()));
+    ...
+}
+```
+
+## Transformation (normalization)
+
+Validation often pairs with **normalizing** input so the rest of your code sees one canonical form:
+- Trim whitespace, lowercase emails (`" Ada@Mail.com "` → `"ada@mail.com"`).
+- Parse strings into rich types: `"2026-10-11"` → `LocalDate`, `"USD"` → `Currency`.
+- Apply defaults: missing `page` → `0`.
+
+Do this once at the boundary. Downstream code should work with **rich, already-valid types** and never re-parse raw strings. "Parse, don't validate" is the slogan: turn input into a type that *can't* be invalid.
+
+## Good validation errors
+
+Return **400** (or **422**) with *all* problems at once, field by field, machine-readable:
+
+```json
+{
+  "type": "https://api.shop.com/errors/validation",
+  "title": "Invalid request",
+  "status": 400,
+  "errors": [
+    { "field": "qty", "message": "must be between 1 and 100" },
+    { "field": "contactEmail", "message": "must be a valid email" }
+  ]
+}
+```
+
+Don't make clients fix one field per round trip.
+
+<Quiz
+  question="Where should the check 'user can't place more than 3 orders per day' live?"
+  options={[
+    "As a @Max annotation on the request DTO",
+    "In the frontend only",
+    "In the service layer, since it depends on stored state (today's order count)",
+    "In a database trigger only",
+  ]}
+  answer={2}
+  explanation="It's a business/state rule that requires reading data. DTO annotations only see the request itself. (A DB constraint can be an extra safety net against races.)"
+/>
+
+## Security angle
+
+Validation is your first defense against abuse:
+- **Bound everything**: string lengths, list sizes, page sizes, request body size. Unbounded input is a denial-of-service vector.
+- **Allowlist over denylist**: accept known-good values (`sort ∈ {name, createdAt}`) rather than trying to block bad ones.
+- Validation is **not** a substitute for parameterized SQL or output encoding (Track 9), but it shrinks the attack surface.
+
+<Tradeoffs
+  good={[
+    "Fail fast with clear 400s instead of confusing 500s",
+    "Downstream code can assume valid, normalized data",
+    "Bounded input protects against abuse",
+  ]}
+  bad={[
+    "Rules duplicated between client and server (acceptable: different purposes)",
+    "Overly strict validation can break legitimate clients when requirements evolve",
+    "State-dependent rules can still race; back them with DB constraints",
+  ]}
+/>
+
+<LevelTags
+  junior="Adds DTO validation annotations and returns 400 with field errors."
+  mid="Separates syntactic/semantic/business validation; normalizes into rich types at the boundary."
+  senior="Designs consistent error contracts and defense-in-depth (validation + DB constraints + idempotency)."
+  lead="Standardizes the error format and input limits across all services."
+/>
+
+<SeniorLens>
+Validation rules are **product decisions in disguise**. "Max 100 items per order" or "names up to 200 chars" affect users and should be agreed with product, documented in the API spec, and consistent across clients. Seniors surface these choices instead of picking arbitrary numbers silently.
+</SeniorLens>
+
+<KeyTakeaways>
+- Validate shape and meaning at the edge; business/state rules in the service.
+- Normalize once into rich types ("parse, don't validate").
+- Return all field errors at once, machine-readable.
+- Bound every input; allowlist where possible.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the validation and transformation episode.
+- **Alexis King, *Parse, don't validate*** (blog post): the idea that changes how you write input handling.
+- **[RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)**: the standard error format above.
+</GoDeeper>

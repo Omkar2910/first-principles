@@ -1,0 +1,101 @@
+---
+section: Level 1 · Junior → Mid (SDE1 → SDE2)
+title: "Junior → Mid: From Tasks to Owning Features"
+description: The core shift to SDE2. Breaking down work, owning outcomes end to end, and needing less hand-holding.
+minutes: 11
+level: junior
+---
+
+<Problem>
+As a junior, someone breaks the work down for you: "add this field, update this endpoint, write these tests." You execute well. To reach mid level, you need to take a **feature-sized, partly defined problem** ("let users export their order history") and drive it from understanding to production, figuring out the steps, the edge cases and the unknowns yourself. That's the essence of SDE1 → SDE2.
+</Problem>
+
+## What changes
+
+| Junior | Mid |
+|---|---|
+| Executes defined tasks | Breaks a feature into tasks |
+| Asks "what should I do next?" | Asks "here's my plan; any concerns?" |
+| Done = code merged | Done = feature works in production for users |
+| Learns the codebase area by area | Navigates the codebase independently |
+| Needs help for most blockers | Unblocks themselves on most issues; escalates the rest early |
+
+<MentalModel>
+A junior is given **turn-by-turn directions**. A mid-level engineer is given **a destination** and plans the route, handles the detours, and only calls for help when the road is truly closed. The destination is defined; the route is yours.
+</MentalModel>
+
+## The feature lifecycle you now own
+
+1. **Understand the problem**: Who's the user? What problem are they solving? What does success look like? Talk to the PM/designer; read the ticket critically.
+2. **Clarify requirements and edge cases**: empty states, large data, permissions, errors, mobile vs web, existing data.
+3. **Break it down**: a short plan of tasks, with **risky/unknown parts first** (spike them).
+4. **Design (lightweight)**: API changes, data model changes, how it fits existing code. Share a short design note for anything non-trivial.
+5. **Build incrementally**: small PRs behind a feature flag, tests included.
+6. **Ship safely**: migrations, rollout, monitoring.
+7. **Verify in production**: does it work for real users? Check logs, metrics, feedback.
+8. **Close the loop**: tell stakeholders it shipped, document anything others need, note follow-ups.
+
+## Breaking down work: an example
+
+**"Users can export their order history as CSV."**
+
+```text
+Questions first:
+- How many orders can a user have? (some have 50,000 → can't build synchronously)
+- Which fields? Any sensitive data? Date range filter?
+- Email it or download it? Retention of generated files?
+
+Plan:
+1. Spike: query performance for 50k orders; confirm streaming CSV approach      (risk first)
+2. API: POST /exports → 202 {exportId}; GET /exports/{id} → status + download URL
+3. Job: background worker generates CSV to S3 (pre-signed URL, 7-day expiry)
+4. Email notification when ready (reuse notification service)
+5. UI: button + status (coordinate with frontend)
+6. Rate limit: max 3 exports/user/day
+7. Metrics + alert on job failures; feature flag; rollout to 10% → 100%
+```
+
+Notice the plan surfaced a design decision (async job) **before** anyone wrote a synchronous endpoint that times out for big customers.
+
+## Getting unblocked: the 30/60 rule
+
+- Spend a focused, time-boxed effort (say 30–60 minutes) trying to unblock yourself: read code, logs, docs, use AI tools, try experiments.
+- Then **ask, with context**: what you're trying to do, what you tried, what you think is going on, your specific question.
+- Raise **schedule risks early**: "This is taking longer because X; I expect Friday instead of Wednesday." Surprises at the deadline are what erode trust.
+
+<Scenario
+  situation="You're halfway through a feature when you realize the requirement as written ('show all orders on one page') will be very slow for customers with thousands of orders. The PM is busy. What do you do?"
+  choices={[
+    { text: "Build it exactly as written; requirements are the PM's job", feedback: "This ships a known problem. Mid-level engineers own outcomes, not just instructions." },
+    { text: "Quietly add pagination yourself without telling anyone", feedback: "Good instinct, but changing behavior without telling the PM can surprise users and stakeholders." },
+    { text: "Write a short message: the problem, data (e.g. some users have 20k orders), 2 options (pagination vs infinite scroll), your recommendation, and ask for a quick decision", feedback: "You surface the issue early, make it easy to decide, and show ownership of the outcome. This is exactly the behavior that marks SDE2+.", best: true },
+  ]}
+/>
+
+<Quiz
+  question="What's the best signal that you're operating at mid level?"
+  options={[
+    "You close the most tickets on the team",
+    "You can take a partly defined feature, plan it, surface risks early, deliver it to production and verify it works, with little guidance",
+    "You know the most frameworks",
+    "You never ask for help",
+  ]}
+  answer={1}
+  explanation="Independent end-to-end delivery of features, including handling ambiguity and risk, is the defining SDE2 behavior. Asking good, well-timed questions is part of it."
+/>
+
+<SeniorLens>
+Managers decide whether someone is ready for SDE2 largely by **how much they need to check in on them**. If your manager can hand you a feature and trust that it'll ship well (or that you'll raise problems early), you're there. Make that trust easy: share plans, give brief proactive updates, and close loops.
+</SeniorLens>
+
+<KeyTakeaways>
+- Mid level = owning features end to end, from understanding the problem to verifying in production.
+- Break work down, de-risk unknowns first, ship in small increments.
+- Clarify requirements and edge cases; propose solutions, don't just ask questions.
+- Time-box being stuck; ask with context; flag schedule risk early.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Gergely Orosz, *The Software Engineer's Guidebook***: the early-career sections.
+- **Sriniously / backend fundamentals**: technical depth that makes independence possible (Tracks 0–1).
+</GoDeeper>

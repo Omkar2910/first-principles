@@ -1,0 +1,106 @@
+---
+title: Why Distributed Systems Are Hard
+description: Partial failure, unreliable networks and the eight fallacies. The mindset shift from one machine to many.
+minutes: 10
+level: mid
+---
+
+<Problem>
+On one machine, a function call either returns or throws. In a distributed system, you call another service and get… nothing. Did the request get lost? Did the server crash before processing it? After processing it but before replying? Is it just slow? **You cannot tell.** This single fact (**partial failure with ambiguous outcomes**) is the root of almost every hard problem in this track.
+</Problem>
+
+## Partial failure
+
+In a single process, failures are mostly total: the whole program crashes. In a distributed system, **some parts fail while others keep running**, and nodes have only a partial, possibly outdated view of the others.
+
+A request to a remote service can end in any of these, and from the caller's side several look identical (a timeout):
+
+```text
+1. Request lost before arriving              → nothing happened
+2. Server crashed before processing          → nothing happened
+3. Server processed it, crashed before reply → it DID happen
+4. Server processed it, reply was lost       → it DID happen
+5. Server is just slow (GC pause, overload)  → it WILL happen, later
+```
+
+So "should I retry?" has no safe universal answer, **unless the operation is idempotent** (lesson 5).
+
+<MentalModel>
+Sending an important letter with **no tracking and no reply guaranteed**. If you hear nothing back in a week: was it lost in the post? Did they receive it and their reply get lost? Are they just slow to answer? If the letter said "please send $100", sending it again might mean paying twice. Distributed systems engineers spend their careers designing around this uncertainty.
+</MentalModel>
+
+## The eight fallacies of distributed computing
+
+Coined at Sun Microsystems in the 1990s, still violated daily:
+
+1. **The network is reliable.** Packets drop; links fail; cables get cut.
+2. **Latency is zero.** Every remote call costs milliseconds and varies wildly (tail latency).
+3. **Bandwidth is infinite.** Large payloads and chatty protocols saturate links.
+4. **The network is secure.** Assume it isn't (hence mTLS, zero trust).
+5. **Topology doesn't change.** Instances come and go every deploy and autoscale.
+6. **There is one administrator.** Many teams, vendors and clouds are involved.
+7. **Transport cost is zero.** Serialization costs CPU; cross-AZ traffic costs money.
+8. **The network is homogeneous.** Different hardware, protocols, versions.
+
+## Other sources of trouble
+
+- **Clocks disagree**: machine clocks drift and jump; you can't order events reliably by wall-clock timestamps (lesson 9).
+- **Processes pause**: a GC pause or VM migration can freeze a node for seconds. It doesn't know it was paused, so it may act on stale beliefs ("I'm still the leader").
+- **Network partitions**: nodes are alive but can't reach each other. Each side may think the other is dead.
+- **Gray failures**: a node isn't down, just degraded (slow disk, packet loss), passing health checks while hurting users.
+
+## Timeouts: the only tool for detecting failure
+
+You can't know a remote node has failed; you can only **stop waiting**. Timeouts are therefore essential and fundamentally a guess:
+- Too long → callers hang, threads pile up, failures cascade.
+- Too short → false positives, unnecessary retries, more load on an already-slow system.
+
+Set them from **measured latency percentiles** (e.g. a bit above p99.9 of healthy latency), and always set them.
+
+<Quiz
+  question="Your service calls a payment API, which times out after 5 seconds. What do you know about the payment?"
+  options={[
+    "It failed; safe to retry",
+    "It succeeded",
+    "Nothing for certain; it may or may not have been processed. Only retry if the call is idempotent (e.g. with an idempotency key)",
+    "It will be automatically rolled back",
+  ]}
+  answer={2}
+  explanation="A timeout is an absence of information. The charge might have happened. Payment APIs offer idempotency keys precisely so that retrying after an ambiguous failure is safe."
+/>
+
+<Tradeoffs
+  good={[
+    "Distribution gives scale, fault tolerance and geographic reach",
+    "Independent deployability of components",
+  ]}
+  bad={[
+    "Partial failures with ambiguous outcomes",
+    "Latency and unreliability on every interaction",
+    "Much harder testing, debugging and reasoning",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows network calls can fail or hang and always sets timeouts."
+  mid="Reasons about ambiguous outcomes and retries only idempotent operations."
+  senior="Designs for partial failure explicitly: timeouts from percentiles, idempotency, degradation paths."
+  lead="Pushes back on unnecessary distribution; prefers fewer, well-designed network boundaries."
+/>
+
+<SeniorLens>
+The senior's first distributed-systems principle: **don't distribute unless you must**. Every network boundary you add brings all eight fallacies with it. When you must, ask of each remote call: *what happens if this hangs, fails, or succeeds but we never hear back?* Design an answer for all three.
+</SeniorLens>
+
+<KeyTakeaways>
+- Partial failure + ambiguous outcomes are the core difficulty.
+- The eight fallacies: networks are unreliable, slow, limited, insecure and changing.
+- Clocks drift, processes pause, networks partition, nodes fail gray.
+- Timeouts are the only failure detector. Set them from measured percentiles.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 8** (The Trouble with Distributed Systems): essential reading.
+- **[Fallacies of distributed computing](https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing)**.
+- **Marc Brooker's blog** (AWS): timeouts, retries, and much more.
+</GoDeeper>

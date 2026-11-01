@@ -1,0 +1,96 @@
+---
+section: The approach
+title: Back-of-Envelope Estimation
+description: Turning users into QPS, storage and servers in two minutes, and using the numbers to drive design.
+minutes: 9
+level: mid
+---
+
+<Problem>
+Without numbers, design discussions drift: one person adds sharding "for scale" while another argues a single database is fine, and neither can prove it. A two-minute estimate settles it. Estimation isn't about precision; it's about getting the **order of magnitude** right so you know whether you're designing a bicycle or a freight train.
+</Problem>
+
+## The core conversions
+
+```text
+Seconds per day          ≈ 86,400 ≈ 10^5  (round it!)
+1 million requests/day   ≈ 12 QPS
+100 million/day          ≈ 1,200 QPS
+1 billion/day            ≈ 12,000 QPS
+Peak                     ≈ 2–5× average (spiky consumer apps: higher)
+```
+
+Storage:
+
+```text
+Bytes per record × records per day × 365 × years × replication factor (≈3)
+```
+
+## Try it
+
+<EstimationCalculator />
+
+## A worked example: photo sharing
+
+- 200M DAU; each user views ~50 photos/day and uploads ~1 (so ~2% of requests are writes), at ~2 MB per photo.
+- Reads: 200M × 50 = 10B/day ≈ **115K QPS** average, ~250K peak. Clearly **read-heavy**, so CDN + cache are central.
+- Writes: 200M/day ≈ 2.3K uploads/s.
+- Storage: 200M × 2 MB = **400 TB/day** → ~146 PB/year before replication. Object storage (S3), not a database; metadata in a DB.
+- Bandwidth: 115K × 2 MB ≈ 230 GB/s outbound. This only works with a CDN.
+
+Every one of those numbers shapes the design. That's the point.
+
+<MentalModel>
+Estimation is like **planning a road trip with a napkin**. You don't need exact fuel consumption. You need to know whether it's a 2-hour drive or a 2-day drive, because that decides whether you pack lunch or book hotels. Being off by 30% doesn't matter; being off by 100× does.
+</MentalModel>
+
+## Capacity reference points (rough, modern hardware)
+
+| Component | Ballpark |
+|---|---|
+| Stateless app server (simple JSON API) | 1K–10K QPS per instance |
+| Postgres/MySQL primary | ~10K+ simple writes/s; many more reads with cache |
+| Redis node | 100K+ ops/s |
+| Kafka cluster | Millions of messages/s |
+| Single SSD | ~100K+ IOPS |
+| 1 Gbps link | ~125 MB/s |
+
+## How to use estimates in a design
+
+- **Read:write ratio** → read-heavy suggests caches, replicas, CDNs, precomputation; write-heavy suggests LSM stores, queues, partitioning.
+- **Peak QPS** vs single-node capacity → do we need sharding? (Often no.)
+- **Storage growth** → DB vs object storage, retention and archiving policies.
+- **Hot keys / skew** → celebrity accounts, viral content.
+
+State assumptions aloud, round aggressively, and move on. Spending 10 minutes on arithmetic is a mistake.
+
+<Quiz
+  question="A system gets 500M requests/day with a 3× peak factor. Roughly what peak QPS should you design for?"
+  options={["~600", "~6,000", "~17,000", "~500,000"]}
+  answer={2}
+  explanation="500M / 86,400 ≈ 5,800 average; × 3 ≈ 17,000 peak QPS. That's a handful of app servers but enough that caching hot reads matters."
+/>
+
+<LevelTags
+  junior="Converts daily volume to QPS with the 10⁵ seconds-per-day trick."
+  mid="Estimates QPS, storage and bandwidth and uses them to justify components."
+  senior="Identifies the binding constraint from estimates and spots hidden ones (skew, fan-out, bandwidth)."
+  lead="Connects estimates to cost and capacity planning budgets."
+/>
+
+<SeniorLens>
+Seniors use estimates to **remove** complexity as often as to add it: "That's 300 QPS peak, so one Postgres instance with a replica is plenty; let's not introduce Kafka." Interviewers love a candidate who can show, with numbers, that the simple design works.
+</SeniorLens>
+
+<KeyTakeaways>
+- 1 day ≈ 10⁵ seconds; 1M/day ≈ 12 QPS.
+- Estimate QPS (avg + peak), read:write ratio, storage, bandwidth.
+- Numbers reveal what's hard and what's unnecessary.
+- Round aggressively; order of magnitude is what matters.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Jeff Dean's latency numbers** (Track 0, lesson 4).
+- **Alex Xu, *System Design Interview Vol. 1***, chapter 2.
+- **[ByteByteGo: back-of-the-envelope estimation](https://bytebytego.com/)**.
+</GoDeeper>

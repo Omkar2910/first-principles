@@ -1,0 +1,118 @@
+---
+title: Prompt Engineering for Engineers
+description: Writing prompts like specifications. Structure, examples, structured outputs, and treating prompts as code.
+minutes: 11
+level: junior
+---
+
+<Problem>
+Your LLM feature works in the demo, then fails in production: inconsistent formats break the JSON parser, edge cases produce nonsense, and a small wording change makes things worse in ways nobody notices for a week. Prompting isn't magic phrasing. It's **writing a clear specification for a very capable but literal-minded colleague** who has no context except what you give them, plus engineering discipline around it.
+</Problem>
+
+## A prompt is a spec
+
+Good prompts include what you'd give a smart new contractor:
+
+1. **Role and goal**: who the model is acting as, and what success looks like.
+2. **Context**: the data, documents and background it needs (it knows nothing about your company).
+3. **Instructions and constraints**: steps, rules, what to avoid, what to do when unsure.
+4. **Output format**: exact structure, ideally machine-readable.
+5. **Examples** (few-shot): a few representative input → output pairs, including tricky cases.
+
+```text
+You are a support ticket triage assistant for Acme Shop.
+
+Classify the ticket below into exactly one category and extract key fields.
+
+Categories:
+- billing: charges, refunds, payment methods
+- shipping: delivery status, address changes, damaged parcels
+- account: login, password, profile, data deletion
+- other: anything else
+
+Rules:
+- If the ticket mentions both billing and shipping, choose the one the customer is asking us to act on.
+- If an order ID (format ORD-123456) is present, extract it; otherwise use null.
+- Do not invent order IDs.
+
+<ticket>
+{{ticket_text}}
+</ticket>
+
+Respond with JSON matching: {"category": "...", "orderId": "ORD-..." | null, "urgency": "low"|"medium"|"high", "reason": "<one sentence>"}
+```
+
+Tips that consistently help:
+- **Be explicit and specific**; state the "why" behind rules so the model can generalize.
+- **Delimit inputs** (XML-style tags or clear sections) so data isn't confused with instructions.
+- **Give the model an out**: "If the information isn't in the context, say so."
+- **Let it think** for complex tasks: ask for step-by-step reasoning before the final answer, or use models/settings with built-in extended reasoning. Then parse only the final answer.
+- Put long documents **before** the question; put the most important instructions where they won't get lost.
+
+<MentalModel>
+Prompting is **delegating to a brilliant intern on their first day**. They're fast and capable, but they don't know your company, your conventions, or which edge cases matter. Vague instructions ("summarize this nicely") get generic work. A clear brief with context, examples and the exact deliverable format gets excellent work.
+</MentalModel>
+
+## Structured outputs
+
+Never regex free-form text if you can avoid it:
+- Use the provider's **structured output / JSON schema** features or **tool/function calling** with a schema, so responses conform to a defined structure.
+- Still **validate** on your side (types, enums, ranges) and handle failures (retry with the error message, fall back).
+
+```java
+record Triage(Category category, String orderId, Urgency urgency, String reason) {}
+
+Triage t = llm.structured(prompt, Triage.class);   // schema derived from the record (e.g. Spring AI, LangChain4j)
+validator.validate(t);                              // business validation still applies
+```
+
+## Prompts are code
+
+- Keep prompts in **version control**, as templates with variables, not scattered string literals.
+- **Test them**: every prompt change runs against an **eval set** (lesson 7) before shipping. "It looked better on three examples" isn't evidence.
+- **Log** inputs, outputs, model version and prompt version for debugging (mind PII).
+- **Pin model versions** and re-run evals when upgrading.
+
+## Common anti-patterns
+
+- Huge "do everything" prompts; split into focused steps or tools.
+- Contradictory instructions accumulated over time.
+- Relying on ALL-CAPS threats ("NEVER EVER…") instead of clear reasoning.
+- No examples for format-sensitive tasks.
+- Letting user input flow unseparated into instructions (prompt injection, lesson 9).
+
+<Quiz
+  question="Your extraction prompt returns valid JSON 97% of the time; the other 3% break the parser. What's the most robust fix?"
+  options={[
+    "Add 'PLEASE RETURN VALID JSON' in capitals",
+    "Use the provider's structured output / tool-calling with a JSON schema, validate the result, and retry or fall back on validation failure",
+    "Increase temperature",
+    "Parse with a more lenient regex",
+  ]}
+  answer={1}
+  explanation="Schema-constrained output removes most format failures; validation plus retry handles the rest. Production code must assume any model output can be invalid."
+/>
+
+<LevelTags
+  junior="Writes clear prompts with context, rules, format and examples."
+  mid="Uses structured outputs, versioned prompt templates and basic evals."
+  senior="Designs multi-step prompt pipelines, failure handling and evaluation-driven iteration."
+  lead="Sets standards for prompt management, testing and model upgrades across teams."
+/>
+
+<SeniorLens>
+Seniors treat a prompt change like a code change to a critical algorithm: **reviewed, tested against a dataset, and rolled out carefully**. The teams that do well with LLMs aren't the ones with clever phrasing; they're the ones with good eval sets and the discipline to use them.
+</SeniorLens>
+
+<KeyTakeaways>
+- Prompts are specs: role, context, instructions, output format, examples.
+- Delimit data, allow "I don't know", let the model reason for hard tasks.
+- Use schema-constrained structured outputs and validate them.
+- Version, test and log prompts like code.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic docs:** prompt engineering guide.
+- **OpenAI docs:** prompt engineering and structured outputs.
+- **Spring AI** / **LangChain4j** docs for Java integrations.
+</GoDeeper>

@@ -1,0 +1,125 @@
+---
+title: Retrieval-Augmented Generation (RAG)
+description: Grounding LLM answers in your own data. The pipeline, chunking, retrieval quality, citations and failure modes.
+minutes: 13
+level: mid
+---
+
+<Problem>
+You want an assistant that answers questions about your company's docs, policies, tickets or codebase. The model doesn't know any of it, and you can't fine-tune every time a document changes. **RAG** retrieves the relevant pieces of your data at question time and puts them in the prompt, so the model answers from **current, authoritative, permission-checked** information, with citations.
+</Problem>
+
+## The pipeline
+
+```text
+INDEXING (offline / on change)
+  sources (docs, wiki, PDFs, tickets, DB rows)
+    → extract text → clean → chunk (e.g. 300–800 tokens, overlap, keep headings)
+    → enrich (title, section, source URL, permissions, updated_at)
+    → embed chunks → store in vector index (+ keyword index)
+
+QUERY (online)
+  user question
+    → (optional) rewrite query / expand / decompose
+    → retrieve top-k (hybrid: vector + BM25), filtered by user permissions
+    → rerank → keep best N chunks
+    → prompt = instructions + retrieved chunks (with IDs) + question
+    → LLM answers, citing chunk IDs; says "not found" if unsupported
+    → return answer + citations (links)
+```
+
+<Flow nodes={["Question", "Retrieve (hybrid + filters)", "Rerank", "Prompt with context", "LLM", "Answer + citations"]} />
+
+<MentalModel>
+RAG is an **open-book exam**. Instead of hoping the student memorized everything (training data), you let them look up the relevant pages in the textbook (retrieval) and answer from those pages, citing page numbers. The answer quality depends on two things: whether they found the right pages, and whether they read them carefully.
+</MentalModel>
+
+## A minimal prompt
+
+```text
+Answer the user's question using ONLY the documents below.
+Cite sources as [doc-id]. If the documents don't contain the answer, say
+"I couldn't find this in our documentation" and suggest contacting support.
+
+<documents>
+<doc id="kb-112" title="Refund policy" updated="2026-08-01">...</doc>
+<doc id="kb-087" title="Returns for damaged items">...</doc>
+</documents>
+
+<question>{{question}}</question>
+```
+
+## Where RAG goes wrong (and fixes)
+
+Most RAG failures are **retrieval failures**, not generation failures. If the right chunk isn't in the context, no model can answer correctly.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Answer misses info that exists | Bad chunking (split mid-thought), weak retrieval | Structure-aware chunking, hybrid search, reranking, query rewriting |
+| Wrong document version | Stale index | Incremental re-indexing on change (CDC/webhooks), `updated_at` metadata |
+| Cites irrelevant chunks | Low-quality top-k | Rerankers, similarity thresholds, fewer but better chunks |
+| Leaks docs a user shouldn't see | No permission filtering | Filter retrieval by the user's ACLs **before** the LLM sees anything |
+| Confident answer with no support | Prompt allows guessing | "Answer only from documents", require citations, verify citations exist |
+| Multi-part question half answered | Single retrieval for a compound question | Query decomposition / agentic multi-step retrieval |
+| Chunks lack context ("it", "this policy") | Chunk isolated from document | Prepend document/section titles or a short generated context to each chunk before embedding |
+
+## Measuring RAG quality
+
+Evaluate the two halves separately (lesson 7):
+- **Retrieval**: for a set of questions with known relevant docs, measure **recall@k** (is the right chunk in the top k?).
+- **Generation**: **faithfulness** (claims supported by retrieved context), **answer relevance/correctness**, citation accuracy. Often scored with a mix of human review and LLM-as-judge.
+
+## RAG vs long context vs fine-tuning
+
+- **Long context**: if your knowledge base is small (fits in the window), just include it all, maybe with prompt caching. Simpler than RAG.
+- **RAG**: large or frequently changing knowledge, per-user permissions, need for citations.
+- **Fine-tuning**: teaches **style, format or specialized behavior**, not reliable fact storage. It doesn't replace retrieval for facts that change.
+
+<Quiz
+  question="Your RAG assistant answers 'I couldn't find this' for questions whose answers are definitely in the docs. Where do you look first?"
+  options={[
+    "Switch to a larger LLM",
+    "Retrieval: check whether the relevant chunks appear in the top-k for those questions (chunking, hybrid search, query rewriting, reranking)",
+    "Increase the temperature",
+    "Remove the 'answer only from documents' instruction",
+  ]}
+  answer={1}
+  explanation="If the right content never reaches the prompt, the model correctly says it can't find it. Measure retrieval recall on those questions and fix retrieval first."
+/>
+
+<Tradeoffs
+  good={[
+    "Answers grounded in current, private data with citations",
+    "No retraining when documents change",
+    "Permission-aware: users only get answers from what they can access",
+  ]}
+  bad={[
+    "Retrieval quality is hard and is the main failure source",
+    "Indexing pipelines must stay in sync with sources",
+    "More context = more tokens, cost and latency",
+  ]}
+/>
+
+<LevelTags
+  junior="Understands the retrieve → augment → generate flow."
+  mid="Builds a RAG pipeline with chunking, hybrid retrieval, citations and permission filters."
+  senior="Diagnoses retrieval vs generation failures with evals; designs incremental indexing and reranking."
+  lead="Decides RAG vs long-context vs fine-tuning per use case; owns knowledge-source governance."
+/>
+
+<SeniorLens>
+Seniors build a **golden set of 50–200 real questions with known answers** before tuning anything. Without it, RAG work becomes endless vibes-based tweaking. With it, every change to chunking, retrieval or prompts is a measurable experiment.
+</SeniorLens>
+
+<KeyTakeaways>
+- RAG = retrieve relevant chunks at query time, put them in context, answer with citations.
+- Most failures are retrieval failures: chunking, hybrid search, reranking, freshness.
+- Filter by permissions before generation.
+- Evaluate retrieval (recall@k) and generation (faithfulness) separately.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic engineering:** *Contextual Retrieval*.
+- **Lewis et al., *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*** (the original RAG paper).
+- **Spring AI** docs: RAG with vector stores (Java).
+</GoDeeper>

@@ -1,0 +1,85 @@
+---
+section: Level 1 · Junior → Mid (SDE1 → SDE2)
+title: "Junior → Mid: Pull Requests People Want to Review"
+description: Small, well-described PRs, self-review, and receiving code review feedback like a professional.
+minutes: 9
+level: junior
+---
+
+<Problem>
+Your PR has 1,400 changed lines, the description says "fixes stuff", and it's been waiting for review for four days. When review finally comes, it has 37 comments and you feel defensive. Pull requests are the primary way your work is seen and evaluated by peers. How you **package** work and **respond** to feedback shapes both your velocity and your reputation.
+</Problem>
+
+## Anatomy of a great PR
+
+1. **Small and focused**: one logical change. Rough guide: under ~400 lines of meaningful diff. Split refactors from behavior changes ("refactor: extract PricingService" then "feat: weekend pricing").
+2. **A description that answers the reviewer's questions**:
+
+```markdown
+## What
+Add weekend pricing (20% off Sat/Sun) for the "standard" plan, behind flag `weekend-pricing`.
+
+## Why
+PRD-412: marketing experiment for Q4. Default off.
+
+## How
+- New `WeekendPricingRule` implements `PricingRule`; registered via config
+- Uses injected `Clock` for testability; time zone = store's zone, not server's
+
+## Testing
+- Unit tests for Sat/Sun/Mon boundaries incl. midnight in store TZ
+- Ran locally against staging data: prices for 3 sample carts match spreadsheet
+
+## Risks / notes
+- No migration. Flag off by default. Rollback = flag off.
+- Reviewers: please look closely at time-zone handling in `isWeekend()`.
+```
+
+3. **Self-reviewed first**: read your own diff before requesting review. Remove debug logs, commented-out code, unrelated formatting changes. You'll catch a surprising number of issues.
+4. **Tests included** and CI green.
+5. **Guide the reviewer**: point out the tricky parts and where you're unsure.
+
+<MentalModel>
+A PR is a **letter to a busy colleague asking for a favor**. A short, clear letter with context, a specific ask and everything they need attached gets a fast, thoughtful reply. A 30-page letter with no summary sits at the bottom of the pile and gets a skim.
+</MentalModel>
+
+## Receiving feedback
+
+- **Assume good intent**: reviewers are protecting the codebase (and you).
+- **Separate yourself from the code**: a comment on your code isn't a judgment of you.
+- **Respond to every comment**: fix it, or explain your reasoning and discuss. "Good catch, fixed in abc123" or "I chose X because Y; happy to change if you still prefer Z."
+- **Ask when unclear**: "Could you say more about what you'd expect here?"
+- **Move long debates to a call**, then summarize the outcome in the PR.
+- **Learn patterns**: if you get the same comment twice, add it to your personal checklist.
+
+## Getting reviews faster
+
+- Small PRs get reviewed faster, and that's the biggest lever.
+- Request specific reviewers with context; mention urgency if real.
+- Review others' PRs promptly; reciprocity is real.
+- If a PR is stuck, ask politely in person or chat, not just via notification.
+
+<Scenario
+  situation="A senior engineer leaves 12 comments on your PR, including 'this approach won't scale; we should use the existing event bus instead of polling.' You think polling is simpler and fine for now. What's the best response?"
+  choices={[
+    { text: "Resolve all comments without replying and merge after approval from someone else", feedback: "Ignoring feedback erodes trust quickly and can ship a real problem." },
+    { text: "Reply with your reasoning (expected volume, simplicity, migration path) and ask what scale concern they have in mind; offer a quick call if needed", feedback: "You engage with the substance, share data, stay open to being wrong, and either learn something or reach a shared decision. That's professional behavior.", best: true },
+    { text: "Rewrite everything to use the event bus immediately to avoid conflict", feedback: "Sometimes right, but changing course without understanding the reasoning misses a learning opportunity, and the reviewer might be fine with your approach given context." },
+  ]}
+/>
+
+<SeniorLens>
+Reviewers notice who sends **easy-to-review PRs**: clear descriptions, focused changes, tests, self-reviewed. Those engineers build a reputation for quality and get trusted with bigger changes. It's one of the cheapest reputation investments available at any level.
+</SeniorLens>
+
+<KeyTakeaways>
+- Small, focused PRs with what/why/how/testing/risks descriptions.
+- Self-review before requesting review; guide reviewers to tricky parts.
+- Respond to every comment; discuss reasoning, not ego; take long debates offline.
+- Review others promptly; reciprocity speeds your own reviews.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google Engineering Practices:** *The CL author's guide* (free online).
+- **Michael Lynch, *How to Make Your Code Reviewer Fall in Love with You*** (blog post).
+</GoDeeper>

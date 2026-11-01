@@ -1,0 +1,107 @@
+---
+section: Case studies
+title: "Case Study: Notification System"
+description: Multi-channel delivery (push, email, SMS), user preferences, templating, rate limits and reliable retries.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Every product eventually needs notifications: "Your order shipped", "Someone liked your post", password resets, marketing campaigns. Each goes out via push, email, SMS or in-app, through third-party providers that are slow, rate-limited and sometimes down. Users get annoyed by duplicates and spam. Design a **central notification service** that every team can use.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: other services request notifications (to a user, via one or more channels); templates with localization; user preferences and opt-outs; scheduling; in-app inbox; delivery status tracking.
+**Non-functional**: 10M+ notifications/day with bursts (campaigns: 50M in an hour); transactional messages (OTP, password reset) fast and prioritized; no duplicates; at-least-once delivery for important messages; respect provider rate limits.
+
+## 2. High-level design
+
+```text
+Producers (order svc, social svc, marketing) ──▶ Notification API  (validate, idempotency key)
+                                                  │
+                                                  ▼
+                                    Notification service
+                       ├─ load user preferences / contact info / quiet hours
+                       ├─ render template (locale, variables)
+                       ├─ dedupe + per-user rate limits ("max 3 marketing pushes/day")
+                       └─ enqueue per channel & priority
+                                                  │
+              ┌────────────────┬──────────────────┼────────────────┐
+              ▼                ▼                  ▼                ▼
+        push queue (hi/lo) email queue        SMS queue       in-app store
+              │                │                  │                │
+        push workers      email workers      SMS workers       (WebSocket/SSE
+        → APNs / FCM      → SES/SendGrid     → Twilio            or poll)
+              │
+        delivery events (sent / failed / bounced / opened) ──▶ status store + analytics
+```
+
+## 3. Key design points
+
+**Separate queues per channel and priority.** An email provider outage shouldn't delay OTP SMS. A 50M-message marketing blast shouldn't delay password resets. Use high- and low-priority queues and dedicated workers.
+
+**Idempotency end to end.** Producers send an idempotency key (`order-9001-shipped`); the service dedupes. Workers pass provider-level idempotency keys where supported. Users really notice duplicate notifications.
+
+**Preferences and compliance.** Check opt-outs per channel and category before sending; honor quiet hours and time zones; include unsubscribe links (legally required for marketing email in many jurisdictions); never send marketing to users who opted out.
+
+**Provider rate limits and retries.** Workers use token buckets per provider; retry transient errors with backoff + jitter; route to a **fallback provider** if one is down (e.g. secondary SMS vendor); dead-letter after N attempts.
+
+**Templates.** Stored and versioned centrally (with localization); rendered by the service so product teams just send `{template: "order_shipped", vars: {...}}`.
+
+**Fan-out for campaigns.** "Notify all 50M users" shouldn't be one request; a campaign job pages through the audience in batches and enqueues at a controlled rate.
+
+**Tracking.** Provider webhooks (delivered, bounced, opened) update status; hard bounces disable the address; analytics measure engagement.
+
+<MentalModel>
+A **post office sorting center**. Letters (requests) arrive from many senders; clerks check the recipient's forwarding and "no junk mail" instructions (preferences), put them in the right envelope and language (templates), and sort them into **separate bins for express and standard, by carrier** (channel/priority queues). Each carrier (provider) picks up at its own pace; undeliverable letters go to a dead-letter office.
+</MentalModel>
+
+<Quiz
+  question="A marketing campaign enqueues 40M emails. Simultaneously, password-reset emails take 30 minutes to arrive. What's the design fix?"
+  options={[
+    "Send password resets via SMS only",
+    "Separate priority queues (and worker pools) so transactional messages never wait behind bulk campaigns",
+    "Add more email providers",
+    "Rate-limit password resets",
+  ]}
+  answer={1}
+  explanation="Head-of-line blocking in a shared queue. Priority isolation (separate queues/workers, reserved provider capacity) keeps transactional messages fast regardless of bulk load."
+/>
+
+<Tradeoffs
+  good={[
+    "One central place for preferences, templates, compliance and tracking",
+    "Queues absorb bursts and isolate channel/provider failures",
+    "Teams send notifications with one API call",
+  ]}
+  bad={[
+    "Central service is critical: if it's down, nobody gets notified",
+    "At-least-once delivery means duplicates must be actively prevented",
+    "Third-party providers bound throughput and reliability",
+  ]}
+/>
+
+<LevelTags
+  junior="Sends notifications asynchronously via a queue rather than inline."
+  mid="Designs per-channel workers, retries, DLQs and idempotency."
+  senior="Adds priority isolation, preference/compliance checks, provider failover and campaign throttling."
+  lead="Owns notification policy (frequency caps, consent, legal) with product, marketing and legal teams."
+/>
+
+<SeniorLens>
+Notification systems fail **socially** before they fail technically: duplicate pushes, 3am alerts, spam that drives uninstalls. Seniors design **frequency caps, quiet hours and deduplication** as first-class features, and give product teams guardrails rather than raw "send" power.
+</SeniorLens>
+
+<KeyTakeaways>
+- Central service: API → preferences/templates/dedupe → per-channel, per-priority queues → provider workers.
+- Isolate transactional from bulk traffic.
+- Idempotency, retries with backoff, provider failover, DLQs.
+- Preferences, quiet hours, unsubscribe and compliance are core requirements.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview Vol. 1***: notification system chapter.
+- **Uber, Airbnb and Slack engineering blogs** on notification platforms.
+- **APNs and FCM docs** on rate limits and collapse keys.
+</GoDeeper>

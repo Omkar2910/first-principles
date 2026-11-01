@@ -1,0 +1,130 @@
+---
+title: "HTTP: The Language of the Web"
+description: Methods, status codes, headers, statelessness, and how HTTP/1.1, HTTP/2 and HTTP/3 differ.
+minutes: 13
+level: junior
+---
+
+<Problem>
+Almost every backend you'll build speaks HTTP. Yet teams constantly misuse it: `200 OK` with `{"error": "not found"}` in the body, `GET` requests that delete things, retries that charge a customer twice because nobody thought about which methods are safe to repeat. Knowing HTTP properly makes your APIs predictable for clients, proxies, caches and the next engineer.
+</Problem>
+
+## The shape of HTTP
+
+HTTP is a **request–response**, **text-based** (at least conceptually) protocol over a connection (TCP or QUIC).
+
+```http
+POST /orders HTTP/1.1
+Host: api.shop.com
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOi...
+Idempotency-Key: 7f3c-...
+
+{"productId": 42, "qty": 2}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+Location: /orders/9001
+Cache-Control: no-store
+
+{"id": 9001, "status": "PENDING"}
+```
+
+A request is a **method**, a **path**, **headers** and an optional **body**. A response is a **status code**, **headers** and an optional **body**.
+
+## HTTP is stateless
+
+Each request stands alone; the server doesn't inherently remember the previous one. State lives in **cookies** or **tokens** sent with every request, and in the **database**. Statelessness is what lets you put any request on any server behind a load balancer. It's the foundation of horizontal scaling.
+
+<MentalModel>
+HTTP is like a **counter at the post office with a different clerk every time**. The clerk doesn't remember you, so every visit you bring your ID (auth token) and your ticket number (session cookie). Annoying for you, but it means any clerk can serve you and the post office can add clerks freely.
+</MentalModel>
+
+## Methods and their guarantees
+
+| Method | Meaning | Safe (no side effects) | Idempotent (repeat = same effect) |
+|---|---|---|---|
+| `GET` | Read a resource | ✅ | ✅ |
+| `HEAD` | GET without body | ✅ | ✅ |
+| `POST` | Create / trigger action | ❌ | ❌ |
+| `PUT` | Replace a resource entirely | ❌ | ✅ |
+| `PATCH` | Partially update | ❌ | ❌ (usually) |
+| `DELETE` | Remove | ❌ | ✅ |
+
+**Idempotency** matters enormously. Networks fail mid-request; clients, proxies and load balancers *retry*. Retrying a `PUT` or `DELETE` is harmless. Retrying a `POST /payments` might charge twice, which is why payment APIs use an **`Idempotency-Key`** header (Track 4).
+
+## Status codes
+
+The first digit is the category. Use them honestly. Clients, monitoring and retries depend on them.
+
+- **2xx success**: `200 OK`, `201 Created` (+ `Location`), `202 Accepted` (async, will process later), `204 No Content`.
+- **3xx redirect**: `301 Moved Permanently`, `302/307 Temporary`, `304 Not Modified` (cache is still valid).
+- **4xx client error**, *don't retry without changing the request*: `400 Bad Request`, `401 Unauthorized` (not authenticated), `403 Forbidden` (authenticated but not allowed), `404 Not Found`, `409 Conflict`, `422 Unprocessable`, `429 Too Many Requests`.
+- **5xx server error**, *might succeed on retry*: `500 Internal Server Error`, `502 Bad Gateway` (upstream gave garbage), `503 Service Unavailable` (overloaded / down), `504 Gateway Timeout` (upstream too slow).
+
+<Quiz
+  question="A client calls your API with an expired token. Which status code?"
+  options={["400 Bad Request", "401 Unauthorized", "403 Forbidden", "500 Internal Server Error"]}
+  answer={1}
+  explanation="401 means 'I don't know who you are (or your credentials are invalid)': re-authenticate. 403 means 'I know who you are, and you're not allowed': re-authenticating won't help."
+/>
+
+## Headers worth knowing
+
+- `Content-Type` / `Accept`: format of the body / what the client wants back.
+- `Authorization`: credentials (`Bearer <token>`).
+- `Cache-Control`, `ETag`, `If-None-Match`: caching and conditional requests (huge for performance).
+- `Cookie` / `Set-Cookie`: session state; mark them `HttpOnly; Secure; SameSite`.
+- `X-Request-Id` / `traceparent`: correlate a request across services in logs and traces.
+- CORS headers (`Access-Control-Allow-Origin` …): let browsers call your API from another origin.
+
+## HTTP/1.1 vs HTTP/2 vs HTTP/3
+
+| | HTTP/1.1 | HTTP/2 | HTTP/3 |
+|---|---|---|---|
+| Transport | TCP | TCP | QUIC (UDP) |
+| Format | Text | Binary frames | Binary frames |
+| Concurrency per connection | One request at a time | **Multiplexed** streams | Multiplexed streams |
+| Head-of-line blocking | At HTTP level | At TCP level (one lost packet stalls all streams) | Eliminated |
+| Header compression | No | HPACK | QPACK |
+
+HTTP/1.1 browsers opened ~6 connections per host to get parallelism. HTTP/2 does many requests over one connection, which is why **gRPC** is built on it. HTTP/3 fixes TCP's head-of-line blocking and shortens handshakes, which matters most on lossy mobile networks.
+
+<Tradeoffs
+  good={[
+    "Universal: every language, proxy, cache and tool understands it",
+    "Stateless model makes horizontal scaling straightforward",
+    "Rich semantics (methods, codes, caching) for free if you use them correctly",
+  ]}
+  bad={[
+    "Text headers on every request add overhead (mitigated in HTTP/2+)",
+    "Request–response doesn't fit server push well (use WebSockets/SSE)",
+    "Easy to misuse, and misuse breaks caches, retries and monitoring",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses correct methods and status codes; knows 4xx vs 5xx and 401 vs 403."
+  mid="Designs idempotent endpoints, uses caching headers and request IDs, understands CORS."
+  senior="Chooses protocols deliberately (HTTP/2, gRPC, WebSockets, SSE) and designs retry-safe APIs end to end."
+  lead="Sets org-wide API conventions (error format, versioning, idempotency) so every team's APIs behave the same way."
+/>
+
+<SeniorLens>
+A senior's API review checklist starts with HTTP semantics: *Is this method idempotent? Is it safe to retry? Do failures return 4xx vs 5xx correctly so clients know whether to retry? Can responses be cached?* Getting these right prevents an entire category of production incidents: double charges, retry storms, cached errors.
+</SeniorLens>
+
+<KeyTakeaways>
+- HTTP is stateless request–response: method + path + headers + body → status + headers + body.
+- Know which methods are safe and idempotent; it determines what can be retried.
+- 4xx = client's fault (don't blindly retry), 5xx = server's fault (maybe retry).
+- HTTP/2 multiplexes over one TCP connection; HTTP/3 moves to QUIC to kill head-of-line blocking.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously, *Backend from First Principles*:** the HTTP deep-dive episodes.
+- **[MDN HTTP docs](https://developer.mozilla.org/en-US/docs/Web/HTTP)**: the best reference for headers and status codes.
+- **[HTTP/3 explained](https://http3-explained.haxx.se/)** by Daniel Stenberg (author of curl).
+</GoDeeper>

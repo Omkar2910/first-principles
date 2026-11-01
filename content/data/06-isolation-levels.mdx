@@ -1,0 +1,108 @@
+---
+title: Isolation Levels and Anomalies
+description: What concurrent transactions can see of each other, the anomalies each level allows, and how to choose.
+minutes: 13
+level: senior
+---
+
+<Problem>
+Your transactions are "ACID", yet two concurrent requests still produce a wrong result: a like count that's off, two doctors both leaving their shift, a double-booked meeting room. The "I" in ACID comes in **levels**, and the default level in Postgres (and most databases) permits several anomalies on purpose, for performance. Knowing exactly which ones is what lets you write correct concurrent code.
+</Problem>
+
+## The levels (SQL standard)
+
+From weakest to strongest:
+
+| Level | Prevents | Still allows |
+|---|---|---|
+| **Read Uncommitted** | (almost nothing) | Dirty reads, everything below |
+| **Read Committed** (Postgres/Oracle/SQL Server default) | Dirty reads | Non-repeatable reads, phantoms, lost updates, write skew |
+| **Repeatable Read** (MySQL default; snapshot isolation in Postgres) | + non-repeatable reads (+ phantoms and lost updates in Postgres) | Write skew |
+| **Serializable** | Everything: result equals *some* serial order | (nothing; but aborts and retries) |
+
+## The anomalies, by example
+
+Step through each one below. Set the level to **Read Committed** first (the real default), then raise it.
+
+<IsolationPlayground />
+
+- **Dirty read**: reading another transaction's uncommitted changes.
+- **Non-repeatable read**: the same row read twice in one transaction returns different values.
+- **Phantom read**: the same *query* returns a different set of rows (someone inserted a matching row).
+- **Lost update**: two read-modify-write cycles race; one overwrites the other.
+- **Write skew**: two transactions read overlapping data, make decisions, then write *different* rows, jointly breaking an invariant.
+
+<MentalModel>
+Isolation levels are like **how much you see of colleagues' drafts in a shared office**. Read Uncommitted: you read their scribbles before they've decided (dirty). Read Committed: you only see final versions, but they may change between your glances. Repeatable Read: you get a **photocopy** of the office at the moment you started and work from that. Serializable: a supervisor checks that everyone's work could have been done one person at a time, and sends someone back to redo theirs if not.
+</MentalModel>
+
+## How databases implement it: MVCC
+
+Postgres and InnoDB use **Multi-Version Concurrency Control**: an update creates a *new version* of the row instead of overwriting it. Each transaction sees the versions that were committed as of its **snapshot**. Readers never block writers, and writers never block readers. Old versions are cleaned up later (Postgres's `VACUUM`), which is why very long transactions cause table bloat.
+
+## Fixing anomalies without going fully Serializable
+
+1. **Atomic updates**: `UPDATE posts SET likes = likes + 1` instead of read-then-write. Kills most lost updates.
+2. **Pessimistic locking**: `SELECT ... FOR UPDATE` locks the rows you read until commit; others wait.
+3. **Optimistic locking**: a `version` column; `UPDATE ... SET ..., version = version + 1 WHERE id = ? AND version = ?`. If 0 rows are affected, someone else won, so retry. JPA's `@Version` does this.
+4. **Constraints**: a `UNIQUE (room_id, slot)` index makes double booking impossible regardless of isolation.
+5. **Materialize the conflict**: for write skew, lock a common row (e.g., the shift row) so both transactions contend on it.
+6. **Serializable** for the critical code paths, with a **retry loop** for serialization failures.
+
+```java
+@Entity
+class Product {
+    @Id Long id;
+    int stock;
+    @Version long version;    // JPA adds "AND version = ?" to updates → OptimisticLockException on conflict
+}
+```
+
+<Quiz
+  question="Postgres at Repeatable Read. Two transactions each check 'at least one doctor on call' and each set a different doctor off-call. Both commit. Which anomaly is this, and what prevents it?"
+  options={[
+    "Dirty read; Read Committed prevents it",
+    "Write skew; Serializable (or locking a shared row / FOR UPDATE on the checked rows) prevents it",
+    "Phantom read; an index prevents it",
+    "Lost update; @Version prevents it",
+  ]}
+  answer={1}
+  explanation="Each transaction read the same data and wrote different rows. Snapshot isolation doesn't detect that. Serializable does (aborting one), or you can force a conflict with SELECT ... FOR UPDATE on the rows you checked."
+/>
+
+<Tradeoffs
+  good={[
+    "Weaker levels: more concurrency, fewer aborts, better throughput",
+    "Serializable: you reason as if transactions ran one at a time",
+    "Targeted fixes (atomic updates, @Version, constraints) give correctness where it matters",
+  ]}
+  bad={[
+    "Weaker levels: subtle anomalies that only appear under load",
+    "Serializable: aborts under contention, so the app must retry",
+    "Semantics differ by database: MySQL RR ≠ Postgres RR",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows isolation levels exist and that the default doesn't prevent every race."
+  mid="Uses atomic updates, @Version, FOR UPDATE and unique constraints to prevent lost updates."
+  senior="Identifies write skew, chooses isolation per use case, implements serialization-failure retries."
+  lead="Ensures critical financial/inventory flows have explicit concurrency designs reviewed and load-tested."
+/>
+
+<SeniorLens>
+In design interviews for booking, wallet or inventory systems, interviewers are probing exactly this. A strong answer names the anomaly ("this is a lost update" / "this is write skew"), then picks the cheapest correct tool: an atomic update, a unique constraint, optimistic locking, or Serializable with retries, and explains its contention behavior under load.
+</SeniorLens>
+
+<KeyTakeaways>
+- Isolation is a spectrum; Read Committed is the common default and permits lost updates and write skew.
+- MVCC gives each transaction a snapshot; readers and writers don't block each other.
+- Fix races with atomic updates, locks, @Version, constraints or Serializable + retry.
+- Database behavior varies. Know yours.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 7**, "Weak Isolation Levels" section.
+- **[Postgres docs: Transaction Isolation](https://www.postgresql.org/docs/current/transaction-iso.html)**.
+- **[Hermitage](https://github.com/ept/hermitage)**: Martin Kleppmann's test suite comparing isolation across databases.
+</GoDeeper>

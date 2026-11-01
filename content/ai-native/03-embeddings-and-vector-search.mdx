@@ -1,0 +1,112 @@
+---
+title: Embeddings and Vector Search
+description: Turning meaning into numbers, similarity search, vector indexes (HNSW), and hybrid search.
+minutes: 11
+level: mid
+---
+
+<Problem>
+A user searches your help center for "I want my money back". The relevant article is titled "Refund policy for returned items". There are zero words in common, so keyword search finds nothing. **Embeddings** represent text by **meaning**, so "money back" and "refund" end up close together. They power semantic search, RAG, recommendations, deduplication and clustering.
+</Problem>
+
+## What an embedding is
+
+An **embedding model** maps a piece of text (or an image, code…) to a **vector**: a list of numbers, typically hundreds to a few thousand dimensions. Texts with similar meaning map to vectors that are **close together**.
+
+```text
+embed("How do I get a refund?")     → [0.021, -0.113, 0.087, ..., 0.004]   (e.g. 1024 numbers)
+embed("money back for my order")    → [0.019, -0.108, 0.091, ..., 0.010]   ← nearby
+embed("reset my password")          → [-0.140, 0.052, -0.033, ..., 0.077]  ← far away
+```
+
+Similarity is usually **cosine similarity** (angle between vectors) or dot product.
+
+<EmbeddingSim />
+
+<MentalModel>
+Embeddings are **coordinates on a map of meaning**. Every sentence gets a location; sentences about refunds cluster in one neighborhood, password problems in another. Searching becomes "**find the nearest neighbors to this point**", which works even when the words are completely different, because the locations encode meaning rather than spelling.
+</MentalModel>
+
+## Vector search at scale
+
+Comparing a query against every stored vector (brute force) is fine for thousands of items, too slow for hundreds of millions. **Approximate Nearest Neighbor (ANN)** indexes trade a little accuracy for huge speedups:
+- **HNSW** (Hierarchical Navigable Small World graphs): the most common; fast and accurate, memory-hungry.
+- **IVF** (inverted file / clustering) + **PQ** (product quantization) to compress vectors for very large scale.
+
+Where to store vectors:
+- **pgvector** in Postgres: keep vectors next to your data, filter with SQL, and one less system. A great default up to many millions of vectors.
+- Search engines with vector support: Elasticsearch/OpenSearch.
+- Dedicated vector databases (Pinecone, Weaviate, Qdrant, Milvus) for very large scale or specialized features.
+
+```sql
+CREATE EXTENSION vector;
+CREATE TABLE doc_chunks (id bigserial PRIMARY KEY, doc_id bigint, content text, embedding vector(1024));
+CREATE INDEX ON doc_chunks USING hnsw (embedding vector_cosine_ops);
+
+SELECT id, content, 1 - (embedding <=> :query_embedding) AS similarity
+FROM doc_chunks
+WHERE doc_id IN (SELECT id FROM docs WHERE tenant_id = :tenant)   -- filter: permissions/tenancy!
+ORDER BY embedding <=> :query_embedding
+LIMIT 10;
+```
+
+## Hybrid search: the practical best
+
+Embeddings are great at meaning but can miss **exact terms**: product codes, error messages, names, rare jargon (`ERR_CONN_RESET_4012`). Keyword search (BM25) is great at those. **Hybrid search** runs both and merges results (e.g. reciprocal rank fusion), often followed by a **reranker** model that scores the top candidates more precisely. That's the setup most production systems converge on.
+
+## Practical details
+
+- **Same model for indexing and querying**; changing the embedding model means **re-embedding everything**.
+- **Chunking** matters: embed passages (a few hundred tokens with some overlap), not whole 50-page documents.
+- Store metadata (source, section, permissions, timestamps) alongside vectors for filtering and citations.
+- **Filter by permissions** at query time, or you'll leak documents across users/tenants.
+- Cost: embedding is cheap per token, but re-embedding large corpora adds up. Batch it and cache it.
+
+<Quiz
+  question="Users search error codes like 'E-4012' and vector search returns loosely related articles instead of the exact match. What's the standard fix?"
+  options={[
+    "Use a bigger embedding model",
+    "Hybrid search: combine keyword (BM25) and vector results, optionally rerank",
+    "Increase the number of dimensions",
+    "Remove the error codes from documents",
+  ]}
+  answer={1}
+  explanation="Exact tokens like codes and identifiers are keyword search's strength. Hybrid retrieval gets both exact matches and semantic matches."
+/>
+
+<Tradeoffs
+  good={[
+    "Finds results by meaning, across paraphrases and languages",
+    "One technique powers search, RAG, recommendations, dedup",
+    "pgvector makes it easy to start inside an existing database",
+  ]}
+  bad={[
+    "Weak on exact identifiers alone, so hybrid search is often needed",
+    "ANN indexes use memory and are approximate",
+    "Model changes require full re-embedding; chunking choices affect quality",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows embeddings map meaning to vectors and similarity search finds neighbors."
+  mid="Builds semantic search with pgvector, chunking and metadata filtering."
+  senior="Designs hybrid retrieval with reranking, permission-aware filtering and re-embedding strategy."
+  lead="Chooses retrieval infrastructure and evaluation standards for AI features org-wide."
+/>
+
+<SeniorLens>
+Most teams over-focus on which vector database to pick and under-invest in **retrieval quality**: chunking, metadata, hybrid search, reranking and measuring recall on real queries. Seniors start with pgvector (or whatever's already operated) and spend their effort on evaluation.
+</SeniorLens>
+
+<KeyTakeaways>
+- Embeddings map text to vectors; nearby vectors = similar meaning.
+- ANN indexes (HNSW) make similarity search fast at scale.
+- Hybrid (keyword + vector) + reranking is the production standard.
+- Chunk well, store metadata, filter by permissions, plan for re-embedding.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[pgvector README](https://github.com/pgvector/pgvector)**.
+- **Pinecone Learning Center:** vector search and HNSW explainers.
+- **Anthropic engineering:** *Contextual Retrieval* (improving RAG retrieval with context + hybrid search).
+</GoDeeper>

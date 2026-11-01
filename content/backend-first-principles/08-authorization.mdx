@@ -1,0 +1,127 @@
+---
+title: Authorization
+description: Deciding what an authenticated user may do. RBAC, ABAC, ownership checks, and the IDOR bug everyone ships once.
+minutes: 10
+level: mid
+---
+
+<Problem>
+User 42 is logged in. They call `GET /invoices/1001`. Invoice 1001 belongs to user 77. Your endpoint checks "is the user authenticated?" and happily returns it. This is **IDOR (Insecure Direct Object Reference)**, one of the most common and damaging API vulnerabilities. Authentication tells you *who*; authorization is the work of deciding *whether they may*, on **every** request, for **every** resource.
+</Problem>
+
+## The models
+
+**RBAC (Role-Based Access Control)**: users get roles; roles get permissions.
+
+```text
+role: customer → orders:read:own, orders:create
+role: support  → orders:read:any, refunds:create
+role: admin    → *
+```
+
+Simple, auditable, and enough for most apps. It breaks down when rules depend on *which* resource ("can edit documents **in their own team**").
+
+**ABAC (Attribute-Based Access Control)**: decisions use attributes of the user, the resource, the action and the environment.
+
+```text
+allow if user.department == doc.department
+      and action in ["read", "comment"]
+      and request.time within business_hours
+```
+
+Very flexible, harder to reason about and audit.
+
+**ReBAC (Relationship-Based)**: permissions follow a graph of relationships: "user can view doc if they're a member of a folder that contains it". Google's **Zanzibar** (which backs Drive and YouTube) works this way, and open-source versions include SpiceDB and OpenFGA.
+
+<MentalModel>
+An office building. **RBAC** is keycards by job title: all "engineers" open the lab door. **ABAC** is a smart lock that checks your title, your team, the time of day and which room. **Ownership checks** are simply "this is your desk drawer; only you open it". Most real systems need **role checks for features** plus **ownership/relationship checks for data**.
+</MentalModel>
+
+## Where checks go
+
+1. **Coarse checks at the edge**: "only `admin` can call `/admin/**`". Gateway or security filter.
+2. **Fine-grained checks next to the data**: "this invoice belongs to this user". Service layer, because you need the resource to decide.
+
+```java
+// Coarse: role/permission on the endpoint
+@PreAuthorize("hasAuthority('invoices:read')")
+@GetMapping("/invoices/{id}")
+InvoiceDto get(@PathVariable long id, @AuthenticationPrincipal User user) {
+    return InvoiceDto.from(invoiceService.getForUser(id, user));
+}
+
+// Fine-grained: ownership in the service
+Invoice getForUser(long id, User user) {
+    Invoice inv = repo.findById(id).orElseThrow(NotFound::new);
+    if (!inv.ownerId().equals(user.id()) && !user.hasRole("SUPPORT")) {
+        throw new NotFound();   // 404, not 403, to avoid leaking that the invoice exists
+    }
+    return inv;
+}
+```
+
+A safer pattern is **scoping the query itself**, so you can't forget the check:
+
+```java
+repo.findByIdAndOwnerId(id, user.id())   // returns empty if not theirs
+```
+
+For multi-tenant SaaS, every query should be scoped by `tenant_id`. Many teams enforce this with a framework-level filter (Hibernate filters) or Postgres **Row-Level Security**.
+
+<Quiz
+  question="An endpoint GET /accounts/{id}/statements checks the user is authenticated and has the 'customer' role. What's still missing?"
+  options={[
+    "Nothing, both checks are present",
+    "A check that the account {id} actually belongs to the authenticated user",
+    "Rate limiting",
+    "HTTPS",
+  ]}
+  answer={1}
+  explanation="Role checks say the user may use the feature; ownership checks say they may see *this* data. Without it, any customer can read any account's statements by changing the ID. That's a textbook IDOR."
+/>
+
+## Principles that prevent breaches
+
+- **Deny by default**: an endpoint without explicit rules should be inaccessible.
+- **Least privilege**: grant the minimum; time-box elevated access.
+- **Check on every request**: don't cache "is admin" in the client or trust a client-sent `role` field.
+- **Centralize policy**: scattered `if (user.isAdmin())` checks rot. Use a policy layer (Spring Security expressions, OPA, Cedar, OpenFGA).
+- **Audit**: log who accessed or changed what, especially for privileged actions.
+- **Test authorization explicitly**: for each endpoint, a test with the *wrong* user that must fail.
+
+<Tradeoffs
+  good={[
+    "RBAC: simple, easy to audit and explain",
+    "ABAC/ReBAC: expressive enough for sharing, teams and multi-tenancy",
+    "Query scoping: makes the secure path the default path",
+  ]}
+  bad={[
+    "RBAC: role explosion when you encode data rules into roles",
+    "ABAC: hard to debug 'why was this denied?'",
+    "Central policy engines add a dependency and latency to every request",
+  ]}
+/>
+
+<LevelTags
+  junior="Never trusts the client for permissions; adds role checks on endpoints."
+  mid="Implements ownership checks and query scoping; writes negative authorization tests."
+  senior="Designs the permission model (RBAC vs ReBAC), multi-tenant isolation and audit logging."
+  lead="Owns access-control architecture across services, often via a central policy service, and access review processes."
+/>
+
+<SeniorLens>
+In security reviews, seniors pick random endpoints and ask one question: **"What stops user A from reading user B's data here?"** If the answer is "the frontend doesn't show the link", that's a bug. Broken object-level authorization is #1 on the OWASP API Security Top 10 for a reason.
+</SeniorLens>
+
+<KeyTakeaways>
+- AuthZ decides what an identity may do. Check on every request, server-side.
+- RBAC for features, ownership/relationship checks for data.
+- Scope queries by owner/tenant so the check can't be forgotten.
+- Deny by default, least privilege, audit, test negative cases.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the authorization episode.
+- **[OWASP API Security Top 10](https://owasp.org/API-Security/)**: Broken Object Level Authorization (BOLA).
+- **Google Zanzibar paper** and **[OpenFGA](https://openfga.dev/)** docs for relationship-based access.
+</GoDeeper>

@@ -1,0 +1,117 @@
+---
+title: How LLMs Work (for Engineers)
+description: Tokens, next-token prediction, context windows, sampling and why models hallucinate. The intuition you need to build with them.
+minutes: 12
+level: junior
+---
+
+<Problem>
+You're asked to add an "AI summary" feature, or debug why the chatbot confidently invented a refund policy, or explain why the bill tripled. Treating the model as a magic black box leads to fragile features and surprises. You don't need to train models, but you do need a working **mental model of what an LLM is doing**, because it explains its strengths, its failure modes and its costs.
+</Problem>
+
+## The core loop: predict the next token
+
+A large language model is a neural network (a **transformer**) trained on enormous amounts of text to do one thing: **given a sequence of tokens, predict a probability distribution over the next token.** Generation is just repeating that:
+
+```text
+input:  "The capital of France is"
+model → P(" Paris") = 0.92, P(" a") = 0.03, P(" located") = 0.02, ...
+pick " Paris" → append → predict again → ... until a stop token or length limit
+```
+
+After pre-training, models are further trained (instruction tuning, reinforcement learning from human and AI feedback) to follow instructions, use tools, reason step by step and be helpful and safe. But underneath, it's still next-token prediction, one token at a time.
+
+<MentalModel>
+An LLM is an **extraordinarily well-read improviser**. It has absorbed patterns from a vast library and, given the start of a scene, continues it in the most plausible way. Brilliant at continuing patterns, explaining, translating, coding and reasoning through familiar structures. But "plausible" isn't "verified": if the scene calls for a fact it doesn't actually know, it may improvise something that *sounds* right.
+</MentalModel>
+
+## Tokens
+
+Models read and write **tokens**: chunks of text, often word pieces. Roughly, in English, **1 token ≈ ¾ of a word** (~4 characters). Code, non-English languages and unusual strings can use more tokens per word.
+
+Tokens matter because:
+- **Pricing** is per input and output token.
+- **Context limits** are measured in tokens.
+- **Latency** grows with output tokens (generated one at a time) and, to a lesser extent, input tokens.
+
+## The context window
+
+The model has no memory between calls. Everything it "knows" about your request must be in the **context window**: system prompt, conversation history, retrieved documents, tool results, and its own output so far. Modern windows are large (hundreds of thousands of tokens or more), but:
+- More context = more cost and latency.
+- Relevance still matters: burying the key fact in a wall of irrelevant text can hurt quality.
+- Conversation "memory" in chat apps is just the app re-sending history (or a summary) every turn.
+
+## Sampling: temperature and friends
+
+The model outputs probabilities; **sampling** picks a token:
+- **Temperature** ~0: nearly always the most likely token, so output is more deterministic and focused (good for extraction, classification, code).
+- Higher temperature: more variety (brainstorming, creative writing).
+- Even at temperature 0, outputs aren't guaranteed identical across runs. Design for some variability.
+
+## Why models hallucinate
+
+The model generates plausible continuations; it doesn't look things up unless you give it the information (or tools). Hallucinations are more likely when:
+- The question needs specific facts not in its training data or context (your company's refund policy, yesterday's prices).
+- The prompt pressures it to answer anyway.
+- Details are niche, numeric or recent.
+
+Mitigations: **ground the model** by putting the facts in context (RAG, lesson 4), give it **tools** to look things up, ask it to cite sources from the provided context, allow "I don't know", and **evaluate** systematically (lesson 7).
+
+## What LLMs are good and bad at (engineering view)
+
+| Strong | Weak / needs support |
+|---|---|
+| Understanding and generating natural language and code | Exact arithmetic on large numbers (use tools) |
+| Summarizing, extracting, classifying, transforming formats | Facts not in training data or context |
+| Following detailed instructions and examples | Guaranteeing determinism |
+| Multi-step reasoning on familiar problem shapes | Strict real-time latency at very low cost |
+| Using tools when given clear definitions | Knowing what it doesn't know (calibration varies) |
+
+<Quiz
+  question="Your chatbot gives confident but wrong answers about your company's return policy. What's the most effective fix?"
+  options={[
+    "Increase the temperature",
+    "Provide the actual policy text in the context (retrieval/RAG) and instruct the model to answer only from it, saying so when the answer isn't there",
+    "Use a longer system prompt telling it not to lie",
+    "Fine-tune on general internet data",
+  ]}
+  answer={1}
+  explanation="The model can't know private, changing facts from training. Grounding it in the real policy, and allowing it to say 'not covered', addresses the root cause."
+/>
+
+<Tradeoffs
+  good={[
+    "General-purpose: one model handles many language and code tasks",
+    "Natural-language interfaces to complex functionality",
+    "Fast prototyping: behavior defined by prompts, not training",
+  ]}
+  bad={[
+    "Non-deterministic and can be confidently wrong",
+    "Cost and latency scale with tokens",
+    "Behavior can shift between model versions, so you need evals",
+  ]}
+/>
+
+<LevelTags
+  junior="Understands tokens, context windows, temperature and why hallucinations happen."
+  mid="Designs prompts and context deliberately; estimates token costs; grounds answers."
+  senior="Chooses where LLMs fit in a system and where deterministic code should do the work."
+  lead="Sets strategy for AI features: model/provider choices, evaluation standards, cost and risk."
+/>
+
+<SeniorLens>
+The senior instinct is to use the model **for what only a model can do** (understanding messy language, generating text, flexible reasoning) and use **plain code for everything else**: validation, math, permissions, business rules, data lookups. The best AI features are mostly normal software, with the LLM doing the parts that used to be impossible.
+</SeniorLens>
+
+<KeyTakeaways>
+- LLMs predict the next token repeatedly; instruction tuning makes them helpful assistants.
+- Tokens drive cost, limits and latency; ~¾ word per token in English.
+- The context window is the model's only working memory per call.
+- Hallucinations come from ungrounded generation; fix with context, tools and evals.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Andrej Karpathy, *Intro to Large Language Models*** and *Let's build GPT* (YouTube).
+- **3Blue1Brown:** neural networks and transformers series (visual intuition).
+- **Anthropic and OpenAI developer docs:** model overviews, tokens and pricing pages.
+</GoDeeper>

@@ -1,0 +1,105 @@
+---
+title: Overload, Backpressure and Graceful Degradation
+description: What to do when demand exceeds capacity. Load shedding, backpressure, queues with limits and degraded modes.
+minutes: 11
+level: senior
+---
+
+<Problem>
+Traffic spikes to 3× capacity during a sale. Requests queue up, latency climbs to 30 seconds, clients time out and **retry**, which adds more load. Every request now fails, including the ones you could have served. This is **congestion collapse**: an overloaded system that tries to serve everyone serves no one. The fix is counterintuitive: **deliberately reject some work** so the rest succeeds.
+</Problem>
+
+## Why overload collapses systems
+
+- **Queues grow without bound**: every request waits behind the backlog, so latency explodes even for "fast" requests.
+- **Work is wasted**: requests are processed after the client has already given up (timed out), so the server does work nobody will receive.
+- **Retries amplify** load exactly when capacity is scarce (Track 4).
+- **Resources exhaust**: thread pools, connections and memory, leading to crashes that reduce capacity further.
+
+<MentalModel>
+A restaurant on its busiest night. If the host seats everyone who walks in, the kitchen drowns, every table waits 2 hours, and people leave without paying. A good host says "**we're full, 45-minute wait or come back later**" at the door. Fewer guests get served immediately, but every seated guest gets a good meal. Load shedding is that host.
+</MentalModel>
+
+## Tools
+
+**1. Load shedding**: reject excess work early and cheaply with `503`/`429`, ideally before expensive processing.
+- Limit **concurrent in-flight requests** per instance (concurrency limits often beat rate limits because they adapt to latency).
+- **Adaptive concurrency limits** (Netflix's concurrency-limits library, Envoy adaptive concurrency) adjust automatically based on observed latency, the TCP-congestion-control idea applied to services.
+- **Prioritize**: shed low-priority traffic first (background syncs, analytics, prefetches, bots) and protect critical paths (checkout, login).
+
+**2. Bounded queues and deadlines**
+- Never use unbounded queues in request paths. A full queue rejects instead of growing.
+- **Drop work whose deadline has passed**: if the client's deadline is gone, don't process it. Propagate deadlines (gRPC does this).
+- Prefer **LIFO or adaptive LIFO** under overload for interactive traffic: the newest requests still have clients waiting (Facebook's CoDel-inspired approach).
+
+**3. Backpressure**: signal upstream to slow down instead of buffering infinitely: bounded channels, reactive streams' demand signaling, Kafka consumer lag driving producer throttling, `429` + `Retry-After`.
+
+**4. Graceful degradation**: serve a **reduced but useful** experience:
+- Serve cached/stale data instead of live (product page from cache, "prices may be delayed").
+- Turn off expensive optional features (recommendations, personalization, real-time counts) via **kill switches**.
+- Reduce quality (lower image resolution, fewer search results, simpler ranking).
+- Queue writes for later (accept the order, process payment asynchronously).
+
+**5. Autoscaling, with caveats**: scaling helps for gradual increases but is **too slow for sudden spikes** (minutes to boot), and scaling app servers can push overload into the database. Load shedding protects you while scaling catches up.
+
+```java
+// Simple concurrency limiter (bulkhead) in front of an expensive endpoint
+private final Semaphore inFlight = new Semaphore(200);
+
+ResponseEntity<?> search(SearchRequest req) {
+    if (!inFlight.tryAcquire()) {
+        return ResponseEntity.status(503).header("Retry-After", "2").build();   // shed fast and cheap
+    }
+    try { return ResponseEntity.ok(searchService.search(req)); }
+    finally { inFlight.release(); }
+}
+```
+
+<Quiz
+  question="During a traffic spike, your service's latency rises from 100 ms to 20 s and success rate drops to near 0%, though CPU is maxed and doing work the whole time. What's happening and what helps most immediately?"
+  options={[
+    "A memory leak; restart everything",
+    "Congestion collapse: the server processes requests clients have already abandoned. Load shedding with concurrency limits/deadlines so accepted requests finish in time",
+    "The database needs an index",
+    "Increase all timeouts to 60 s",
+  ]}
+  answer={1}
+  explanation="With unbounded queuing, all work completes too late to matter. Rejecting excess early lets the system serve the requests it accepts at normal latency, so goodput recovers."
+/>
+
+<Tradeoffs
+  good={[
+    "Load shedding preserves goodput: some users served well instead of all served badly",
+    "Degraded modes keep core journeys alive",
+    "Backpressure prevents unbounded resource growth",
+  ]}
+  bad={[
+    "Rejected users see errors; prioritization must be thought through",
+    "Degraded modes are code paths that need testing",
+    "Adaptive limits need tuning and good latency signals",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows unbounded queues and missing timeouts are dangerous."
+  mid="Adds concurrency limits, bounded queues and kill switches for optional features."
+  senior="Designs prioritized load shedding, deadline propagation and degradation plans per dependency."
+  lead="Makes overload behavior an explicit, tested requirement (game days, load tests beyond capacity)."
+/>
+
+<SeniorLens>
+Seniors load-test **past** capacity, not just up to it. The interesting question isn't "can we handle 2,000 RPS?" but "**what happens at 4,000 RPS?**" A well-designed service plateaus at max goodput and rejects the rest. A poorly designed one falls off a cliff and stays down even after the spike ends.
+</SeniorLens>
+
+<KeyTakeaways>
+- Overload + unbounded queues + retries = congestion collapse.
+- Shed load early and cheaply; prioritize critical traffic.
+- Bounded queues, deadlines, backpressure.
+- Plan degraded modes with kill switches; autoscaling alone is too slow.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Book:** *Handling Overload* and *Addressing Cascading Failures*.
+- **AWS Builders' Library:** *Using load shedding to avoid overload*.
+- **Netflix:** *Performance Under Load* (adaptive concurrency limits) blog post.
+</GoDeeper>

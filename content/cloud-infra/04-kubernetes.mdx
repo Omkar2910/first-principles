@@ -1,0 +1,133 @@
+---
+title: Kubernetes Essentials
+description: Pods, Deployments, Services, config, autoscaling and the reconciliation loop, everything a backend engineer needs.
+minutes: 13
+level: mid
+---
+
+<Problem>
+You have 40 containerized services across 30 machines. Machines die, traffic spikes, deploys happen 50 times a day. Who decides which container runs where, restarts crashed ones, rolls out new versions without downtime, and routes traffic to healthy instances? Doing this by hand is impossible. **Kubernetes** is the de facto platform for it, and most backend engineers now deploy to it daily.
+</Problem>
+
+## The core idea: declarative desired state
+
+You don't tell Kubernetes *how* to do things ("start 3 containers on node 7"). You declare **what you want** ("3 replicas of image X with these resources"), and **controllers** continuously reconcile reality toward that desired state.
+
+```text
+loop forever:
+    desired = read spec from API server (stored in etcd)
+    actual  = observe the cluster
+    if actual != desired: take action (start pod, kill pod, update endpoint…)
+```
+
+A crashed pod or a dead node is just "actual ≠ desired", and gets fixed automatically.
+
+<MentalModel>
+Kubernetes is a **thermostat for your infrastructure**. You set the desired temperature (3 healthy replicas, version 1.4). The thermostat constantly measures the room and turns the heating on or off to match. You never say "run the heater for 10 minutes"; you state the goal and it keeps working toward it, even when someone opens a window (a node dies).
+</MentalModel>
+
+## Objects you'll use daily
+
+| Object | What it is |
+|---|---|
+| **Pod** | Smallest unit: one (or a few tightly coupled) containers sharing network/storage. Ephemeral. |
+| **Deployment** | Manages a ReplicaSet of identical stateless pods; handles rolling updates and rollbacks. |
+| **Service** | Stable virtual IP + DNS name (`orders.default.svc.cluster.local`) load-balancing across matching pods. |
+| **Ingress / Gateway API** | HTTP routing from outside the cluster to Services (host/path rules, TLS). |
+| **ConfigMap / Secret** | Configuration and sensitive values injected as env vars or files. |
+| **HorizontalPodAutoscaler** | Scales replicas based on CPU/memory or custom metrics. |
+| **StatefulSet** | For stateful workloads needing stable identity/storage (databases, Kafka); use sparingly. |
+| **Job / CronJob** | Run-to-completion and scheduled tasks. |
+| **Namespace** | Logical grouping and isolation (per team or environment). |
+
+## A typical service manifest
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: orders }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: orders } }
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }   # zero-downtime rollout
+  template:
+    metadata: { labels: { app: orders } }
+    spec:
+      containers:
+        - name: orders
+          image: registry.example.com/orders:3f9a1c2      # immutable tag per build
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: prod }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: orders-db, key: password } }
+          resources:
+            requests: { cpu: "500m", memory: "768Mi" }    # used for scheduling
+            limits:   { memory: "768Mi" }                 # memory limit = OOM kill boundary
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: 8080 } }
+          livenessProbe:  { httpGet: { path: /actuator/health/liveness,  port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: orders }
+spec:
+  selector: { app: orders }
+  ports: [{ port: 80, targetPort: 8080 }]
+```
+
+## Things that bite backend engineers
+
+- **Resource requests/limits**: requests drive scheduling; memory over limit → OOMKilled; CPU over limit → throttled (latency spikes). Many teams set memory limits but avoid CPU limits for latency-sensitive services.
+- **Probes**: see Track 1. Liveness must not depend on downstream services.
+- **Graceful shutdown**: pods get SIGTERM, then removal from endpoints happens *concurrently*; add a short `preStop` sleep so in-flight traffic drains.
+- **Pods are cattle**: no local state; anything on the container filesystem disappears.
+- **Debugging**: `kubectl get pods`, `describe pod` (events! OOMKilled, image pull errors, probe failures), `logs -f`, `logs --previous` (crashed container), `exec`, `port-forward`, `top pod`, `rollout undo`.
+
+<Quiz
+  question="A pod keeps restarting with reason OOMKilled while the JVM heap metrics look fine. What's a likely cause?"
+  options={[
+    "The liveness probe is wrong",
+    "Total process memory (heap + metaspace + thread stacks + direct buffers) exceeds the container memory limit; size MaxRAMPercentage and the limit accordingly",
+    "The Service selector is wrong",
+    "The image tag is latest",
+  ]}
+  answer={1}
+  explanation="The kernel kills the container when total memory exceeds the cgroup limit, not just heap. Leave headroom (e.g. heap ≈ 70–75% of the limit) and check non-heap usage."
+/>
+
+<Tradeoffs
+  good={[
+    "Self-healing, declarative, consistent deploys across environments",
+    "Rolling updates, autoscaling and service discovery built in",
+    "Huge ecosystem: Helm, operators, service meshes, GitOps",
+  ]}
+  bad={[
+    "Significant complexity; easy to misconfigure resources and probes",
+    "Operating clusters is real work (use managed: EKS/GKE/AKS)",
+    "Overkill for a few simple services (consider Cloud Run, ECS/Fargate, App Runner)",
+  ]}
+/>
+
+<LevelTags
+  junior="Deploys with existing manifests/Helm charts; reads pod logs and status."
+  mid="Writes Deployments/Services/probes/resources correctly; debugs OOMs, CrashLoopBackOff and rollouts."
+  senior="Designs autoscaling, PodDisruptionBudgets, topology spread across AZs, and zero-downtime strategies."
+  lead="Owns the platform approach: managed K8s vs simpler PaaS, golden paths, multi-tenancy and cost."
+/>
+
+<SeniorLens>
+Seniors judge Kubernetes by whether product engineers **need to think about it**. The best platforms give teams a "golden path" (a template with sane probes, resources, HPA and dashboards) so deploying a new service is a 20-line config. If every team is hand-tuning YAML and debugging ingress, the platform is leaking.
+</SeniorLens>
+
+<KeyTakeaways>
+- Declare desired state; controllers reconcile continuously.
+- Pods (ephemeral) ← Deployments (rollouts) ← Services (stable endpoints) ← Ingress (HTTP entry).
+- Set requests/limits and probes correctly; handle SIGTERM with a preStop delay.
+- `kubectl describe` events are your first debugging stop.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Kubernetes docs: Concepts](https://kubernetes.io/docs/concepts/)**.
+- **Kubernetes Up & Running** (Burns, Beda, Hightower).
+- **Learnk8s blog:** excellent deep dives (graceful shutdown, resource limits).
+</GoDeeper>

@@ -1,0 +1,93 @@
+---
+title: Becoming an AI-Native Engineer
+description: What changes in your role, which skills compound in value, and a practical plan to grow in the AI era.
+minutes: 9
+level: senior
+---
+
+<Problem>
+Coding agents write more code every month. It's natural to wonder what that means for your career. Is learning system design still worth it? What makes a senior engineer valuable when an agent can produce a CRUD service in minutes? The honest answer: **the value is shifting, not disappearing**, toward judgment, systems thinking, communication and building with AI. Engineers who adapt deliberately will be far more productive than ever.
+</Problem>
+
+## What changes
+
+- **Writing code gets cheaper**; **deciding what to build and verifying it's right** become the bottleneck.
+- **Throughput per engineer** rises; expectations follow: scope, ownership and quality bars increase.
+- **Products change**: many features now include LLM components, so backend engineers need AI-system skills (retrieval, evals, tool design, cost and safety).
+- **Review and verification** become central daily skills.
+
+## Skills that compound in value
+
+| Skill | Why it matters more now |
+|---|---|
+| **System design & fundamentals** (this whole site) | Agents generate code inside the architecture you choose; bad architecture at AI speed is just faster debt |
+| **Problem framing & specification** | The quality of an agent's work tracks the quality of the brief |
+| **Code review & verification** | You're accountable for far more code than you typed |
+| **Debugging & production intuition** | Agents struggle most with novel, cross-system failures |
+| **Domain understanding** | Knowing what users and the business actually need is irreplaceable |
+| **Communication & leadership** | Aligning people, writing design docs, making decisions |
+| **AI engineering** | Prompts, RAG, tools, evals, LLM system design: new core backend skills |
+| **Taste** | Knowing what good looks like: simple designs, clean APIs, maintainable code |
+
+<MentalModel>
+Power tools didn't make carpenters obsolete; they changed what a carpenter's day looks like. A carpenter with power tools builds much more, but **knowing what to build, how it bears load, and whether it's square** matters more than ever, because mistakes are also made faster. AI is the power tool; fundamentals and judgment are the craft.
+</MentalModel>
+
+## A practical growth plan
+
+**Daily habits**
+- Use coding agents for real work; notice where they excel and where they fail.
+- Keep a project instructions file current; treat it like onboarding docs.
+- Review AI output as rigorously as a colleague's PR.
+
+**Quarterly projects**
+- Build one AI feature end to end: RAG or tool-using assistant, **with evals**, cost tracking and guardrails.
+- Build an MCP server for an internal system.
+- Write a design doc for an AI feature, including cost, latency, failure modes and safety.
+
+**Ongoing learning**
+- Keep strengthening fundamentals (Tracks 0–9): they're what lets you judge AI output.
+- Follow a few high-signal sources (provider engineering blogs, practitioners who share evals and failures), not the hype.
+- Share what works with your team: prompts, workflows, review checklists. Multiplying others is senior work.
+
+## At each level
+
+- **Junior → mid**: use AI to learn faster (ask it to explain code, generate test cases), but make sure you understand everything you ship. Fundamentals first.
+- **Mid → senior**: own AI-assisted delivery of whole features; build AI-powered features with evals; become the person who reviews AI-generated code well.
+- **Senior → lead**: shape how your team uses AI (norms, tooling, security), identify where AI changes your product and architecture, and measure real impact (cycle time, quality), not hype.
+
+<Quiz
+  question="Which investment most increases your long-term value as AI writes more of the code?"
+  options={[
+    "Memorizing framework APIs",
+    "Strengthening fundamentals and judgment (system design, debugging, review, specification) and learning to build and evaluate AI-powered systems",
+    "Avoiding AI tools to keep coding skills pure",
+    "Typing speed",
+  ]}
+  answer={1}
+  explanation="AI handles more of the 'how to write it'. The scarce skills are knowing what to build, how systems should be designed, and whether the result is correct and safe, plus building with AI itself."
+/>
+
+<LevelTags
+  junior="Uses AI to learn and deliver while making sure they understand every change."
+  mid="Delivers features faster with agents, builds first AI features with evals."
+  senior="Designs AI-native systems and workflows; raises the team's review and verification bar."
+  lead="Redefines team processes, roles and roadmaps around AI capabilities, measuring real outcomes."
+/>
+
+<SeniorLens>
+The engineers who thrive treat AI as **leverage on their judgment**, not a replacement for it. They go deeper on fundamentals because that's what lets them direct and verify the work, and they become the people others ask: "how should we build this with AI, and how will we know it works?"
+</SeniorLens>
+
+<KeyTakeaways>
+- Code generation gets cheap; specification, design, verification and judgment get more valuable.
+- AI engineering (RAG, tools, evals, cost, safety) is now part of backend engineering.
+- Build habits: use agents daily, review rigorously, build AI features with evals.
+- Fundamentals are what make you effective with AI. Keep investing in them.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Chip Huyen, *AI Engineering***.
+- **Anthropic and OpenAI engineering blogs** (agents, evals, tool design).
+- The rest of this site: every track is a fundamental that makes your AI-assisted work better.
+</GoDeeper>

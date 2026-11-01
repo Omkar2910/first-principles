@@ -1,0 +1,88 @@
+---
+section: Level 3 · Senior → Tech Lead / Staff
+title: "Senior → Lead: Making and Recording Decisions"
+description: RFC processes, ADRs, disagree-and-commit, and driving groups to good decisions without endless debate.
+minutes: 9
+level: senior
+---
+
+<Problem>
+The team has debated REST vs gRPC for internal services for six weeks across four meetings. Nothing is decided, people are frustrated, and two services shipped with different choices anyway. A year later, someone asks "why did we choose Kafka?" and nobody remembers. Tech leads are responsible for **decision velocity and decision quality**: making sure decisions get made, made well, and remembered.
+</Problem>
+
+## Matching process to the decision
+
+| Decision type | Example | Process |
+|---|---|---|
+| **Small, reversible** | Library for a utility, naming | Decide yourself or in the PR; move on |
+| **Medium, team-scoped** | API style for a new service, caching approach | Short design note, team discussion, tech lead decides; record an ADR |
+| **Large or irreversible, cross-team** | New database platform, org-wide API standards, major architecture change | Written RFC, open comment period, review meeting, clear decider; ADR |
+
+Over-processing small decisions is as harmful as under-processing big ones.
+
+## RFCs (Request for Comments)
+
+A lightweight process for significant proposals:
+1. Author writes a proposal (problem, options, recommendation; see design doc structure).
+2. Shared broadly with a **comment deadline** (e.g. 1 week).
+3. Author addresses comments; major disagreements discussed in a focused meeting.
+4. **A named decider** (tech lead, architecture group, staff engineer) makes the call.
+5. Outcome recorded; RFC status updated (accepted / rejected / superseded).
+
+## ADRs (Architecture Decision Records)
+
+Short, immutable records of significant decisions, kept in the repo next to the code:
+
+```markdown
+# ADR-014: Use the transactional outbox for publishing order events
+Status: Accepted (2026-10-02) · Deciders: @lead, @payments-lead
+## Context
+Order service writes to Postgres and publishes to Kafka; we've lost events on crashes (INC-221).
+## Decision
+Write events to an outbox table in the same transaction; Debezium relays to Kafka.
+## Consequences
++ No lost or phantom events. − Consumers must be idempotent; Debezium to operate.
+## Alternatives considered
+Publish after commit with retries (still loses on crash); 2PC (unsupported).
+```
+
+ADRs answer "why is it like this?" for future engineers (and your future self) in two minutes.
+
+<MentalModel>
+ADRs are a **ship's logbook** for architecture. Each entry records what was decided, under what conditions, and why. Future crews don't have to guess why the ship took that route, and when conditions change, they can make an informed course correction instead of repeating old debates.
+</MentalModel>
+
+## Driving decisions in groups
+
+- **Frame the decision**: what exactly are we deciding, by when, who decides, what criteria matter.
+- **Separate options from evaluation**: list options first, then score against agreed criteria.
+- **Seek disagreement early**: ask quiet people directly; "what would make this fail?"
+- **Time-box**: "We'll decide by Friday with the information we have."
+- **Disagree and commit**: once decided, everyone commits fully, including those who disagreed. Record dissent in the ADR if useful; revisit only if new information appears.
+- **Know when "good enough" is good enough**: for reversible decisions, speed beats perfection.
+
+<Scenario
+  situation="Your team has argued for three weeks about whether to adopt GraphQL for a new mobile BFF. Opinions are split and strong. As tech lead, what do you do?"
+  choices={[
+    { text: "Keep discussing until everyone agrees", feedback: "Unanimity is rarely achievable; endless debate has real costs." },
+    { text: "Frame the decision (criteria, deadline, decider), have each side write a one-page case against the criteria, consider a small spike for the key uncertainty, then decide, record an ADR, and ask everyone to commit", feedback: "Structure turns opinions into evaluation, the time-box creates momentum, and disagree-and-commit keeps the team unified after.", best: true },
+    { text: "Pick your favorite immediately without discussion", feedback: "Fast, but you lose the team's knowledge and buy-in, which costs more later." },
+  ]}
+/>
+
+<SeniorLens>
+A tech lead's credibility comes partly from **making calls**. Teams prefer a lead who decides clearly, explains the reasoning, and adjusts when wrong over one who seeks perfect consensus forever. Indecision is itself a decision, usually the worst one.
+</SeniorLens>
+
+<KeyTakeaways>
+- Match process to decision size and reversibility.
+- RFCs for big cross-team decisions: written proposal, comment period, named decider.
+- ADRs: short, in-repo records of context, decision, consequences, alternatives.
+- Frame, time-box, decide, disagree-and-commit.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Michael Nygard, *Documenting Architecture Decisions*** (the original ADR post).
+- **[adr.github.io](https://adr.github.io/)**: templates and tools.
+- **Amazon's leadership principles**: "Have Backbone; Disagree and Commit".
+</GoDeeper>

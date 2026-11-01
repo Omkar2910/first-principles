@@ -1,0 +1,111 @@
+---
+title: API Security
+description: The OWASP API Top 10 in practice. Object-level authorization, mass assignment, resource limits and abuse.
+minutes: 11
+level: mid
+---
+
+<Problem>
+APIs are now the main attack surface. Unlike web pages, they expose raw data and operations directly, and attackers use them exactly as your mobile app does, just with modified parameters and automated scripts. Most API breaches aren't clever exploits; they're **missing authorization checks, too much data returned, and no limits**.
+</Problem>
+
+## The big ones (OWASP API Security Top 10, condensed)
+
+### 1. Broken Object Level Authorization (BOLA / IDOR)
+
+The #1 API vulnerability: changing an ID in a request returns someone else's data.
+
+```http
+GET /api/v1/accounts/1001/statements    ← my account
+GET /api/v1/accounts/1002/statements    ← someone else's: must return 404/403
+```
+
+Fix: authorization check **on every object access**, ideally by scoping queries (`findByIdAndOwnerId`). Track 1's authorization lesson covers this. Random UUIDs make guessing harder but are **not** a substitute for checks.
+
+### 2. Broken authentication
+
+Weak token validation, no rate limiting on login/OTP endpoints, tokens that never expire, credentials in URLs. Fix: proven IdP/framework, short-lived tokens, rate limits on auth endpoints.
+
+### 3. Broken object property level authorization
+
+- **Excessive data exposure**: returning the full user object (with `passwordHash`, `isAdmin`, internal notes) and letting the client "filter". Fix: explicit response DTOs per use case.
+- **Mass assignment**: binding request JSON straight onto entities.
+
+```java
+// ❌ client sends {"name":"Eve","role":"ADMIN","balance":1000000}
+@PatchMapping("/me") User update(@RequestBody User patch) { return repo.save(merge(me, patch)); }
+
+// ✅ explicit DTO with only the fields users may change
+record UpdateProfileRequest(@Size(max=100) String name, @Email String email) {}
+```
+
+### 4. Unrestricted resource consumption
+
+No limits on page size, payload size, upload size, query complexity, batch operations, or expensive operations (SMS sending, LLM calls, report generation). Fix: limits on everything, rate limits per client, timeouts, and quotas on cost-incurring operations.
+
+### 5. Broken function level authorization
+
+Regular users calling admin endpoints (`POST /api/admin/users/42/promote`) because only the UI hides the button. Fix: role checks on every endpoint, deny-by-default, separate admin APIs/networks.
+
+### 6. Unrestricted access to sensitive business flows
+
+Bots buying all concert tickets, creating 10,000 accounts, scraping your catalog, or brute-forcing gift card codes, all "legitimate" API calls. Fix: business-level rate limits, bot detection, CAPTCHAs on sensitive flows, device fingerprinting, anomaly detection.
+
+### 7. SSRF, misconfiguration, improper inventory, unsafe consumption of third-party APIs
+
+- SSRF: see the web vulnerabilities lesson.
+- Misconfiguration: verbose errors, permissive CORS (`*` with credentials), exposed Actuator/Swagger in prod.
+- **Improper inventory**: forgotten `v1` endpoints, staging APIs exposed publicly, undocumented "internal" routes. You can't protect what you don't know exists.
+- Unsafe consumption: trusting data from third-party APIs without validation.
+
+<MentalModel>
+Your API is a **vending machine on a busy street**. The UI is the nice front panel with buttons, but attackers open the service hatch and press the internal switches directly. Every switch must check: Is this person allowed (authN)? Allowed to take *this* item (object-level authZ)? Only the item they paid for, not the whole tray (property-level)? Not 10,000 times a minute (resource limits)?
+</MentalModel>
+
+## An API security checklist
+
+- AuthN on every endpoint (deny by default); authZ on every **object** and **function**.
+- Response DTOs; request DTOs (no mass assignment).
+- Validation and size limits on all input; pagination caps.
+- Rate limits per client and per sensitive flow; quotas for costly operations.
+- Consistent, non-leaky errors; no stack traces.
+- Strict CORS; security headers; TLS only.
+- API inventory and gateway; old versions retired.
+- Audit logs for sensitive operations; anomaly alerts.
+- Security tests: automated authorization tests (user A vs B), fuzzing, DAST, periodic pentests.
+
+<Quiz
+  question="Your user-update endpoint accepts the User entity directly as @RequestBody. A user sends an extra field 'role':'ADMIN' and becomes an admin. What's the vulnerability and fix?"
+  options={[
+    "SQL injection; use prepared statements",
+    "Mass assignment; accept a dedicated request DTO containing only user-editable fields",
+    "CSRF; add tokens",
+    "XSS; escape output",
+  ]}
+  answer={1}
+  explanation="Binding untrusted input onto internal objects lets clients set fields they shouldn't. Explicit request DTOs define exactly what's writable."
+/>
+
+<LevelTags
+  junior="Uses DTOs for requests/responses and never relies on the UI hiding things."
+  mid="Implements object/function-level authZ, limits and rate limiting; writes negative authZ tests."
+  senior="Designs abuse prevention for business flows, API inventory and gateway policies."
+  lead="Runs API security governance: reviews, testing programs, inventory and incident readiness."
+/>
+
+<SeniorLens>
+The most effective API security habit is **automated authorization tests**: for every endpoint, a test that calls it as the wrong user, the wrong role and no user, expecting rejection. Make it part of the endpoint template. BOLA and function-level bugs, the top two API breach causes, nearly vanish.
+</SeniorLens>
+
+<KeyTakeaways>
+- Object-level and function-level authorization on every request.
+- Explicit request/response DTOs prevent mass assignment and data overexposure.
+- Limit everything: sizes, pages, rates, costly operations, business flows.
+- Maintain an API inventory; retire old versions; test authorization automatically.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/)**.
+- **PortSwigger Web Security Academy:** API testing labs.
+- **Corey Ball, *Hacking APIs*** (attacker's perspective).
+</GoDeeper>

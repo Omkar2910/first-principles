@@ -1,0 +1,133 @@
+---
+section: Case studies
+title: "Case Study: News Feed"
+description: Fan-out on write vs read, the celebrity problem, ranking, and caching a personalized timeline.
+minutes: 14
+level: senior
+---
+
+<Problem>
+Design the home timeline for a Twitter/Instagram-like app: when you open the app, you see recent posts from the people you follow, fast. Hundreds of millions of users, each following hundreds of accounts, some accounts with 100 million followers. The core tension: **do the work when a post is written, or when a feed is read?**
+</Problem>
+
+## 1. Requirements
+
+**Functional**: publish a post; follow/unfollow; view home feed (posts from followees, newest or ranked first, paginated).
+**Non-functional**: 300M DAU; feed load under 200 ms p99; a new post may take a few seconds to appear (eventual consistency OK); highly available.
+
+## 2. Estimates
+
+- Posts: 300M DAU × 0.5 posts/day ≈ 150M/day ≈ **1,700 writes/s**.
+- Feed reads: 300M × 10 opens/day = 3B/day ≈ **35K reads/s**, peaks ~100K. Read-heavy by ~20×.
+- Average follows: ~200; some accounts have 100M+ followers.
+
+## 3. API
+
+```http
+POST /v1/posts                     {text, mediaIds}   → 201
+GET  /v1/feed?cursor=&limit=20     → {posts[], nextCursor}
+POST /v1/users/{id}/follow
+```
+
+## 4. Data
+
+```text
+posts:       post_id (Snowflake, time-sortable) | author_id | text | media | created_at   → sharded by author_id
+follows:     follower_id | followee_id   (+ reverse index followee → followers)          → graph store / sharded table
+feed cache:  user_id → [post_id, post_id, ...] (most recent ~800)                       → Redis lists / sorted sets
+```
+
+## 5. The core decision: fan-out on write vs read
+
+**Fan-out on read (pull)**: when Alice opens her feed, fetch recent posts from all ~200 people she follows, merge, sort.
+- Writes cheap; reads expensive (200 queries or a big scatter-gather per feed load at 100K QPS). Hard to hit 200 ms.
+
+**Fan-out on write (push)**: when Bob posts, insert the post ID into the **precomputed feed** of each of his followers.
+- Reads become a single Redis lookup: fast.
+- Writes amplify: 1 post × 200 followers = 200 feed inserts. Fine on average (1,700 × 200 = 340K inserts/s, distributed via a queue).
+- **Celebrity problem**: one post from an account with 100M followers = 100M inserts. Takes minutes and wastes work for inactive followers.
+
+**Hybrid (what real systems do)**:
+- Normal users → **push** to followers' feeds.
+- Celebrities (followers > threshold) → **don't push**; at read time, **pull** their recent posts and merge them into the precomputed feed.
+- Skip pushing to **inactive** users; build their feed on demand when they return.
+
+<MentalModel>
+**Push** is a newspaper delivered to every subscriber's doorstep each morning: reading is instant, but printing and delivering to millions is heavy. **Pull** is going to the newsstand and assembling your own paper from 200 sources. The hybrid is doorstep delivery from your local writers, plus grabbing the few superstar columnists' latest pieces yourself when you sit down to read.
+</MentalModel>
+
+## 6. High-level design
+
+```text
+Write path:
+Client → Post service → posts DB (sharded by author)
+                     → Kafka "post-created"
+                          → Fan-out workers: get followers (skip celebrities' followers & inactive users)
+                                → Redis: LPUSH feed:{follower} postId; LTRIM to 800
+
+Read path:
+Client → Feed service → Redis feed:{me}             (precomputed post IDs)
+                      + recent posts of celebrities I follow (cached per celebrity)
+                      → merge, (rank), take 20
+                      → hydrate: batch-get post bodies + author info from caches
+                      → response with cursor
+```
+
+## 7. Deep dives
+
+- **Hydration**: feeds store **IDs only**; post bodies and user profiles come from separate caches (`MGET`). Edits/deletes then update one place.
+- **Ranking**: chronological is simple. Ranked feeds score candidates (recency, affinity with the author, engagement, content type) with an ML model. The architecture becomes "**candidate generation → ranking → filtering**".
+- **Pagination**: cursor = last seen post ID/score; never offsets.
+- **Deletes and unfollows**: lazy filtering at read time (skip deleted posts/unfollowed authors) plus async cleanup.
+- **Media**: uploaded to object storage via pre-signed URLs; served via CDN.
+- **Cold start / cache loss**: rebuild a user's feed from the pull path on demand; that's another reason to keep the pull path working.
+- **Consistency**: the author should see their own post immediately (read-your-writes): insert into their own feed synchronously, or merge their recent posts at read time.
+
+<Quiz
+  question="Why do production feed systems avoid pure fan-out-on-write for accounts with tens of millions of followers?"
+  options={[
+    "Celebrities post too rarely to matter",
+    "One post would trigger tens of millions of feed writes (slow, costly, mostly for inactive users), so their posts are pulled and merged at read time instead",
+    "Redis can't store that many keys",
+    "Followers of celebrities don't open the app",
+  ]}
+  answer={1}
+  explanation="Write amplification proportional to follower count is fine for typical users but explodes for celebrities. The hybrid model pulls celebrity content on read."
+/>
+
+<Tradeoffs
+  good={[
+    "Push: very fast reads from precomputed feeds",
+    "Pull: no write amplification, always fresh",
+    "Hybrid: fast reads without celebrity write storms",
+  ]}
+  bad={[
+    "Push: write amplification, storage per user, wasted work for inactive users",
+    "Pull: slow, expensive reads at high QPS",
+    "Hybrid: two code paths and merge logic to maintain",
+  ]}
+/>
+
+<LevelTags
+  junior="Designs a basic pull-based feed with a posts table and a follows table."
+  mid="Explains push vs pull and uses a Redis feed cache with ID-only lists and hydration."
+  senior="Designs the hybrid model, celebrity thresholds, inactive-user handling, ranking pipeline and cache rebuilds."
+  lead="Balances freshness, ranking quality, infra cost and product goals across teams (ranking, infra, client)."
+/>
+
+<SeniorLens>
+The standout move in a feed interview is spotting **skew** early: "follower counts follow a power law, so a single strategy won't work for both ends of the distribution." Then quantify: a 100M-follower post at 340K inserts/s capacity takes 5 minutes. That number is why the hybrid exists.
+</SeniorLens>
+
+<KeyTakeaways>
+- Fan-out on write = fast reads, write amplification; fan-out on read = cheap writes, slow reads.
+- Hybrid: push for normal users, pull for celebrities, skip inactive users.
+- Store IDs in feeds; hydrate from caches.
+- Ranking = candidate generation → scoring → filtering.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Twitter engineering:** *Timelines at Scale* (QCon talk by Raffi Krikorian).
+- **Instagram engineering blog** on feed ranking.
+- **Alex Xu, *System Design Interview Vol. 1***: news feed chapter.
+</GoDeeper>

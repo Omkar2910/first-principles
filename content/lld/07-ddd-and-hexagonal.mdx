@@ -1,0 +1,135 @@
+---
+section: Principles and patterns
+title: Domain-Driven Design and Hexagonal Architecture
+description: Bounded contexts, aggregates, ubiquitous language, and keeping business logic independent of frameworks.
+minutes: 13
+level: senior
+---
+
+<Problem>
+In a growing system, the word "Customer" means five different things to five teams: billing needs payment methods and invoices, shipping needs addresses, support needs ticket history, marketing needs consent flags. One giant `Customer` class serving everyone becomes a tangle no one can change. Meanwhile, business rules are buried under JPA annotations and controller code, impossible to test without starting Spring. **DDD** organizes the *problem*; **hexagonal architecture** organizes the *code*.
+</Problem>
+
+## Strategic DDD: carving up the domain
+
+- **Ubiquitous language**: developers and domain experts use the **same terms**, in conversation and in code. If the business says "policy lapses", the code has `policy.lapse()`, not `setStatus(3)`.
+- **Bounded context**: a boundary within which a model and its language are consistent. "Customer" in *Billing* and "Customer" in *Shipping* are different models in different contexts, linked by an ID.
+- **Context map**: how contexts relate: upstream/downstream, shared kernel, **anti-corruption layer** (an adapter protecting your model from another's), published language (events/APIs).
+
+Bounded contexts are natural candidates for **modules or services** (Track 4, monolith vs microservices) and for **team ownership**.
+
+<MentalModel>
+A large company with departments. "Account" means a bank account to Finance, a login to IT, and a client relationship to Sales. Each department keeps its own files in its own language (bounded context). When they exchange information, they use agreed forms (contracts/events) instead of reaching into each other's filing cabinets.
+</MentalModel>
+
+## Tactical DDD: modeling inside a context
+
+- **Entity**: has identity that persists over time (`Order #9001`), even as attributes change.
+- **Value object**: defined by its values, immutable (`Money`, `Address`, `DateRange`).
+- **Aggregate**: a cluster of objects treated as **one consistency unit**, with a single **aggregate root** as the entry point. All invariants inside an aggregate hold after every transaction.
+- **Domain events**: things that happened (`OrderPlaced`, `PaymentFailed`), used to communicate between aggregates and contexts.
+- **Repository**: loads/saves whole aggregates.
+- **Domain service**: logic that doesn't naturally belong to one entity.
+
+```java
+// Aggregate root: all changes go through Order; invariants enforced here
+public class Order {
+    private final OrderId id;
+    private final List<OrderLine> lines = new ArrayList<>();
+    private OrderStatus status = OrderStatus.DRAFT;
+    private final List<DomainEvent> events = new ArrayList<>();
+
+    public void addLine(ProductId p, Quantity q, Money unitPrice) {
+        requireStatus(OrderStatus.DRAFT);
+        if (lines.size() >= 50) throw new DomainException("max 50 lines per order");
+        lines.add(new OrderLine(p, q, unitPrice));
+    }
+    public void place() {
+        requireStatus(OrderStatus.DRAFT);
+        if (lines.isEmpty()) throw new DomainException("cannot place an empty order");
+        status = OrderStatus.PLACED;
+        events.add(new OrderPlaced(id, total()));
+    }
+    public Money total() { return lines.stream().map(OrderLine::subtotal).reduce(Money.ZERO, Money::plus); }
+}
+```
+
+**Aggregate design rules of thumb**: keep aggregates **small**; reference other aggregates **by ID**, not object references; modify **one aggregate per transaction**; use domain events + eventual consistency between aggregates.
+
+## Hexagonal architecture (ports and adapters)
+
+Put the **domain at the center**, free of frameworks. It defines **ports** (interfaces) for what it needs; **adapters** implement them at the edges.
+
+```text
+          ┌──────────── Adapters (driving) ────────────┐
+          │ REST controller · Kafka consumer · CLI      │
+          └──────────────┬──────────────────────────────┘
+                         ▼  (input ports / use cases)
+                ┌───────────────────┐
+                │  Application +    │   plain Java, no Spring/JPA imports
+                │  Domain model     │
+                └───────┬───────────┘
+                        ▼  (output ports: interfaces owned by the domain)
+          ┌──────────── Adapters (driven) ─────────────┐
+          │ JPA repository · Stripe adapter · Kafka pub │
+          └─────────────────────────────────────────────┘
+```
+
+```text
+src/main/java/com/shop/ordering/
+  domain/        Order, OrderLine, Money, OrderPlaced          (no framework imports)
+  application/   PlaceOrderUseCase, ports: OrderRepository, PaymentGateway
+  adapters/in/   OrderController, CartCheckedOutConsumer
+  adapters/out/  JpaOrderRepository, StripePaymentGateway, KafkaEventPublisher
+```
+
+Benefits: domain logic tested with plain unit tests in milliseconds; swap infrastructure (DB, payment vendor) without touching rules; the dependency rule (adapters → application → domain) is enforceable with ArchUnit.
+
+<Quiz
+  question="An Order aggregate and a Customer aggregate both need updating when an order is placed (customer's lifetime spend). DDD guidance suggests:"
+  options={[
+    "Make Customer a field inside Order and update both in one transaction always",
+    "Update Order in its transaction and publish OrderPlaced; a handler updates Customer in a separate transaction (eventual consistency)",
+    "Merge Order and Customer into one giant aggregate",
+    "Use a distributed lock across both tables",
+  ]}
+  answer={1}
+  explanation="Keep aggregates small and modify one per transaction; cross-aggregate updates flow through domain events. Lifetime spend can be eventually consistent."
+/>
+
+<Tradeoffs
+  good={[
+    "Bounded contexts align models, code and teams",
+    "Aggregates make invariants explicit and enforceable",
+    "Hexagonal: framework-free, fast-to-test domain; swappable infrastructure",
+  ]}
+  bad={[
+    "Significant ceremony for simple CRUD domains",
+    "Mapping between domain objects, DTOs and persistence models",
+    "Requires real collaboration with domain experts to pay off",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses domain vocabulary in code and keeps business rules out of controllers."
+  mid="Models entities, value objects and aggregates; separates domain from infrastructure."
+  senior="Identifies bounded contexts, designs aggregate boundaries and event flows, applies hexagonal structure."
+  lead="Aligns contexts with team ownership and service boundaries (context mapping at org level)."
+/>
+
+<SeniorLens>
+DDD's biggest payoff is **strategic**, not tactical. Getting bounded contexts right determines team boundaries, service boundaries and how much coordination your org needs. Apply full tactical DDD where the domain is genuinely complex (pricing, underwriting, scheduling); use simple CRUD for supporting domains. Knowing which is which is the senior skill.
+</SeniorLens>
+
+<KeyTakeaways>
+- Ubiquitous language + bounded contexts organize the problem space.
+- Aggregates are consistency boundaries: small, referenced by ID, one per transaction.
+- Domain events connect aggregates and contexts.
+- Hexagonal: domain at the center, ports owned by the domain, adapters at the edges.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Eric Evans, *Domain-Driven Design*** (the "blue book") and **Vaughn Vernon, *Implementing DDD***.
+- **Alistair Cockburn, *Hexagonal Architecture*** (original article).
+- **[Spring Modulith](https://spring.io/projects/spring-modulith)**: modular monoliths with DDD-style modules in Spring Boot.
+</GoDeeper>

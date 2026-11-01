@@ -1,0 +1,92 @@
+---
+title: What the Cloud Actually Is
+description: Regions, availability zones, service models (IaaS to serverless) and the shared responsibility model.
+minutes: 9
+level: junior
+---
+
+<Problem>
+"Deploy it to the cloud" hides a lot of decisions: which region? One availability zone or three? A VM, a container platform, or a serverless function? Who patches the OS? Who's responsible when data leaks through a misconfigured bucket? The cloud is **someone else's datacenters exposed through APIs**, and using it well means understanding its building blocks and its failure domains.
+</Problem>
+
+## Physical structure: regions and availability zones
+
+- **Region**: a geographic area (e.g. `us-east-1`, `ap-south-1` Mumbai) containing multiple datacenters. Choose by **user latency**, **data residency laws** and **service availability/price**.
+- **Availability Zone (AZ)**: one or more datacenters within a region with independent power, cooling and networking, a few km apart, connected by low-latency links (~1–2 ms).
+- **Edge locations**: CDN/DNS points of presence, many more than regions.
+
+The fundamental reliability pattern: **spread across AZs** (survive a datacenter failure with little latency cost). **Multi-region** survives a regional outage but brings data replication and consistency challenges (Track 4).
+
+<MentalModel>
+A region is a **city**; AZs are **separate neighborhoods** on different power grids in that city. If a storm knocks out one neighborhood, the others keep running, and they're close enough to commute between in a minute. Moving to a different city (multi-region) protects against a city-wide disaster, but everything becomes farther apart.
+</MentalModel>
+
+## Service models: how much do you manage?
+
+| Model | You manage | Provider manages | Examples |
+|---|---|---|---|
+| **On-prem** | Everything | Nothing | Your own servers |
+| **IaaS** | OS, runtime, app, scaling | Hardware, virtualization, network | EC2, Compute Engine, Azure VMs |
+| **CaaS / managed K8s** | Containers, app, cluster config | Control plane, nodes (partly) | EKS, GKE, ECS/Fargate, Cloud Run |
+| **PaaS** | App code + config | Runtime, OS, scaling | Elastic Beanstalk, Heroku, App Engine |
+| **Serverless / FaaS** | Functions | Everything else, including scaling to zero | Lambda, Cloud Functions |
+| **SaaS / managed services** | Usage and data | The whole service | RDS, S3, SQS, DynamoDB, Auth0 |
+
+Moving down the table trades **control** for **less operational work**. Most teams should use managed services for undifferentiated heavy lifting (databases, queues, object storage) and spend engineering time on their product.
+
+## The shared responsibility model
+
+The provider secures **the cloud** (physical security, hypervisors, managed service internals). You secure **what you put in the cloud**: IAM permissions, network rules, encryption settings, OS patches on your VMs, your application, your data. Public S3 buckets and over-permissive IAM roles, both customer-side misconfigurations, cause most cloud breaches.
+
+## Cloud economics in one paragraph
+
+You pay for what you provision (VMs, storage) or use (requests, GB transferred). Watch for: **data egress** (transfer out to the internet or across regions/AZs is often the surprise bill), idle resources, over-provisioned instances, and chatty cross-AZ traffic. Savings levers: autoscaling, right-sizing, reserved/savings plans for steady load, spot instances for interruptible work, storage tiering.
+
+<Quiz
+  question="Your app runs on instances in one AZ with a single-AZ database. The AZ has a power failure. What would have prevented the outage most cost-effectively?"
+  options={[
+    "Multi-region active-active deployment",
+    "Running app instances across multiple AZs behind a load balancer, with a Multi-AZ database (synchronous standby)",
+    "Bigger instances",
+    "A CDN",
+  ]}
+  answer={1}
+  explanation="AZ failures are the most common large-scale failure domain. Multi-AZ is cheap (same region, low latency) and standard. Multi-region is for regional disasters and is much more complex."
+/>
+
+<Tradeoffs
+  good={[
+    "Elastic capacity on demand; no hardware procurement",
+    "Managed services remove huge operational burden",
+    "Global footprint and built-in redundancy (AZs, regions)",
+  ]}
+  bad={[
+    "Costs can grow silently (egress, idle resources)",
+    "Vendor lock-in through proprietary services",
+    "Misconfiguration is your responsibility and a top breach cause",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows regions vs AZs and the main service models."
+  mid="Deploys across AZs, uses managed services, understands IAM basics and cost drivers."
+  senior="Designs for failure domains, multi-region tradeoffs, data residency and cost efficiency."
+  lead="Sets cloud strategy: provider choices, landing zones, governance, FinOps practices."
+/>
+
+<SeniorLens>
+Seniors default to **"managed service unless proven otherwise"**: running your own Kafka or Postgres on VMs is a full-time job. They also read the bill. Cost is an architectural property, and a design that's 3× more expensive than needed is a design flaw.
+</SeniorLens>
+
+<KeyTakeaways>
+- Regions for geography and compliance; AZs for fault isolation. Multi-AZ by default.
+- IaaS → containers → PaaS → serverless → managed services: less control, less ops.
+- Shared responsibility: you own IAM, network rules, data and app security.
+- Watch egress, idle and over-provisioned resources.
+</KeyTakeaways>
+
+<GoDeeper>
+- **AWS Well-Architected Framework** (all six pillars).
+- **AWS: Regions and Availability Zones** documentation.
+- **Corey Quinn's Last Week in AWS**: cloud costs and cynicism, educational.
+</GoDeeper>

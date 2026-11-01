@@ -1,0 +1,120 @@
+---
+section: Case studies
+title: "Case Study: URL Shortener"
+description: The classic warm-up. ID generation, read-heavy caching, redirects and analytics at scale.
+minutes: 13
+level: mid
+---
+
+<Problem>
+Design a service like bit.ly: given a long URL, return a short one (`sho.rt/aZ3kQ9x`); visiting the short URL redirects to the original. It sounds trivial, but it's a perfect exercise in **ID generation, read-heavy scaling, caching and analytics**.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: create short URL (optional custom alias, optional expiry); redirect; basic click analytics.
+**Non-functional**: 100M new URLs/month; 100:1 read:write; redirect latency under 50 ms p99; highly available (broken links are very visible); short codes unpredictable enough not to be enumerable (nice to have).
+
+## 2. Estimates
+
+- Writes: 100M/month ≈ **40 writes/s** (peak ~100).
+- Reads: 100× → **4,000 redirects/s** (peak ~10K+).
+- Storage: 100M × 12 months × 5 years = 6B URLs × ~500 bytes ≈ **3 TB**. Fits in one well-provisioned DB, or a key-value store.
+- Code length: base62 with 7 characters = 62⁷ ≈ **3.5 trillion** codes. Plenty.
+
+## 3. API
+
+```http
+POST /v1/urls   {"longUrl": "https://...", "alias": "optional", "expiresAt": "optional"}
+  → 201 {"shortUrl": "https://sho.rt/aZ3kQ9x"}
+GET /{code}
+  → 301/302 Location: https://original...
+```
+
+**301 vs 302**: 301 (permanent) lets browsers cache the redirect, which means less load but you lose click analytics for repeat visits. 302 (temporary) hits you every time. Most shorteners use 302 for analytics.
+
+## 4. Data model
+
+```text
+urls: code (PK, varchar 7–10) | long_url | user_id | created_at | expires_at
+```
+
+Access pattern is pure key lookup by `code`, so a key-value store (DynamoDB/Cassandra) or Postgres with the primary key both work. At ~3 TB, Postgres is fine; a KV store simplifies horizontal growth.
+
+## 5. Generating short codes: the interesting part
+
+| Approach | How | Pros | Cons |
+|---|---|---|---|
+| **Hash the URL** (MD5/SHA → take 7 chars) | Deterministic | Same URL → same code | Collisions need handling; predictable |
+| **Random 7 chars** + check uniqueness | Generate, insert with unique constraint, retry on conflict | Simple, unpredictable | Extra DB check; retries grow as space fills (still tiny at this scale) |
+| **Counter + base62 encode** | Global unique ID → base62 | No collisions, short | Sequential = enumerable; global counter is a bottleneck/SPOF |
+| **Pre-allocated ID ranges** | Each app server grabs a block of 10,000 IDs from a central counter (DB/ZooKeeper) | No per-request coordination, no collisions | Lost ranges on crash (harmless); still sequential within a block |
+| **Snowflake-style IDs** | timestamp + machine ID + sequence, base62 | Distributed, no coordination | Longer codes (~11 chars) |
+
+A strong answer: **counter ranges + base62**, optionally passing IDs through a **bijective shuffle** (e.g. a small Feistel cipher) so codes look random and aren't enumerable. Or **random codes with a unique constraint**, which is simplest at 40 writes/s.
+
+```java
+static final String ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static String base62(long n) {
+    StringBuilder sb = new StringBuilder();
+    do { sb.append(ALPHABET.charAt((int) (n % 62))); n /= 62; } while (n > 0);
+    return sb.reverse().toString();
+}
+```
+
+## 6. High-level design
+
+<Flow nodes={["Client", "CDN / edge", "Load balancer", "URL service (stateless)", "Redis cache", "URL DB (KV / Postgres)"]} caption="Redirect path: cache hit in Redis (or even at the edge) → 302; miss → DB → populate cache." />
+
+```text
+Create:   client → LB → URL service → get ID from local range → base62 → INSERT → return
+Redirect: client → (edge cache?) → LB → URL service → Redis GET code
+              hit  → 302
+              miss → DB → Redis SET (TTL) → 302
+          → async: publish ClickEvent → Kafka → analytics consumer → OLAP store (ClickHouse)
+```
+
+## 7. Deep dives
+
+- **Caching**: link popularity is extremely skewed, so a Redis cache of hot codes gives a 90%+ hit rate. Popular links can even be cached at the CDN edge (with short TTLs for analytics trade-offs).
+- **Analytics without slowing redirects**: never write analytics synchronously on the redirect path. Emit an event to Kafka (or log and ship), aggregate asynchronously.
+- **Expiry**: check `expires_at` on read; a background job purges expired rows; cache TTL ≤ expiry.
+- **Custom aliases**: same table, unique constraint; reserve words (`api`, `admin`); validate characters.
+- **Abuse**: rate-limit creation per user/IP; scan long URLs against malware/phishing lists; allow takedowns.
+- **Availability**: replicate DB across AZs; the redirect path only needs reads, so serve from replicas/cache even if the primary is down (degrade creation, keep redirects alive).
+
+<Quiz
+  question="Why is a simple auto-increment counter exposed as the short code a poor choice for a public shortener?"
+  options={[
+    "Base62 can't encode integers",
+    "Codes are sequential, so anyone can enumerate all links (privacy leak), and a single global counter is a bottleneck/SPOF",
+    "Counters overflow at 1,000",
+    "It makes redirects slower",
+  ]}
+  answer={1}
+  explanation="Sequential codes let attackers crawl every shortened URL, including private ones. Use ranges plus a bijective shuffle, or random codes, and avoid a single coordinating counter per request."
+/>
+
+<LevelTags
+  junior="Designs create + redirect with a DB and base62 codes."
+  mid="Adds caching, explains 301 vs 302, handles collisions and expiry."
+  senior="Compares ID strategies (ranges, Snowflake, random), designs async analytics and degraded modes."
+  lead="Considers abuse, legal takedowns, multi-region availability and cost."
+/>
+
+<SeniorLens>
+A URL shortener is a **read-availability** problem in disguise. The senior insight: redirects must keep working even when everything else is broken. Separate the read path (cache + replicas, even edge) from the write path, and design so analytics and creation can degrade without affecting redirects.
+</SeniorLens>
+
+<KeyTakeaways>
+- Tiny write rate, high read rate, so caching and read availability dominate.
+- Code generation: ranges + base62 (+ shuffle) or random with a unique constraint.
+- 302 for analytics; analytics via async events, never on the hot path.
+- Plan for expiry, custom aliases and abuse.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview Vol. 1***: URL shortener chapter.
+- **Twitter's Snowflake** ID generator (GitHub archive).
+- **Hello Interview:** Bit.ly breakdown.
+</GoDeeper>

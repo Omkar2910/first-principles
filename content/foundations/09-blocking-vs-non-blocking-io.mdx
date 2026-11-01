@@ -1,0 +1,121 @@
+---
+title: Blocking vs Non-Blocking I/O
+description: Thread-per-request, event loops and virtual threads, and how each one handles thousands of waiting requests.
+minutes: 13
+level: mid
+---
+
+<Problem>
+Your service spends 95% of each request **waiting**: on the database, on another service, on S3. In thread-per-request, every waiting request holds an expensive OS thread hostage. That caps how many requests you can serve concurrently long before your CPU is busy. Node.js, Netty, Spring WebFlux, Go and Java's virtual threads are all different answers to the same question: **how do you wait for thousands of things without thousands of OS threads?**
+</Problem>
+
+## Blocking I/O
+
+A **blocking** call parks the calling thread until the result arrives:
+
+```java
+ResultSet rs = statement.executeQuery(sql); // thread sleeps here until the DB answers
+```
+
+Simple, readable, debuggable. The cost: an OS (platform) thread uses ~1 MB of stack and kernel scheduling overhead, so you realistically run hundreds to a few thousand, not hundreds of thousands.
+
+## Non-blocking I/O and the event loop
+
+The OS can tell you *which* of many sockets are ready (`epoll` on Linux, `kqueue` on macOS). An **event loop** uses this to multiplex thousands of connections on a single thread:
+
+```text
+loop forever:
+    events = epoll_wait(all_sockets)        // "which sockets have data?"
+    for each ready socket:
+        run its callback until it would wait again, then move on
+```
+
+Code must never block the loop. Instead of waiting, you register **what to do when the data arrives**:
+
+```java
+// Spring WebFlux / Reactor style
+Mono<OrderDto> get(long id) {
+    return orderRepo.findById(id)                          // returns immediately
+        .flatMap(o -> customerClient.fetch(o.customerId())  // continue when DB answers
+            .map(c -> OrderDto.of(o, c)));
+}
+```
+
+Massively scalable for I/O-heavy work, but harder to read, debug (stack traces are useless) and easy to break: **one blocking call inside the loop stalls every request on that thread**.
+
+<MentalModel>
+**Thread-per-request** is a restaurant where each waiter is assigned one table and stands next to it the entire meal, even while the kitchen cooks. You need as many waiters as tables. **Event loop** is one very fast waiter who takes an order, hands it to the kitchen, and serves other tables until a bell rings. Efficient, unless that waiter stops to chat at one table (a blocking call), freezing service for everyone. **Virtual threads** give every table its own *imaginary* waiter, but behind the scenes a few real waiters do the work whenever a table actually needs something.
+</MentalModel>
+
+## Virtual threads (Java 21+)
+
+Virtual threads are lightweight threads managed by the JVM, not the OS. When a virtual thread hits blocking I/O, the JVM **unmounts** it from its carrier OS thread and runs another virtual thread there. You write plain blocking code and get event-loop-like scalability.
+
+```java
+// Spring Boot 3.2+: one line in application.properties
+spring.threads.virtual.enabled=true
+```
+
+```java
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (int i = 0; i < 100_000; i++) {
+        executor.submit(() -> callSlowService()); // 100k concurrent blocking calls: fine
+    }
+}
+```
+
+Caveats: you can still overwhelm *downstream* systems (100k virtual threads can open 100k DB requests, but your DB pool has 20 connections, so they just queue). `synchronized` blocks with I/O inside can pin carrier threads in some JDK versions. CPU-bound work gains nothing.
+
+Go's goroutines and Kotlin coroutines are similar ideas.
+
+## Try it
+
+Set I/O wait to 200 ms and push the load up. Compare how each model behaves, then turn on the "blocking driver" mistake in the event-loop model.
+
+<ThreadPoolSim />
+
+<Quiz
+  question="Your WebFlux service suddenly handles only ~40 req/s, with low CPU. A teammate recently added a JDBC call in a handler. What happened?"
+  options={[
+    "JDBC is slower than R2DBC",
+    "A blocking call is running on the event loop thread, so every request on that loop waits behind it",
+    "The database is down",
+    "WebFlux has a hard limit of 40 req/s",
+  ]}
+  answer={1}
+  explanation="Event loops have very few threads (≈ one per core). A blocking call freezes the loop for its whole duration. Blocking work must be moved to a separate thread pool (e.g. Schedulers.boundedElastic()) or replaced with a non-blocking driver."
+/>
+
+## Choosing
+
+| | Thread-per-request | Event loop / reactive | Virtual threads |
+|---|---|---|---|
+| Code style | Simple, blocking | Callbacks / reactive chains | Simple, blocking |
+| Concurrent waiting requests | Hundreds–thousands | Tens of thousands+ | Tens of thousands+ |
+| Debuggability | Great | Hard | Great |
+| Main risk | Thread pool exhaustion | Accidental blocking | Overwhelming downstreams; pinning |
+| Good for | Most CRUD services | Streaming, gateways, very high fan-out | New Java services with heavy I/O |
+
+<LevelTags
+  junior="Knows that blocking I/O parks a thread and that event loops must never block."
+  mid="Identifies whether a service is I/O-bound or CPU-bound and picks/configures the model accordingly."
+  senior="Designs for backpressure: bounds concurrency to what downstreams can handle regardless of the threading model."
+  lead="Decides the org's default stack (e.g., 'new Java services use virtual threads') and the migration path for existing ones."
+/>
+
+<SeniorLens>
+A lot of teams adopted reactive programming purely for scalability and paid a big readability and debugging tax. With virtual threads, the default answer for Java has shifted back to **blocking style code on virtual threads**, with reactive reserved for genuinely streaming use cases. Whatever the model, the real limit is usually *downstream capacity*. Unlimited concurrency just moves the queue to the database.
+</SeniorLens>
+
+<KeyTakeaways>
+- Blocking I/O holds a thread while waiting; OS threads are too expensive to have hundreds of thousands.
+- Event loops multiplex many connections on few threads but must never block.
+- Virtual threads give blocking-style code with event-loop-like scalability.
+- Concurrency is ultimately bounded by your slowest dependency.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[JEP 444: Virtual Threads](https://openjdk.org/jeps/444)**: the design rationale, very readable.
+- **Sriniously:** the episodes on concurrency and the Node.js event loop.
+- **Dan Kegel, *The C10K problem***: the classic essay that started it all.
+</GoDeeper>

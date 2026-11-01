@@ -1,0 +1,145 @@
+---
+section: Case studies
+title: "Case Study: Payment System"
+description: Correctness over everything. Idempotency, double-entry ledgers, PSP integration, webhooks and reconciliation.
+minutes: 15
+level: senior
+---
+
+<Problem>
+Design the payment flow for an e-commerce platform: customers pay for orders by card, the platform takes a fee, sellers get paid out. Here, **correctness beats everything**. A dropped like is invisible; a double charge or lost payment destroys trust and has legal consequences. This case study pulls together idempotency, sagas, outbox and consistency.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: pay-in (charge customer), refunds, pay-out to sellers, payment status, history.
+**Non-functional**: **exactly-once effects** (no double charges, no lost payments); strong consistency for balances; full auditability; PCI-DSS compliance; ~1,000 payments/s peak; availability matters, but correctness wins any tradeoff.
+
+## 2. Don't touch card numbers
+
+Use a **Payment Service Provider (PSP)** such as Stripe, Adyen or Braintree. The client sends card data **directly to the PSP** (hosted fields/SDK) and gets a token; your servers never see the raw card number. That keeps most of your system out of PCI scope.
+
+## 3. High-level design
+
+```text
+Client ──checkout──▶ Order service ──▶ Payment service ──▶ PSP (Stripe/Adyen)
+                                          │       ▲            │
+                                          │       └── webhook ─┘ (async result, 3DS, disputes)
+                                          ▼
+                                  payments DB (payment state machine)
+                                          │ outbox
+                                          ▼
+                                  Ledger service (double-entry, append-only)
+                                          │
+                                  Wallet/balances, payouts, reconciliation jobs
+```
+
+## 4. The payment state machine
+
+```text
+CREATED → PROCESSING → SUCCEEDED → (REFUND_PENDING → REFUNDED)
+                    ↘ FAILED
+                    ↘ REQUIRES_ACTION (3-D Secure) → PROCESSING
+```
+
+Every transition is a **guarded update** (`UPDATE ... SET status='SUCCEEDED' WHERE id=? AND status='PROCESSING'`), recorded with timestamps and reasons. Invalid transitions are rejected.
+
+## 5. Idempotency everywhere
+
+- Client → Payment service: **idempotency key** per checkout attempt (e.g. `order-9001-attempt-1`), so double-clicks and retries create one payment.
+- Payment service → PSP: pass a **PSP idempotency key** derived from the payment ID. If your call to Stripe times out (ambiguous!), you retry with the same key and Stripe returns the original result instead of charging twice.
+- Webhook handling: PSPs deliver webhooks **at least once and possibly out of order**. Dedupe by event ID and apply only valid state transitions.
+
+## 6. The ledger: double-entry bookkeeping
+
+Never store "balance" as a single mutable number you increment. Record **immutable entries**, where every transaction has debits and credits that **sum to zero**:
+
+```text
+txn 7781: customer pays $100 for order 9001
+  DEBIT   customer_funds_receivable   100.00
+  CREDIT  seller_42_payable            95.00
+  CREDIT  platform_fee_revenue          5.00
+                                     ───────
+                                        0.00   ✓ balanced
+```
+
+```sql
+CREATE TABLE ledger_entries (
+  id BIGSERIAL PRIMARY KEY,
+  txn_id UUID NOT NULL,
+  account_id TEXT NOT NULL,
+  amount_minor BIGINT NOT NULL,          -- positive debit, negative credit (or a direction column)
+  currency CHAR(3) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);  -- append-only: no UPDATE, no DELETE. Corrections are new reversing entries.
+```
+
+Balances are derived (sum of entries, cached/snapshotted). Benefits: a full audit trail, invariants checkable at any time (all transactions sum to zero), and mistakes are fixed with **reversing entries**, never edits.
+
+<MentalModel>
+A ledger is a **bank passbook written in pen**. You never erase a line; if something was wrong, you write a new correcting line. And every movement of money is written twice (where it came from, where it went), so the books always balance. If they don't, you know immediately that something is wrong.
+</MentalModel>
+
+## 7. Reconciliation: trust, but verify
+
+Despite all of the above, systems drift: a webhook was lost, a bug, a manual refund in the PSP dashboard. **Daily reconciliation** jobs compare your ledger against the PSP's settlement reports and the bank statements, and flag mismatches for investigation. Every serious payment system has this; it's how you **know** you're correct.
+
+## 8. Handling the ambiguous timeout
+
+```text
+Payment service → PSP charge request ... timeout. Did it charge?
+  1. Mark payment UNKNOWN / PROCESSING (don't tell the user "failed")
+  2. Retry with the SAME PSP idempotency key → PSP returns the original outcome
+  3. If still unknown: rely on the webhook, or a status-query job polling the PSP
+  4. Never create a new charge with a new key until the first is resolved
+```
+
+<Quiz
+  question="Your call to the PSP times out and the user sees an error. They click 'Pay' again. How do you avoid a double charge?"
+  options={[
+    "Hope the first one failed",
+    "Reuse the same idempotency key (scoped to the order/attempt) for both the API request and the PSP call, so the retry returns the original result instead of creating a new charge",
+    "Wait 24 hours before allowing a retry",
+    "Refund automatically after every timeout",
+  ]}
+  answer={1}
+  explanation="The ambiguous outcome is resolved by idempotency: the PSP recognizes the key and returns the first charge's result. Also, don't show 'failed' for an unknown outcome; show 'processing'."
+/>
+
+<Tradeoffs
+  good={[
+    "PSP tokenization keeps you out of most PCI scope",
+    "Idempotency + state machine = no double charges despite retries",
+    "Double-entry ledger gives auditability and checkable invariants",
+    "Reconciliation catches what everything else misses",
+  ]}
+  bad={[
+    "Async webhooks and ambiguous outcomes complicate UX ('processing')",
+    "Ledger and reconciliation add significant engineering",
+    "Strong consistency requirements limit some scaling options",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses a PSP SDK and never stores card numbers."
+  mid="Implements idempotent payment APIs, a state machine and idempotent webhook handling."
+  senior="Designs the ledger, handles ambiguous timeouts, outbox to downstream, reconciliation and refunds."
+  lead="Owns compliance (PCI, audits), multi-PSP strategy, financial controls and incident processes for money movement."
+/>
+
+<SeniorLens>
+In payment design reviews, seniors ask relentlessly: "**what if this step runs twice? What if it never completes? What if we never hear back?**" They also insist on reconciliation from day one, because in payments the question isn't *whether* you'll have a discrepancy, but *how quickly you'll detect it*.
+</SeniorLens>
+
+<KeyTakeaways>
+- Use a PSP; never handle raw card data.
+- Idempotency keys end-to-end; guarded state-machine transitions; idempotent webhooks.
+- Double-entry, append-only ledger; balances are derived.
+- Treat timeouts as "unknown", not "failed"; reconcile daily.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Stripe engineering:** idempotency and API design posts.
+- **Uber engineering:** *Payments platform* and ledger posts; **Square / Modern Treasury** blogs on double-entry ledgers.
+- **Alex Xu, *System Design Interview Vol. 2***: payment system chapter.
+</GoDeeper>

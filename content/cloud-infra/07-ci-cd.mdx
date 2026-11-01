@@ -1,0 +1,111 @@
+---
+title: CI/CD and Deployment Pipelines
+description: From commit to production safely and often. Pipelines, environments, artifact promotion and GitOps.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Releases happen every two weeks on a Thursday evening. Someone builds the JAR on their laptop, copies it to servers, runs a migration by hand, and the team watches dashboards nervously. Big releases bundle 80 changes, so when something breaks, finding the culprit takes hours. Teams that deploy **small changes many times a day** have *fewer* incidents, and **CI/CD** is how they do it.
+</Problem>
+
+## Definitions
+
+- **Continuous Integration (CI)**: every change is merged to the main branch frequently and **automatically built and tested**. Broken builds are fixed immediately.
+- **Continuous Delivery**: every change that passes the pipeline is **deployable** to production at the push of a button.
+- **Continuous Deployment**: every passing change **is deployed** automatically.
+
+## A solid pipeline
+
+```text
+PR opened
+  └─ CI: compile → unit tests → static analysis/lint → dependency & secret scanning
+        → integration tests (Testcontainers) → build image (tag = git SHA) → image scan
+        → contract/breaking-change checks (OpenAPI/proto/schema)
+PR approved + merged to main
+  └─ build once → push artifact to registry
+        → deploy to staging (same image) → smoke tests / e2e on critical paths
+        → deploy to production: canary 5% → automated metric checks → 25% → 100%
+        → post-deploy verification; automatic rollback on SLO breach
+```
+
+Key principles:
+- **Build once, promote the same artifact** through environments (never rebuild for prod).
+- **Everything as code**: pipeline config, infrastructure, deployment manifests.
+- **Fast feedback**: PR checks in under ~10 minutes, or people stop waiting for them.
+- **Trunk-based development**: short-lived branches merged daily; incomplete features hidden behind **feature flags** instead of long-lived branches.
+- **Database migrations** run as a pipeline step, and are backward compatible (Track 2).
+- **Automated rollback** (or roll forward fast) when metrics degrade.
+
+<MentalModel>
+CI/CD is an **automated assembly line with quality inspectors**. Every small part (commit) moves down the line, gets inspected at each station (tests, scans), and is packaged identically (one artifact). Shipping is just releasing boxes that already passed every inspection. Small boxes are easy to inspect, and when one is faulty, you know exactly which box it was.
+</MentalModel>
+
+## GitOps
+
+Instead of the pipeline pushing to the cluster, the **desired state lives in a Git repo** (manifests/Helm values with image tags). A controller in the cluster (**Argo CD**, **Flux**) continuously syncs the cluster to Git.
+- Every change is a reviewed commit, so you get an audit trail for free.
+- Rollback = `git revert`.
+- Drift (manual `kubectl edit`) is detected and corrected.
+
+## Measuring delivery: DORA metrics
+
+Research (Accelerate / DORA) found four metrics that predict both delivery performance and stability:
+
+| Metric | Elite teams |
+|---|---|
+| **Deployment frequency** | On demand, multiple times per day |
+| **Lead time for changes** (commit → prod) | Less than a day |
+| **Change failure rate** | Low (roughly 0–15%) |
+| **Time to restore service** | Less than an hour |
+
+The key finding: **speed and stability go together**. Small, frequent changes are safer than big, rare ones.
+
+<Quiz
+  question="Your pipeline rebuilds the application separately for staging and production from the same commit. Why is that risky?"
+  options={[
+    "It's slower but otherwise fine",
+    "The production artifact was never tested: dependency resolution, build tools or base images can differ between builds. Build once and promote the same artifact",
+    "Staging needs a different Java version",
+    "Registries can't store two images",
+  ]}
+  answer={1}
+  explanation="'Same commit' isn't 'same artifact'. Floating dependency versions or updated base images can change the output. Promote the exact tested image."
+/>
+
+<Tradeoffs
+  good={[
+    "Small, frequent, low-risk deployments",
+    "Fast feedback catches problems near their cause",
+    "Repeatable, auditable releases; quick rollbacks",
+  ]}
+  bad={[
+    "Investment in test automation and pipeline maintenance",
+    "Flaky tests erode trust and slow everyone",
+    "Requires discipline: feature flags, backward-compatible changes",
+  ]}
+/>
+
+<LevelTags
+  junior="Keeps the build green, writes tests that run in CI."
+  mid="Builds pipelines with scanning, artifact promotion and staged deploys."
+  senior="Designs progressive delivery (canary + automated analysis), GitOps and fast, reliable test suites."
+  lead="Tracks DORA metrics and invests in delivery capability as a strategic lever."
+/>
+
+<SeniorLens>
+When a team is afraid to deploy, the fix is almost never "deploy less". It's **make deploys smaller, safer and more automated**. Seniors attack the biggest source of fear first: flaky tests, manual migration steps, missing rollback, or no canary. Each one removed makes the next deploy less scary.
+</SeniorLens>
+
+<KeyTakeaways>
+- CI: integrate and test every change automatically; CD: always deployable (or auto-deployed).
+- Build once, promote the same artifact; everything as code.
+- Trunk-based development + feature flags + backward-compatible migrations.
+- DORA metrics: frequent, fast, low-failure, quick-recovery delivery go together.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Forsgren, Humble, Kim, *Accelerate***: the research behind DORA.
+- **Jez Humble & David Farley, *Continuous Delivery***.
+- **[Argo CD docs](https://argo-cd.readthedocs.io/)** for GitOps.
+</GoDeeper>

@@ -1,0 +1,101 @@
+---
+title: Working Effectively with AI Coding Agents
+description: How to get high-quality work from coding agents. Context, task framing, verification and review discipline.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Two engineers use the same AI coding agent. One ships twice as fast with fewer bugs. The other produces large, plausible-looking diffs that break subtle invariants, and spends the saved time debugging. The difference isn't the tool; it's **how they work with it**: how they frame tasks, provide context, verify results and review code. In the AI-native era, this is a core engineering skill.
+</Problem>
+
+## The mental shift
+
+You move from **writing every line** to **specifying, steering, verifying and owning** the outcome. You're still accountable for every line that ships. The agent is a fast, tireless, very knowledgeable collaborator that **doesn't know your system's unwritten rules** unless you tell it, and can be confidently wrong.
+
+<MentalModel>
+Working with a coding agent is like **pairing with a brilliant contractor who just joined today**. They type faster than anyone and know every library, but they don't know why the billing module is weird, which tests are flaky, or that "we never call the payments API without an idempotency key". The better your brief and the tighter your feedback loop, the better their work. And you still review everything before it merges.
+</MentalModel>
+
+## Give it context
+
+- **Project instructions file** (e.g. `CLAUDE.md`, `AGENTS.md`, or similar): build/test commands, architecture overview, conventions, "always/never" rules, where things live. Agents read it every session, which makes it one of the highest-leverage files in a modern repo.
+- **Point to examples**: "Follow the pattern in `OrderController` and its test."
+- **Explain the why**: constraints and invariants ("this must be idempotent because the queue redelivers").
+- Keep the codebase **legible**: clear names, consistent structure, good tests. What helps humans helps agents.
+
+## Frame tasks well
+
+- **Explore → plan → implement → verify**: ask it to read the relevant code and propose a plan first; review the plan; then implement.
+- **Right-size tasks**: well-scoped units with clear done criteria beat "rewrite the billing system".
+- **Be specific about acceptance criteria**: inputs/outputs, edge cases, performance or compatibility constraints.
+- **Ask for tests first** (or alongside): "write failing tests for these cases, then make them pass."
+
+## Close the loop: verification
+
+Agents do best when they can **check their own work**:
+- Make it easy to run **tests, linters, type checks and the app** (documented commands).
+- Ask the agent to run them and iterate until green, and to show evidence (test output, screenshots for UI).
+- For UI work, have it open the page and verify visually.
+
+## Review like it matters (it does)
+
+AI-generated code can look polished while hiding problems. Review for:
+- **Correctness at the edges**: nulls, concurrency, error paths, idempotency, timezones, money.
+- **Invented APIs or config** (nonexistent methods, wrong library versions).
+- **Security**: authZ checks, injection, secrets, overly broad permissions.
+- **Scope creep**: unrelated changes, unnecessary abstractions, deleted "unused" code that's actually used reflectively.
+- **Tests that test nothing**: assertions weakened or mocked away to pass.
+- **Fit**: does it follow the codebase's conventions, or introduce a parallel pattern?
+
+Keep diffs reviewable: small PRs, clear commit messages, one concern per change.
+
+## Where agents shine (and where to be careful)
+
+| Great at | Be careful with |
+|---|---|
+| Boilerplate, CRUD, glue code, migrations of repetitive patterns | Subtle concurrency, distributed consistency, security-critical code |
+| Writing tests, especially for existing code | Large architectural changes without a reviewed plan |
+| Exploring and explaining unfamiliar codebases | Anything you can't verify or don't understand |
+| Debugging with logs/stack traces and running experiments | Destructive operations (production data, force pushes): require confirmation |
+| Docs, scripts, small tools, prototypes | Blindly accepting dependency additions |
+
+## Your growth as an engineer
+
+AI shifts value toward **judgment**: system design, requirements clarity, taste in code, review skill, debugging intuition and understanding the domain. Use agents to go faster, but keep **understanding** what ships; ask the agent to explain unfamiliar code it wrote, and occasionally write critical pieces yourself to keep skills sharp.
+
+<Quiz
+  question="An agent produces a 900-line PR implementing a feature, and all tests pass. What's the best next step?"
+  options={[
+    "Merge it; tests pass",
+    "Review it critically (edge cases, security, invented APIs, test quality, scope) and ideally split it into smaller reviewable changes; you own what ships",
+    "Ask the agent if the code is correct and merge if it says yes",
+    "Delete the tests to speed up CI",
+  ]}
+  answer={1}
+  explanation="Passing tests show what was tested, not that everything is right. Accountability stays with the engineer; smaller diffs make real review possible."
+/>
+
+<LevelTags
+  junior="Uses agents for well-scoped tasks, runs tests, and reviews every line before committing."
+  mid="Writes project instructions, frames tasks with plans and acceptance criteria, verifies via tests."
+  senior="Designs codebases and workflows that agents work well in; reviews AI output rigorously; parallelizes work."
+  lead="Sets team norms for AI-assisted development: review standards, security rules, tooling and measurement."
+/>
+
+<SeniorLens>
+Senior engineers get the most out of agents because they're good at the things agents need: **clear specifications, decomposition, knowing what to verify, and fast, critical review**. The new leverage is running several well-scoped agent tasks in parallel while you focus on design and review, much like leading a team, at a smaller scale.
+</SeniorLens>
+
+<KeyTakeaways>
+- You specify, steer, verify and own; the agent drafts and executes.
+- Context (instructions file, examples, the why) drives quality.
+- Explore → plan → implement → verify; let the agent run tests and iterate.
+- Review AI code rigorously; keep diffs small; keep your own understanding sharp.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic engineering:** *Claude Code best practices*.
+- **Simon Willison's blog**: practical, honest writing on AI-assisted programming.
+- **Your own team's experience**: keep a running list of what works and put it in your project instructions file.
+</GoDeeper>

@@ -1,0 +1,102 @@
+---
+title: Deployment Strategies
+description: Rolling, blue-green, canary and feature flags. Releasing changes while limiting blast radius.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Most production incidents are caused by **changes**: deploys, config updates, flag flips, migrations. You can't stop changing things, so the goal is to make each change **small, observable and quickly reversible**, and to expose it to a few users before all of them. Deployment strategy is one of the highest-leverage reliability tools you have.
+</Problem>
+
+## Deploy ≠ release
+
+- **Deploy**: put new code on servers.
+- **Release**: expose new behavior to users.
+
+Separating them (with feature flags) means you can deploy anytime and release deliberately, gradually, and roll back with a switch instead of a redeploy.
+
+## The strategies
+
+| Strategy | How | Pros | Cons |
+|---|---|---|---|
+| **Recreate** | Stop old, start new | Simple | Downtime |
+| **Rolling** | Replace instances a few at a time | No extra capacity, zero downtime (with readiness) | Old and new versions run together; rollback is another rollout |
+| **Blue-green** | Stand up full new environment (green), switch traffic from blue at once | Instant switch and instant rollback | Double capacity during deploy; DB must work for both |
+| **Canary** | Send a small % of traffic (1% → 5% → 25% → 100%) to the new version; compare metrics | Real-traffic validation with tiny blast radius | Needs good metrics and traffic splitting; slower |
+| **Shadow / dark launch** | Mirror real traffic to the new version, discard its responses | Test under real load without user impact | Duplicate side effects must be suppressed |
+
+**Canary with automated analysis** is the gold standard for services at scale: the pipeline compares error rate and latency of canary vs baseline and **auto-rolls back** on regression (Argo Rollouts, Flagger, Spinnaker/Kayenta).
+
+<MentalModel>
+A **canary** is a taste test: the chef gives a new recipe to one table first and watches their faces before serving the whole restaurant. **Blue-green** is having a second kitchen fully prepared; you swap which kitchen serves orders, and if something's wrong, you swap back instantly. **Feature flags** are a dimmer switch on each new dish: you can turn it up gradually, or off immediately, without touching the kitchen.
+</MentalModel>
+
+## Feature flags
+
+```java
+if (flags.isEnabled("new-pricing-engine", user)) {
+    return newPricing.price(cart);
+}
+return legacyPricing.price(cart);
+```
+
+Uses: progressive rollout (1% of users, internal staff first, one region), kill switches for risky features, A/B experiments, trunk-based development (merge unfinished work, hidden).
+
+Hygiene: every flag has an **owner and an expiry**; remove flags after full rollout. Old flags are hidden complexity and combinatorial test explosions (Knight Capital's 2012 $440M loss involved a repurposed old flag).
+
+## Making rollbacks safe
+
+- **Backward-compatible changes**: old and new versions coexist during rollouts. APIs, events and DB schemas must work with both (expand/contract).
+- **Config and flags are changes too**: version them, roll them out gradually, make them reversible.
+- **Practice rollback**: a rollback path that has never been exercised is a hope, not a plan.
+- **Roll back first, debug later**: if a deploy correlates with an incident, revert immediately.
+
+<Quiz
+  question="A new version passes all tests. In production it slightly increases the error rate for one rare request type. Which strategy would most likely catch it with minimal user impact?"
+  options={[
+    "Recreate deployment at night",
+    "Canary with automated metric comparison and auto-rollback",
+    "Blue-green with instant full switch",
+    "Rolling update without monitoring",
+  ]}
+  answer={1}
+  explanation="Canaries expose a small fraction of real traffic and compare metrics against the baseline. Rare-path regressions show up with limited blast radius, and rollback is automatic."
+/>
+
+<Tradeoffs
+  good={[
+    "Canaries and flags limit blast radius of bad changes",
+    "Blue-green gives instant rollback",
+    "Decoupling deploy from release increases safety and speed",
+  ]}
+  bad={[
+    "Requires good metrics and traffic-splitting infrastructure",
+    "Mixed-version periods demand backward compatibility",
+    "Flags add code paths and debt if not cleaned up",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses feature flags and understands rolling deployments."
+  mid="Runs canaries, writes backward-compatible changes, removes stale flags."
+  senior="Designs progressive delivery with automated analysis and safe rollback for code, config and data."
+  lead="Makes progressive delivery and change management standard practice across teams."
+/>
+
+<SeniorLens>
+When reviewing a risky change, seniors ask: **"How will we know it's broken, and how fast can we undo it?"** If the answers are "users will tell us" and "redeploy the old version in 40 minutes", the change isn't ready. Put it behind a flag, canary it, and define the rollback trigger before shipping.
+</SeniorLens>
+
+<KeyTakeaways>
+- Changes cause most incidents; make them small, observable and reversible.
+- Rolling, blue-green, canary, shadow: tradeoffs in capacity, speed and safety.
+- Separate deploy from release with feature flags; clean them up.
+- Backward compatibility makes rollbacks safe; roll back first, debug later.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Workbook:** *Canarying Releases*.
+- **Pete Hodgson, *Feature Toggles*** (martinfowler.com).
+- **Argo Rollouts / Flagger** docs for automated canary analysis.
+</GoDeeper>

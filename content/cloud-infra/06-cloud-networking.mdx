@@ -1,0 +1,119 @@
+---
+title: Cloud Networking (VPCs)
+description: VPCs, subnets, route tables, security groups, NAT and private connectivity, explained for application engineers.
+minutes: 11
+level: mid
+---
+
+<Problem>
+Your new service can't reach the database ("connection timed out"). Or the database is accidentally reachable from the internet. Or your NAT gateway bill is bigger than your compute bill. Cloud networking is where many "mysterious" connectivity bugs and serious security exposures live, and it's built from a handful of concepts.
+</Problem>
+
+## The building blocks
+
+- **VPC (Virtual Private Cloud)**: your private network in a region, with an IP range (e.g. `10.0.0.0/16` = 65,536 addresses).
+- **Subnets**: slices of the VPC range, each in **one AZ**. Typically per AZ:
+  - **Public subnet**: route to an **Internet Gateway**; hosts load balancers, NAT gateways, bastions.
+  - **Private subnet**: no direct inbound internet; hosts app servers/containers.
+  - **Isolated/data subnet**: no internet at all; hosts databases and caches.
+- **Route tables**: decide where traffic from a subnet goes (local VPC, internet gateway, NAT, peering, VPN).
+- **NAT gateway**: lets private instances make **outbound** connections (download packages, call third-party APIs) without being reachable inbound.
+- **Security groups**: stateful, instance-level firewalls ("allow inbound 5432 **from the app's security group**"). Return traffic is automatically allowed.
+- **Network ACLs**: stateless subnet-level rules; coarse extra layer, often left default.
+
+```text
+                 Internet
+                    │
+             [Internet Gateway]
+                    │
+   ┌──────── Public subnets (AZ a/b/c) ────────┐
+   │   ALB          NAT gateway                │
+   └──────┬───────────────▲────────────────────┘
+          ▼               │ outbound only
+   ┌──────── Private subnets ──────────────────┐
+   │   App services / Kubernetes nodes         │
+   └──────┬────────────────────────────────────┘
+          ▼ SG: allow 5432 from app-sg only
+   ┌──────── Data subnets ─────────────────────┐
+   │   RDS (Multi-AZ), ElastiCache             │
+   └───────────────────────────────────────────┘
+```
+
+<MentalModel>
+A VPC is a **gated office campus**. Public subnets are the **lobby** facing the street (load balancers). Private subnets are **office floors** that need a badge to enter (no inbound from outside) but can still send mail out through the mailroom (NAT). Data subnets are the **vault in the basement**, reachable only from specific offices. Security groups are the **door locks on each room**, keyed to who's allowed in.
+</MentalModel>
+
+## Connecting things privately
+
+- **VPC endpoints / PrivateLink**: reach AWS services (S3, DynamoDB, SQS, Secrets Manager) or partner services **without going through NAT or the internet**. More secure, and often much cheaper than NAT data processing charges.
+- **VPC peering / Transit Gateway**: connect VPCs (multiple accounts, environments, services).
+- **VPN / Direct Connect**: connect to on-prem or office networks.
+
+## Debugging connectivity: the checklist
+
+When service A can't reach B (`timeout` is the typical symptom; `connection refused` means you reached the host but nothing listens):
+
+1. **DNS**: does the name resolve to the expected (private) IP? `dig`.
+2. **Route**: does A's subnet route table have a path to B's subnet/IP?
+3. **Security group on B**: inbound rule for the port **from A's SG or CIDR**?
+4. **Security group on A**: outbound allowed (usually all)?
+5. **NACLs**: any stateless deny (remember ephemeral return ports)?
+6. **B listening**: on `0.0.0.0` and the right port? Healthy?
+7. **Outbound to internet**: does a private subnet have a NAT route?
+
+`nc -zv host port` from A answers most of it quickly; VPC Reachability Analyzer automates the rest.
+
+## Cost and design tips
+
+- NAT gateways charge per GB processed. Heavy S3 or container image pulls through NAT get expensive; use **gateway endpoints** for S3/DynamoDB.
+- **Cross-AZ traffic** costs money; chatty services across AZs add up (zone-aware routing helps).
+- Plan **CIDR ranges** to avoid overlaps with other VPCs/on-prem you'll peer with later, and size for growth (Kubernetes pods can consume IPs fast).
+
+<Quiz
+  question="An app in a private subnet times out calling a third-party payment API on the internet. Inbound rules look fine. What's the most likely missing piece?"
+  options={[
+    "An Internet Gateway attached to the private subnet",
+    "A route from the private subnet to a NAT gateway (in a public subnet) for outbound internet traffic",
+    "A public IP on the database",
+    "A larger instance type",
+  ]}
+  answer={1}
+  explanation="Private subnets have no direct internet route by design. Outbound access goes through a NAT gateway (or a proxy/PrivateLink if the vendor supports it)."
+/>
+
+<Tradeoffs
+  good={[
+    "Layered isolation: internet-facing, app and data tiers",
+    "Security groups referencing each other express intent clearly",
+    "Private endpoints keep traffic off the internet",
+  ]}
+  bad={[
+    "Many layers to check when debugging connectivity",
+    "NAT and cross-AZ data charges surprise people",
+    "CIDR mistakes are painful to fix later",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows public vs private subnets and what a security group does."
+  mid="Debugs connectivity systematically; configures SG-to-SG rules and NAT."
+  senior="Designs VPC layouts, endpoints, peering/transit and cost-aware traffic flows."
+  lead="Owns network architecture across accounts: CIDR planning, connectivity hubs, guardrails."
+/>
+
+<SeniorLens>
+Seniors make the **database unreachable by construction**: data subnets without internet routes, security groups that only admit the app's SG, no public IPs, IAM-authenticated access where possible. Defense in depth means one misconfiguration isn't enough to cause a breach.
+</SeniorLens>
+
+<KeyTakeaways>
+- VPC → subnets per AZ (public, private, data) → route tables → IGW/NAT.
+- Security groups: stateful, reference other SGs; NACLs: stateless, coarse.
+- Use VPC endpoints for cloud services; watch NAT and cross-AZ costs.
+- Debug in order: DNS → routes → SGs → NACLs → listener.
+</KeyTakeaways>
+
+<GoDeeper>
+- **AWS VPC User Guide** (concepts and scenarios).
+- **AWS re:Invent:** *Advanced VPC design* talks.
+- **Cloudflare Learning Center:** networking basics (CIDR, NAT).
+</GoDeeper>

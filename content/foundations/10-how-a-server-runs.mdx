@@ -1,0 +1,128 @@
+---
+title: How a Server Process Actually Runs
+description: Ports, file descriptors, environment variables, signals and exit codes, the OS contract every service lives by.
+minutes: 9
+level: junior
+---
+
+<Problem>
+Your app works on your laptop. In a container it says "connection refused". In Kubernetes it gets killed mid-request during every deploy. In production it dies with "too many open files". None of these are bugs in your business logic. They're about how your **process interacts with the operating system**. Learning this contract makes you the person who can debug "it works locally" problems.
+</Problem>
+
+## A server is just a process that listens
+
+At startup, your service:
+1. Reads **configuration** (env vars, files, flags).
+2. Opens resources (DB pools, caches, log files).
+3. **Binds** to an address and port (`0.0.0.0:8080`) and **listens**.
+4. Loops: **accept** connection → handle request → repeat.
+5. On a stop **signal**, stops accepting, finishes in-flight work, closes resources, **exits** with a code.
+
+```text
+bind(0.0.0.0:8080) → listen() → accept() → read request → write response → ...
+```
+
+## Binding: 127.0.0.1 vs 0.0.0.0
+
+- `127.0.0.1` (localhost): only connections from **the same machine/container**.
+- `0.0.0.0`: all network interfaces, reachable from outside.
+
+The classic Docker bug: the app binds to `127.0.0.1` inside the container, so it's unreachable from the host even with `-p 8080:8080`. Only one process can bind a given port at a time, hence "Address already in use".
+
+## Everything is a file (descriptor)
+
+Unix represents open files, sockets, pipes and more as **file descriptors (FDs)**: small integers the process uses to refer to them. Each TCP connection is an FD. Each open log file is an FD. The OS limits FDs per process (`ulimit -n`, often 1024 by default).
+
+"Too many open files" usually means you're **leaking connections** (not closing them) or the limit is too low for a busy server.
+
+```java
+// ❌ leaks a file descriptor if an exception happens
+InputStream in = new FileInputStream(path);
+process(in);
+in.close();
+
+// ✅ always closed
+try (InputStream in = new FileInputStream(path)) {
+    process(in);
+}
+```
+
+## Configuration through environment
+
+The **Twelve-Factor App** principle: store config that varies between environments (DB URLs, credentials, feature flags) in **environment variables**, not in code. The same build artifact then runs in dev, staging and prod. Spring maps `SPRING_DATASOURCE_URL` to `spring.datasource.url` automatically.
+
+## Signals: how the OS talks to your process
+
+| Signal | Meaning | What you should do |
+|---|---|---|
+| `SIGTERM` | "Please shut down" (Kubernetes, Docker stop, systemd) | Graceful shutdown: stop accepting, finish in-flight requests, close pools |
+| `SIGINT` | Ctrl+C | Same as SIGTERM |
+| `SIGKILL` | "Die now" (can't be caught) | Nothing. You're gone. Sent if you ignore SIGTERM too long |
+| `SIGHUP` | Historically "reload config" | Some daemons (nginx) reload on it |
+
+Kubernetes sends `SIGTERM`, waits `terminationGracePeriodSeconds` (default 30s), then sends `SIGKILL`. If your app doesn't handle `SIGTERM` gracefully, every deploy drops in-flight requests.
+
+```properties
+# Spring Boot: finish in-flight requests before exiting
+server.shutdown=graceful
+spring.lifecycle.timeout-per-shutdown-phase=20s
+```
+
+One gotcha: if your container's entrypoint is a shell script that launches Java, the shell might receive `SIGTERM` and not forward it. Use `exec java ...` so Java becomes PID 1.
+
+## Exit codes
+
+`0` means success; anything else is failure. Orchestrators use this. A crash-looping pod with exit code `137` means it was SIGKILLed (often **out of memory**: 128 + 9). Exit code `143` means it exited after SIGTERM (128 + 15).
+
+<MentalModel>
+The OS is your service's **landlord**. It gives you a room (memory), a limited number of keys (file descriptors), a mailbox address (port), and a list of house rules (env config). When it's time to move out it knocks politely (SIGTERM). Ignore the knock long enough and it changes the locks with you inside (SIGKILL).
+</MentalModel>
+
+<Quiz
+  question="Every deploy causes a burst of 502 errors for a few seconds. What's the most likely missing piece?"
+  options={[
+    "More replicas",
+    "Graceful shutdown on SIGTERM (stop accepting, drain in-flight requests) plus readiness checks",
+    "A bigger heap",
+    "Switching to UDP",
+  ]}
+  answer={1}
+  explanation="Without graceful shutdown, old pods are killed mid-request, and without readiness checks new pods get traffic before they're ready. Both cause 502s during rollouts. Track 1 covers health checks in depth."
+/>
+
+<Tradeoffs
+  good={[
+    "Env-based config: one artifact for every environment",
+    "Signals: a universal way for orchestrators to manage process lifecycles",
+    "FDs: one uniform abstraction for files, sockets and pipes",
+  ]}
+  bad={[
+    "Env vars are visible to anything in the process; keep real secrets in a secrets manager",
+    "Ignoring signals silently breaks deploys",
+    "FD limits and leaks only show up under real load",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows 0.0.0.0 vs localhost, uses env vars for config, closes resources with try-with-resources."
+  mid="Implements graceful shutdown, reads exit codes (137 = OOM/SIGKILL), debugs FD and port issues with lsof/ss."
+  senior="Designs zero-downtime deploys end to end: readiness, draining, shutdown timing vs LB deregistration."
+  lead="Standardizes service templates so every new service gets correct lifecycle handling by default."
+/>
+
+<SeniorLens>
+Zero-downtime deploys are a great litmus test of a team's maturity. They require the app (graceful shutdown), the platform (readiness probes, preStop hooks) and the load balancer (deregistration delay) to agree on timing. Seniors know all three pieces and debug the seams between them.
+</SeniorLens>
+
+<KeyTakeaways>
+- A server binds a port, accepts connections, and must handle SIGTERM gracefully.
+- Bind to 0.0.0.0 in containers; only one process per port.
+- Every socket and file is a file descriptor. Close them; mind the limit.
+- Config via environment; exit codes tell orchestrators what happened (137 = killed).
+</KeyTakeaways>
+
+<GoDeeper>
+- **[The Twelve-Factor App](https://12factor.net/)**: short, foundational, still relevant.
+- **Kubernetes docs: Pod lifecycle and termination.**
+- **Julia Evans' zines** on Linux processes, signals and file descriptors.
+</GoDeeper>

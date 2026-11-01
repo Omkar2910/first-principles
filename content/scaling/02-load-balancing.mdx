@@ -1,0 +1,108 @@
+---
+title: Load Balancing
+description: Spreading traffic across servers. L4 vs L7, algorithms, health checks, and sticky sessions.
+minutes: 11
+level: mid
+---
+
+<Problem>
+You now have six app servers. Clients only know one address. Something must decide, for each request, which server handles it, notice when a server dies, avoid overloading a slow one, and do all that without becoming the bottleneck or single point of failure itself. That's the **load balancer**, and the choices you make about it shape latency, resilience and deploys.
+</Problem>
+
+## What a load balancer does
+
+1. **Distributes** requests across a pool of backends.
+2. **Health checks** backends and stops routing to unhealthy ones.
+3. **Hides** the topology: clients see one stable address (DNS name / IP).
+4. Often also: **TLS termination**, connection reuse to backends, request routing by path/host, rate limiting, compression.
+
+<MentalModel>
+The **host at a busy restaurant**. Guests wait at one door; the host seats each party at a table with a free waiter, skips sections where the waiter went home sick (health checks), and might always seat regulars with their favorite waiter (sticky sessions). A good host keeps every waiter evenly busy; a bad one sends everyone to the first section.
+</MentalModel>
+
+## L4 vs L7
+
+| | **Layer 4 (transport)** | **Layer 7 (application)** |
+|---|---|---|
+| Sees | IPs, ports, TCP/UDP | Full HTTP: path, headers, cookies |
+| Routing by | Connection | Request (path `/api` vs `/static`, host, header) |
+| Speed | Very fast, minimal overhead | More CPU (parses HTTP, often terminates TLS) |
+| Examples | AWS NLB, HAProxy (TCP mode), LVS | AWS ALB, Nginx, Envoy, HAProxy (HTTP), Traefik |
+
+With HTTP/1.1 keep-alive or HTTP/2, an **L4** balancer pins a long-lived connection to one backend, which can cause imbalance. **L7** balances each request.
+
+## Algorithms
+
+Run the simulation with each algorithm. Watch the slow server (app-4), then kill a server with health checks on and off.
+
+<LoadBalancerSim />
+
+- **Round robin**: take turns. Simple, ignores load. Overloads slower or busier servers.
+- **Weighted round robin**: bigger servers get proportionally more.
+- **Random**: surprisingly decent at scale; same weakness as round robin.
+- **Least connections / least outstanding requests**: send to the least busy. Adapts to slow servers and uneven request costs. A great default.
+- **Power of two choices**: pick 2 random servers and send to the less loaded one. Nearly as good as least-connections with much less coordination; used widely at scale.
+- **Hash-based** (IP hash, consistent hash on a key): the same client/key goes to the same server. Useful for cache locality.
+
+## Health checks
+
+- **Active**: the LB polls `/health/ready` every few seconds; N failures → out of rotation; M successes → back in.
+- **Passive** (outlier detection): the LB notices real requests failing (5xx, timeouts) and ejects the backend.
+
+Health checks should reflect **ability to serve**: see the readiness lesson in Track 1. Too strict and you eject everything during a blip; too lax and you route to zombies.
+
+## Sticky sessions
+
+Sticky sessions (session affinity) route a user to the same backend via a cookie. They let you keep session state in memory, but they **undermine horizontal scaling**: uneven load, and a server dying loses its users' sessions. Prefer stateless services; use stickiness only for things like WebSocket connections or a cache-locality optimization.
+
+## Avoiding a single point of failure
+
+The LB itself must be redundant: managed cloud LBs are multi-AZ by design; self-hosted ones use pairs with a floating IP (keepalived) or **anycast**. At global scale, **DNS/GeoDNS** or anycast routes users to the nearest regional LB, a hierarchy of balancing.
+
+```text
+User → GeoDNS / anycast → Regional L4 LB → L7 LB / ingress → service instances
+```
+
+<Quiz
+  question="One backend has a slow disk and handles requests 3× slower than the others. Which algorithm naturally protects it from overload?"
+  options={["Round robin", "Random", "Least outstanding requests", "IP hash"]}
+  answer={2}
+  explanation="Requests pile up on the slow server, so its outstanding count stays high and the LB sends new work elsewhere. Round robin and random keep sending it an equal share regardless."
+/>
+
+<Tradeoffs
+  good={[
+    "Horizontal scaling and redundancy behind one address",
+    "Health checks route around failures automatically",
+    "L7 enables path routing, TLS termination and per-request balancing",
+  ]}
+  bad={[
+    "Another hop (small latency) and another component to configure",
+    "Misconfigured health checks cause flapping or zombie routing",
+    "Sticky sessions create imbalance and fragile state",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what an LB does and why health checks matter."
+  mid="Configures ALB/Nginx/ingress: health checks, timeouts, path routing, deregistration delay."
+  senior="Chooses L4 vs L7 and algorithms based on traffic shape; designs multi-AZ/region traffic flow."
+  lead="Owns the edge architecture (CDN, WAF, global LB, ingress) and its failure modes across the org."
+/>
+
+<SeniorLens>
+Timeouts at the LB are a sneaky source of incidents. The LB's idle timeout, the app's keep-alive timeout and the client's timeout must be **ordered correctly** (the backend's keep-alive should exceed the LB's idle timeout) or you get random 502s under light traffic. Seniors check the whole timeout chain end to end.
+</SeniorLens>
+
+<KeyTakeaways>
+- LBs distribute load, health-check backends and hide topology.
+- L4 balances connections; L7 balances requests and routes by HTTP details.
+- Least-outstanding-requests / power-of-two-choices beat naive round robin.
+- Avoid sticky sessions; make the LB itself redundant.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Envoy docs: load balancing](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/overview)**.
+- **Marc Brooker (AWS): *Load balancing and the power of two choices*** blog post.
+- **Sriniously:** load balancers episode.
+</GoDeeper>

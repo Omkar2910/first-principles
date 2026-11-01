@@ -1,0 +1,164 @@
+---
+section: Across all levels
+title: Templates You'll Reuse
+description: Copy-ready templates for design docs, ADRs, postmortems, project updates, 1:1s and growth plans.
+minutes: 8
+level: mid
+---
+
+<Problem>
+Every important artifact in an engineer's career (design doc, ADR, postmortem, status update, growth plan) is easier and better when you start from a good structure instead of a blank page. Here they are in one place. Copy them, adapt them to your company, and keep the structure in mind even when you write informally.
+</Problem>
+
+## Design doc
+
+```markdown
+# <Title>
+Author: · Reviewers: · Status: Draft | In review | Approved · Updated:
+
+## TL;DR
+One paragraph: problem, proposal, key tradeoff, ask.
+
+## Context & problem
+What's happening and why it matters now (with data).
+
+## Goals / Non-goals
+
+## Proposed design
+Architecture diagram · data flow · APIs · data model · key algorithms
+
+## Alternatives considered
+Option → why not chosen
+
+## Tradeoffs & risks
+Risk → mitigation
+
+## Operations
+SLOs · monitoring/alerts · failure modes · rollout & rollback · migration/backfill
+
+## Security, privacy & compliance
+
+## Cost
+Expected monthly cost now and at 10× scale; main drivers
+
+## Open questions
+
+## Milestones
+```
+
+## Architecture Decision Record (ADR)
+
+```markdown
+# ADR-NNN: <Decision title>
+Status: Proposed | Accepted | Superseded by ADR-MMM · Date: · Deciders:
+
+## Context
+Forces at play, constraints, the problem.
+
+## Decision
+What we decided, stated plainly.
+
+## Consequences
+Positive, negative, and follow-ups.
+
+## Alternatives considered
+```
+
+## Postmortem
+
+```markdown
+# <Incident title>: <date>
+Severity: · Duration: · Authors: · Status: Draft | Reviewed
+
+## Summary
+2–3 sentences: what happened, impact, resolution.
+
+## Impact
+Users/customers affected · duration · business impact · data impact
+
+## Timeline (UTC)
+hh:mm event (detection, escalation, key decisions, mitigation, resolution)
+
+## Root cause & contributing factors
+Technical · process · organizational
+
+## What went well · What went poorly · Where we got lucky
+
+## Action items
+| Action | Type (prevent/detect/mitigate) | Owner | Due | Ticket |
+```
+
+## Project status update (weekly)
+
+```markdown
+**<Project>**: week of <date> · Status: 🟢 On track | 🟡 At risk | 🔴 Off track
+**Done:** ...
+**Next:** ...
+**Risks / blockers:** risk → mitigation / help needed from whom
+**Decisions needed:** question → by when → from whom
+**Milestone dates:** M2 (Oct 20, on track) · Launch (Nov 15, at risk: reason)
+```
+
+## 1:1 agenda (with your manager)
+
+```markdown
+## Wins since last time
+## What I'm working on / blocked by
+## Feedback (both directions)
+## Growth: progress on my plan; opportunities I'd like
+## Anything else (team, process, ideas, concerns)
+```
+
+## Growth plan
+
+```markdown
+# Growth plan: <period>
+Target level: · Mentor/manager:
+
+| Gap (competency) | Current → target | Learn | Practice (real work) | Evidence of progress | Check-in |
+|---|---|---|---|---|---|
+| Written communication | Mid → Senior | Career lesson 7 | Design doc for X | Approved; reused by team Y | Monthly |
+```
+
+## Brag document
+
+```markdown
+# Brag doc: <period>
+## Goals
+## Projects (impact, numbers, links)
+## Production & operations
+## Collaboration, mentoring & glue work
+## Learning & sharing
+## Feedback received
+```
+
+## Production readiness checklist (short)
+
+```markdown
+- [ ] Health: startup/liveness/readiness probes (liveness independent of deps)
+- [ ] Graceful shutdown; config validated at startup
+- [ ] Timeouts + retry policy on every outbound call; circuit breakers for critical deps
+- [ ] Resource requests/limits; JVM sized to container
+- [ ] RED metrics, structured logs with request IDs, tracing
+- [ ] SLOs + burn-rate alerts with runbooks and an owner
+- [ ] Load tested to forecast peak (with N−1 capacity)
+- [ ] Backups + tested restore; backward-compatible migrations
+- [ ] AuthN/AuthZ on every endpoint; secrets from manager; deps scanned
+- [ ] Rollout plan (canary/flags) and rollback tested
+```
+
+<MentalModel>
+Templates are **checklists for thinking**, like a pilot's pre-flight checklist. Experienced pilots still use them, not because they can't remember, but because under pressure everyone forgets something. A template makes sure the important questions get asked every time.
+</MentalModel>
+
+<KeyTakeaways>
+- Start important documents from proven structures.
+- Adapt templates to your company, but keep the core questions.
+- Lead with the TL;DR; make action items owned and dated; keep updates short and honest.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Book appendix:** example postmortem.
+- **[adr.github.io](https://adr.github.io/)**: ADR templates.
+- **Julia Evans' brag document template**.
+</GoDeeper>

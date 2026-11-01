@@ -1,0 +1,110 @@
+---
+section: The approach
+title: A Framework for System Design
+description: A repeatable six-step approach for design interviews and real design docs, from requirements to tradeoffs.
+minutes: 10
+level: mid
+---
+
+<Problem>
+"Design Twitter." Many engineers freeze, or jump straight to drawing Kafka and Cassandra boxes. Interviewers (and real design reviewers) aren't looking for a memorized architecture. They're looking for a **structured way of thinking**: clarify the problem, quantify it, propose a simple design, then evolve it where the requirements demand, explaining tradeoffs along the way. This lesson is that structure; every case study in this track follows it.
+</Problem>
+
+## The six steps
+
+### 1. Clarify requirements (5 min)
+
+- **Functional**: what must the system do? Pick the **core 3–4 features**; explicitly park the rest.
+- **Non-functional**: scale (users, QPS), latency targets, availability, consistency needs, durability, security/compliance.
+- **Constraints**: read-heavy or write-heavy? Global or one region? Mobile clients?
+
+> "For this design I'll focus on posting tweets, following users, and the home timeline. I'll treat search and DMs as out of scope. Let's target 200M DAU, timeline latency under 200 ms p99, and accept a few seconds of staleness in timelines."
+
+### 2. Estimate (3–5 min)
+
+QPS (average and peak), read/write ratio, storage growth, bandwidth. Purpose: find what's **hard** (e.g. "timeline reads are 100K QPS, so precomputation and caching are central"). Use the estimator in the next lesson.
+
+### 3. Define the API (3–5 min)
+
+The contract forces clarity:
+
+```http
+POST /v1/tweets            {text, mediaIds}        → 201 {tweetId}
+GET  /v1/timeline?cursor=  → 200 {tweets[], nextCursor}
+POST /v1/users/{id}/follow → 204
+```
+
+### 4. Data model (5 min)
+
+Entities, key fields, relationships, access patterns → which store, how it's partitioned/indexed.
+
+### 5. High-level design (10–15 min)
+
+Start **simple**: client → LB → stateless services → database. Walk a request through it. Then add components **only to solve a requirement or bottleneck you identified**: cache, queue, CDN, read replicas, search index, sharding.
+
+### 6. Deep dives and tradeoffs (10–15 min)
+
+Go deep on the 1–2 hardest parts (the interviewer often picks). Discuss bottlenecks, failure modes, consistency choices, and alternatives you rejected, with reasons.
+
+<MentalModel>
+Designing a system is like an **architect designing a building**. First the brief (requirements: how many people, what for). Then the numbers (load, square meters). Then the floor plan (high-level design). Only then structural details where they matter (deep dives: this wall carries the load, this staircase must handle evacuation). Nobody starts by picking the brand of elevator.
+</MentalModel>
+
+## What evaluators look for
+
+| Signal | Looks like |
+|---|---|
+| **Structured thinking** | Requirements → estimates → API → data → design → deep dive |
+| **Requirements-driven choices** | "Because reads are 100× writes, we fan out on write" |
+| **Tradeoff awareness** | "This gives low read latency at the cost of write amplification for celebrities" |
+| **Depth** | Can go from boxes to details (schema, partition key, cache invalidation) |
+| **Pragmatism** | Starts simple; doesn't add Kafka without a reason |
+| **Communication** | Thinks aloud, checks in, adapts to hints |
+
+## Common mistakes
+
+- Jumping to a complex architecture before clarifying requirements.
+- Naming technologies without justifying them ("use Cassandra").
+- Ignoring failure modes: "what if the cache/queue/region is down?"
+- Spending 20 minutes on one box and never finishing the end-to-end flow.
+- Over-engineering for scale nobody asked for.
+
+## The same framework at work
+
+A real **design doc** follows the same skeleton: context and goals, non-goals, requirements, estimates, proposed design, alternatives considered, risks and failure modes, rollout plan, open questions. Lesson 6 of the Career track covers writing them.
+
+<Quiz
+  question="An interviewer says 'Design a URL shortener.' What's the best first move?"
+  options={[
+    "Draw the architecture with Kafka, Cassandra and Redis",
+    "Ask clarifying questions: scale, custom aliases, expiry, analytics, and state assumptions",
+    "Start writing the hashing code",
+    "Discuss which cloud provider to use",
+  ]}
+  answer={1}
+  explanation="Requirements drive every later decision. A URL shortener for 1,000 internal users and one for 100M daily users are completely different systems."
+/>
+
+<LevelTags
+  junior="Can describe a simple three-tier design and walk a request through it."
+  mid="Follows the framework; justifies caches, queues and replicas from requirements."
+  senior="Drives the conversation: crisp scope, quantified bottlenecks, deep dives with failure modes and alternatives."
+  lead="Uses the same rigor in real design reviews and coaches others to; evaluates organizational fit and cost."
+/>
+
+<SeniorLens>
+Senior candidates **lead** the design session: they propose the scope, state assumptions confidently, and tell the interviewer where the interesting problems are ("the hard part here is the celebrity fan-out; let me go deep on that"). Saying what you're optimizing for, and what you're consciously giving up, matters more than any single component choice.
+</SeniorLens>
+
+<KeyTakeaways>
+- Requirements → estimates → API → data model → high-level design → deep dives.
+- Start simple; add components only to solve identified problems.
+- Always state tradeoffs and failure modes.
+- The same skeleton makes a great real-world design doc.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview* Vol. 1 & 2**: the most popular case-study books.
+- **[The System Design Primer](https://github.com/donnemartin/system-design-primer)**.
+- **Hello Interview / ByteByteGo**: written walkthroughs of common problems.
+</GoDeeper>

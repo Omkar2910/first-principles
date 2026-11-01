@@ -1,0 +1,149 @@
+---
+section: Principles and patterns
+title: Object-Oriented Design Done Right
+description: Encapsulation, composition over inheritance, polymorphism and rich domain models, beyond textbook definitions.
+minutes: 11
+level: junior
+---
+
+<Problem>
+Most codebases use classes, but few use **object-oriented design**. You see getters and setters on every field, logic scattered in "Manager" and "Util" classes, deep inheritance hierarchies nobody dares touch, and `if (type == ...)` switches copy-pasted across files. The four OOP pillars are well known; what's rarer is using them to make code **easy to change**.
+</Problem>
+
+## Encapsulation: protect invariants, not just fields
+
+Encapsulation isn't "make fields private and add getters/setters". It's **keeping an object's rules inside the object** so it can never be in an invalid state.
+
+```java
+// ❌ Anemic: anyone can put the account in an invalid state
+class Account {
+    private BigDecimal balance;
+    public BigDecimal getBalance() { return balance; }
+    public void setBalance(BigDecimal b) { this.balance = b; }   // negative? sure!
+}
+// Logic lives elsewhere, duplicated:
+if (account.getBalance().compareTo(amount) >= 0) account.setBalance(account.getBalance().subtract(amount));
+
+// ✅ Behavior-rich: the rule lives with the data
+class Account {
+    private Money balance;
+    public void withdraw(Money amount) {
+        if (amount.isNegativeOrZero()) throw new IllegalArgumentException("amount must be positive");
+        if (balance.lessThan(amount)) throw new InsufficientFunds(balance, amount);
+        balance = balance.minus(amount);
+    }
+    public Money balance() { return balance; }    // read-only view
+}
+```
+
+**"Tell, don't ask"**: tell objects what to do (`account.withdraw(x)`), instead of asking for their data and deciding for them.
+
+## Composition over inheritance
+
+Inheritance creates the tightest coupling in OOP: subclasses depend on parent implementation details (the "fragile base class" problem), and hierarchies can't model things that vary along two axes.
+
+```java
+// ❌ Inheritance explosion: Notification × channel × priority...
+class EmailNotification extends Notification {}
+class UrgentEmailNotification extends EmailNotification {}
+class SmsNotification extends Notification {}
+class UrgentSmsNotification extends SmsNotification {}   // and so on...
+
+// ✅ Compose behaviors
+class Notification {
+    private final Channel channel;          // EmailChannel, SmsChannel, PushChannel
+    private final Priority priority;
+    void send(Message m) { channel.deliver(m, priority); }
+}
+```
+
+Use inheritance for genuine **is-a** relationships with stable base behavior (and prefer interfaces + small abstract bases). Use composition for **has-a / uses-a** and for anything that varies.
+
+<MentalModel>
+Inheritance is **a family tree**: you inherit everything from your parents, wanted or not, and you can't change your parents later. Composition is **assembling a team**: you pick a specialist for each job and can swap any of them without disturbing the others.
+</MentalModel>
+
+## Polymorphism: replace conditionals
+
+```java
+// ❌ Switch on type, repeated wherever shipping cost is needed
+double cost(Order o) {
+    switch (o.shippingType()) {
+        case STANDARD: return 5;
+        case EXPRESS:  return 15;
+        case FREE:     return 0;
+    }
+}
+
+// ✅ Each type knows its own behavior; adding a type doesn't touch existing code
+sealed interface Shipping permits Standard, Express, Free { Money cost(Order o); }
+record Standard() implements Shipping { public Money cost(Order o) { return Money.of(5); } }
+record Express()  implements Shipping { public Money cost(Order o) { return Money.of(15); } }
+record Free()     implements Shipping { public Money cost(Order o) { return Money.ZERO; } }
+```
+
+(Modern Java note: with **sealed interfaces + pattern matching `switch`**, an exhaustive switch is sometimes the cleaner choice, especially when the *operations* change more often than the *types*. Know both tools.)
+
+## Value objects
+
+Wrap primitives that carry meaning: `Money`, `Email`, `OrderId`, `Quantity`. They validate on construction, are immutable, and compare by value. Java `record`s make this cheap:
+
+```java
+public record Email(String value) {
+    public Email {
+        if (value == null || !value.contains("@")) throw new IllegalArgumentException("invalid email");
+        value = value.trim().toLowerCase();
+    }
+}
+```
+
+No more `sendEmail(String userId, String email)` with arguments swapped by accident.
+
+<Quiz
+  question="Which design best protects the rule 'an order can't be shipped unless it's paid'?"
+  options={[
+    "A setStatus(Status s) method plus a check in the controller",
+    "An order.ship() method that throws if the order isn't PAID, with status only changeable via such methods",
+    "A comment on the status field",
+    "A database trigger only",
+  ]}
+  answer={1}
+  explanation="Encapsulating transitions as behavior keeps the rule in one place and makes invalid states unrepresentable through the object's API."
+/>
+
+<Tradeoffs
+  good={[
+    "Rich objects keep rules next to data, so there's less duplication",
+    "Composition makes behavior swappable and testable",
+    "Value objects eliminate whole classes of primitive bugs",
+  ]}
+  bad={[
+    "Over-abstracting simple CRUD adds ceremony",
+    "Deep object graphs can be hard to persist with ORMs",
+    "Polymorphism scatters an operation across classes (sometimes a switch is clearer)",
+  ]}
+/>
+
+<LevelTags
+  junior="Writes classes with behavior, not just getters/setters; uses records for value objects."
+  mid="Prefers composition, replaces type switches with polymorphism where it helps, protects invariants."
+  senior="Models domains with clear aggregates and invariants; knows when OOP vs functional style fits."
+  lead="Sets coding standards and reviews designs for long-term changeability."
+/>
+
+<SeniorLens>
+The measure of a good design isn't elegance; it's **how many files you touch for a typical change**. Seniors look at the change history: if every new payment method requires edits in 9 places, the abstraction is wrong. Good OOP concentrates each kind of change in one place.
+</SeniorLens>
+
+<KeyTakeaways>
+- Encapsulation = protecting invariants; tell, don't ask.
+- Composition over inheritance; inheritance only for stable is-a.
+- Polymorphism replaces repeated type switches (sealed types + pattern matching are an alternative).
+- Value objects make primitives meaningful and safe.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Joshua Bloch, *Effective Java***: items on composition, immutability and classes.
+- **Sandi Metz, *Practical Object-Oriented Design*** (Ruby, but universal).
+- **Martin Fowler:** *Anemic Domain Model* and *Tell Don't Ask* (articles).
+</GoDeeper>

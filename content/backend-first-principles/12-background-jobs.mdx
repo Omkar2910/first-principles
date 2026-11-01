@@ -1,0 +1,125 @@
+---
+title: Background Jobs and Scheduling
+description: Moving slow or unreliable work out of the request path with task queues, workers, retries and cron.
+minutes: 10
+level: mid
+---
+
+<Problem>
+A user signs up. Your endpoint creates the account, sends a welcome email, resizes their avatar, syncs them to the CRM and generates a PDF. The request takes 6 seconds, and if the email provider is down, signup fails entirely. Most of that work doesn't need to happen **before** you respond. **Background jobs** let you answer fast and do the rest reliably, later.
+</Problem>
+
+## The pattern
+
+```text
+API request ──▶ save essential data ──▶ enqueue job(s) ──▶ 201 Created (fast)
+                                            │
+                                     [ job queue ]
+                                            │
+                              worker(s) ◀───┘  process, retry on failure
+```
+
+Typical candidates:
+- **Slow** work: video transcoding, report generation, image processing.
+- **Unreliable** work: third-party calls (email, SMS, webhooks, CRM).
+- **Fan-out** work: notify 10,000 followers.
+- **Scheduled** work: nightly billing, cleanup, reminders.
+
+<MentalModel>
+A dry cleaner. You drop off clothes and get a **ticket** immediately (202 Accepted + job ID). The cleaning happens in the back on their schedule (worker). If a machine breaks, they re-run the batch (retry). You come back later or get a text when it's ready (polling or notification).
+</MentalModel>
+
+## The building blocks
+
+- **Queue / broker**: holds jobs durably. Options: Redis-based (Sidekiq, BullMQ), RabbitMQ, AWS SQS, Kafka (for event streams), or a **database table** (simple and transactional; e.g. JobRunr, db-scheduler for Java).
+- **Workers**: processes that pull jobs and execute them. Scale them independently of the API.
+- **Retries with backoff**: transient failures retry at increasing intervals (1s, 4s, 16s… with jitter).
+- **Dead-letter queue (DLQ)**: after N failures, park the job for human inspection instead of retrying forever.
+- **Visibility timeout / acknowledgement**: a job is only removed after the worker confirms success; if the worker crashes, the job reappears.
+
+## The golden rule: jobs run at least once
+
+Because of retries and crash recovery, **a job may run more than once**. Every job handler must be **idempotent**: running it twice has the same effect as once.
+
+```java
+@JobHandler("send-welcome-email")
+void sendWelcome(long userId) {
+    if (emailLog.alreadySent(userId, "WELCOME")) return;   // idempotency guard
+    emailClient.send(templates.welcome(users.get(userId)));
+    emailLog.markSent(userId, "WELCOME");
+}
+```
+
+Even this has a gap: if the process crashes between `send` and `markSent`, the email goes twice. Often acceptable for emails; not acceptable for payments. That's where idempotency keys at the provider come in (Track 4).
+
+## Don't lose jobs: the dual-write trap
+
+```java
+@Transactional
+void signup(...) {
+    userRepo.save(user);
+    queue.publish(new WelcomeJob(user.id()));   // ⚠ if the transaction rolls back after this, the job refers to a user that doesn't exist
+}                                               // ⚠ if publish fails after commit, the job is lost
+```
+
+Writing to the DB and the queue are two separate systems; you can't commit both atomically. Solutions: store jobs **in the same database** (DB-backed queue), or use the **transactional outbox** pattern (Track 4).
+
+## Scheduled jobs (cron)
+
+```java
+@Scheduled(cron = "0 0 2 * * *")   // 2am daily
+void nightlyBilling() { ... }
+```
+
+Pitfall: with 5 instances, this runs **5 times**. Use a distributed lock (ShedLock), a single scheduler instance, or a platform scheduler (Kubernetes CronJob, EventBridge). Also make scheduled jobs **resumable** (process in batches, track progress) so a crash at 80% doesn't mean starting over or double-billing.
+
+<Quiz
+  question="An SQS worker processes 'charge-subscription' jobs. It crashes after charging the card but before acknowledging the message. What happens next, and what's the fix?"
+  options={[
+    "Nothing; the job is lost",
+    "The message becomes visible again and another worker charges the card a second time, unless the handler is idempotent (e.g., uses an idempotency key with the payment provider)",
+    "SQS automatically refunds",
+    "The job moves to the DLQ immediately",
+  ]}
+  answer={1}
+  explanation="At-least-once delivery means redelivery after crashes. Make the side effect idempotent: pass a stable idempotency key (e.g. subscriptionId + billingPeriod) to the payment provider so a retry can't double-charge."
+/>
+
+<Tradeoffs
+  good={[
+    "Fast responses: users don't wait for slow work",
+    "Resilience: third-party outages don't break core flows",
+    "Independent scaling of workers",
+    "Automatic retries and DLQs for transient failures",
+  ]}
+  bad={[
+    "Eventual consistency: the result isn't there immediately",
+    "At-least-once delivery forces idempotent handlers",
+    "More moving parts to operate and monitor (queue depth, DLQ size, job age)",
+    "Harder debugging across async boundaries",
+  ]}
+/>
+
+<LevelTags
+  junior="Moves slow/unreliable work to background jobs and returns 202 when appropriate."
+  mid="Writes idempotent handlers, configures retries/backoff/DLQs, prevents duplicate cron runs."
+  senior="Solves dual-write problems (outbox), designs job priorities and backpressure, monitors queue age."
+  lead="Chooses the org's async infrastructure and sets standards for job observability and DLQ ownership."
+/>
+
+<SeniorLens>
+The metric seniors watch for job systems isn't queue *length*. It's **age of the oldest message**. A queue of 1M jobs that drains in a minute is fine; 10 jobs stuck for 2 hours is an incident. And every DLQ needs an **owner and an alert**; an unmonitored DLQ is just a silent data-loss bin.
+</SeniorLens>
+
+<KeyTakeaways>
+- Respond fast; do slow, unreliable or fan-out work in background jobs.
+- Queues + workers + retries with backoff + DLQ.
+- Jobs run at least once, so handlers must be idempotent.
+- Beware dual writes; beware cron running on every instance.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the task queues / background jobs episode.
+- **AWS SQS docs** on visibility timeout and DLQs.
+- **[JobRunr](https://www.jobrunr.io/)** and **[ShedLock](https://github.com/lukas-krecan/ShedLock)** for Java.
+</GoDeeper>

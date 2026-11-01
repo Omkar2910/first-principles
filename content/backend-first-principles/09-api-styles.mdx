@@ -1,0 +1,126 @@
+---
+title: "API Styles: REST, gRPC, GraphQL and Real-Time"
+description: Four ways for clients and services to talk, and how to pick the right one for each boundary.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Your mobile team complains that the product page needs 7 REST calls. Your platform team wants to switch internal calls to gRPC. A new feature needs live order-status updates. Each of these is a different **API style** with different strengths. Picking one style for everything (or a new one because it's trendy) leads to friction. Seniors choose **per boundary**.
+</Problem>
+
+## REST (resource-oriented HTTP + JSON)
+
+Model your domain as **resources** (`/orders/42`) manipulated with HTTP methods. Leans on HTTP semantics: status codes, caching, idempotency.
+
+```http
+GET /orders/42           → 200 {"id":42,"status":"SHIPPED"}
+PATCH /orders/42         → 200
+GET /orders?status=open  → 200 [...]
+```
+
+**Strengths**: universal, cacheable, debuggable with curl, great for public APIs. **Weaknesses**: over-fetching (too many fields) and under-fetching (too many calls); no enforced schema unless you add OpenAPI.
+
+## gRPC (RPC over HTTP/2 + Protobuf)
+
+Define **services and methods** in a `.proto` file; generate typed clients and servers in any language.
+
+```proto
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order);
+  rpc WatchOrder(WatchRequest) returns (stream OrderEvent);  // server streaming
+}
+```
+
+**Strengths**: compact binary, fast, strict contracts, streaming, generated clients, deadlines built in. **Weaknesses**: not browser-native (needs gRPC-Web/proxy), harder to debug by hand, HTTP caching doesn't apply.
+
+**Sweet spot**: internal service-to-service traffic.
+
+## GraphQL (client-specified queries)
+
+One endpoint; the client asks for exactly the shape it needs:
+
+```graphql
+query {
+  product(id: 42) {
+    name
+    price
+    reviews(first: 3) { rating text }
+    seller { name rating }
+  }
+}
+```
+
+**Strengths**: one round trip for complex screens, no over-fetching, strongly typed schema, great for many different frontends. **Weaknesses**: HTTP caching is harder, the **N+1 resolver problem** (fix with DataLoader batching), per-field authorization, and unbounded queries need depth/cost limits.
+
+**Sweet spot**: a **BFF (backend-for-frontend)** aggregating many services for rich UIs.
+
+## Real-time: polling, SSE, WebSockets
+
+| Technique | How | Good for |
+|---|---|---|
+| **Short polling** | Client asks every N seconds | Simple, low-frequency updates |
+| **Long polling** | Server holds request until there's news | Legacy fallback |
+| **Server-Sent Events (SSE)** | One-way server → client stream over HTTP | Notifications, live feeds, **LLM token streaming** |
+| **WebSockets** | Full-duplex persistent connection | Chat, multiplayer, collaborative editing |
+
+Persistent connections change scaling: servers become **stateful** (they hold connections), so you need sticky routing or a pub/sub layer (Redis, Kafka) to fan out messages to whichever server holds the user's socket. More in the HLD chat-system case study.
+
+<MentalModel>
+**REST** is a **library**: well-organized shelves (resources), standard rules for borrowing (methods), and anyone can walk in. **gRPC** is an **internal phone extension system**: fast, precise, but you need the company directory (proto) and the phones (generated clients). **GraphQL** is a **personal shopper**: hand them a list, get exactly what you asked for in one trip. **WebSockets** are an **open phone line** that either side can speak on at any time.
+</MentalModel>
+
+<Quiz
+  question="You're building internal communication between 30 microservices in Java and Go, with strict latency budgets. Which style fits best by default?"
+  options={["GraphQL", "gRPC", "SOAP", "WebSockets"]}
+  answer={1}
+  explanation="Typed contracts across languages, binary encoding, HTTP/2 multiplexing and built-in deadlines make gRPC the common default for internal service-to-service calls. REST is also fine; GraphQL shines at the client edge, not between backends."
+/>
+
+## A typical modern architecture uses several
+
+```text
+Browser/Mobile ──GraphQL or REST──▶ BFF / API Gateway ──gRPC──▶ internal services
+                ◀──SSE/WebSocket── notifications service
+Partners ─────REST (public, versioned, OpenAPI)──▶ API Gateway
+Services ─────events (Kafka)──▶ other services     (async: Track 3)
+```
+
+<Tradeoffs
+  good={[
+    "REST: universal, cacheable, simple",
+    "gRPC: fast, typed, streaming, multi-language codegen",
+    "GraphQL: client-driven shapes, one round trip",
+    "SSE/WebSockets: real-time push",
+  ]}
+  bad={[
+    "REST: chatty for complex UIs; schema discipline is optional",
+    "gRPC: browser support and debuggability",
+    "GraphQL: caching, N+1, query cost control, authz complexity",
+    "WebSockets: stateful connections complicate scaling and deploys",
+  ]}
+/>
+
+<LevelTags
+  junior="Builds clean REST endpoints and knows the other styles exist and why."
+  mid="Uses OpenAPI/proto contracts, implements SSE or WebSockets, handles GraphQL N+1."
+  senior="Chooses styles per boundary (public, internal, client-facing, real-time) and designs the gateway/BFF layer."
+  lead="Sets the org's API strategy and contract governance (schema registry, breaking-change checks in CI)."
+/>
+
+<SeniorLens>
+The question isn't "which is best?" but **"who are the clients of this boundary and what do they need?"** Public partners → stable, versioned REST. Many UIs with different needs → GraphQL/BFF. Internal high-volume calls → gRPC. Push → SSE before WebSockets unless you truly need bidirectional. Whatever you choose, **put the contract in a file (OpenAPI/proto/GraphQL schema) and check breaking changes in CI**.
+</SeniorLens>
+
+<KeyTakeaways>
+- REST: resources + HTTP semantics, ideal for public APIs.
+- gRPC: typed, fast RPC over HTTP/2, ideal internally.
+- GraphQL: client-shaped queries, ideal for rich UIs via a BFF.
+- SSE for one-way push, WebSockets for bidirectional real-time.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** REST API design and real-time episodes.
+- **[grpc.io](https://grpc.io/docs/what-is-grpc/core-concepts/)** core concepts.
+- **[GraphQL best practices](https://graphql.org/learn/best-practices/)** and the DataLoader pattern.
+</GoDeeper>

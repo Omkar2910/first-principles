@@ -1,0 +1,85 @@
+---
+section: Level 1 · Junior → Mid (SDE1 → SDE2)
+title: "Junior → Mid: Reading Code and Debugging Systematically"
+description: Navigating unfamiliar codebases quickly and debugging with a method instead of guesswork.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Most of an engineer's time isn't writing new code. It's **reading existing code** and **figuring out why something doesn't work**. Juniors often get stuck for days in an unfamiliar codebase or fix bugs by trial and error ("I changed things until it worked"). Mid-level engineers have a **method**: they find their way around new code in hours and debug by forming and testing hypotheses.
+</Problem>
+
+## Reading an unfamiliar codebase
+
+1. **Start from behavior, not files**: pick one user action ("place order") and trace it end to end: route → controller → service → repository → DB → events.
+2. **Find the entry points**: routes/controllers, message consumers, scheduled jobs, `main`/config classes.
+3. **Read the tests**: they show intended behavior and how components are wired.
+4. **Map the data**: the schema and main entities explain most of a system.
+5. **Use your tools**: "go to definition", "find usages", call hierarchy, `git log -p` / `git blame` on confusing lines (the commit message often explains *why*), search across repos.
+6. **Use AI assistants**: "Explain how an order goes from the API to the database in this repo, with file references." Then **verify** by reading the referenced code.
+7. **Run it and poke it**: start the app locally, hit the endpoint, set breakpoints, watch logs.
+8. **Write down a map** (a few bullet points or a diagram). It cements understanding and helps the next person.
+
+## Debugging: the scientific method
+
+```text
+1. Reproduce        → reliably trigger the bug (smallest input, exact steps, which environment)
+2. Observe          → gather facts: logs, stack traces, metrics, traces, recent changes, data
+3. Hypothesize      → "the cache returns stale prices after an update because invalidation runs before commit"
+4. Test             → design an experiment that could prove it WRONG (log timestamps, add a test, flip a flag)
+5. Narrow           → binary search: which commit (git bisect), which layer, which input, which instance
+6. Fix the cause    → not the symptom; add a regression test
+7. Reflect          → why did this bug exist? Could a test, type or guardrail prevent the class of bug?
+```
+
+<MentalModel>
+Debugging is **detective work**, not guessing. A detective gathers evidence, forms a theory, and looks for the clue that would disprove it. They don't arrest the first suspect who looks nervous (the first plausible cause), and they don't rearrange the crime scene at random hoping the culprit confesses (random code changes).
+</MentalModel>
+
+## Practical techniques
+
+- **Read the whole error**: the root cause is often the *last* "Caused by" in a Java stack trace.
+- **Check what changed**: recent deploys, config, dependencies, data, traffic. Most bugs are new.
+- **Binary search**: `git bisect` across commits; comment out halves; compare a working and broken environment.
+- **Minimal reproduction**: strip away everything unrelated until the bug is obvious.
+- **Rubber duck**: explain the problem out loud (or in writing, or to an AI). Articulating assumptions exposes the wrong one.
+- **Question assumptions**: "Is this code even running? Is this the config I think it is? Is this the right environment/database?" Verify each with evidence.
+- **Instrument**: add a log or metric to see what's actually happening rather than reasoning in circles.
+
+## When asking for help
+
+Bring a **debugging summary**: symptom, how to reproduce, what you checked, current hypothesis, what you need. A senior can usually help in minutes with that, versus an hour of back-and-forth without it.
+
+<Scenario
+  situation="An API endpoint intermittently returns 500 errors, about 1 in 50 requests. You can't reproduce it locally. What's your best first move?"
+  choices={[
+    { text: "Wrap the handler in try/catch and return 200 to make the errors go away", feedback: "This hides the symptom and loses the information you need. It could also corrupt data silently." },
+    { text: "Gather evidence: find failing requests in logs/traces, compare them with successful ones (input, instance, timing, downstream calls), check recent changes, then form a hypothesis to test", feedback: "Intermittent bugs reveal themselves in the differences between failing and passing cases. Evidence first, then hypotheses.", best: true },
+    { text: "Rewrite the endpoint from scratch", feedback: "Without understanding the cause, a rewrite may keep the bug or add new ones." },
+  ]}
+/>
+
+<Quiz
+  question="A bug appeared sometime in the last 200 commits and you have a reliable reproduction test. What's the fastest way to find the culprit commit?"
+  options={["Read all 200 diffs", "git bisect: binary search, about 8 steps", "Revert everything", "Ask in Slack who broke it"]}
+  answer={1}
+  explanation="Binary search halves the range each step: log₂(200) ≈ 8 test runs to pinpoint the commit."
+/>
+
+<SeniorLens>
+A sign of mid-to-senior growth is when your bug fixes include **"why this happened and how we prevent the class of bug"**: a missing test category, a confusing API that invites misuse, an absent guardrail. Fixing one bug is useful; making the next ten impossible is leverage.
+</SeniorLens>
+
+<KeyTakeaways>
+- Learn codebases by tracing one behavior end to end; use tests, git history and AI (verified).
+- Debug scientifically: reproduce, observe, hypothesize, test, narrow, fix the cause, reflect.
+- Check what changed; binary search; question assumptions; instrument.
+- Ask for help with a clear debugging summary.
+</KeyTakeaways>
+
+<GoDeeper>
+- **David Agans, *Debugging: The 9 Indispensable Rules***: short and timeless.
+- **Julia Evans, *The Pocket Guide to Debugging***.
+- **Git docs:** `git bisect`.
+</GoDeeper>

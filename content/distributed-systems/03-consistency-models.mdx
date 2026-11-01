@@ -1,0 +1,91 @@
+---
+title: Consistency Models
+description: Linearizable, sequential, causal, read-your-writes and eventual consistency. What each promises to users.
+minutes: 11
+level: senior
+---
+
+<Problem>
+"Eventually consistent" sounds fine until a user posts a comment, refreshes, and it's gone. Or they reply to a message, and their friend sees the reply before the original. Consistency models are precise contracts about **what readers can observe** in a replicated system. Choosing the right one (and explaining it to product teams) prevents both bugs and over-engineering.
+</Problem>
+
+## The spectrum (strongest → weakest)
+
+**Linearizability (strong consistency)**: the system behaves as if there's a **single copy** of the data, and every operation takes effect atomically at some instant between its start and end. Once a write completes, every later read (by anyone) sees it.
+*Needed for*: locks, leader election, unique constraints, account balances, "compare-and-set".
+*Cost*: coordination on every operation; latency; unavailability during partitions.
+
+**Sequential consistency**: all nodes see operations in the **same order**, consistent with each client's own order, but not necessarily real-time order.
+
+**Causal consistency**: operations that are **causally related** are seen in the same order by everyone (a reply always after the message it replies to). Concurrent, unrelated operations may be seen in different orders.
+*A sweet spot*: the strongest model that stays available during partitions.
+
+**Session guarantees** (what users actually notice):
+- **Read-your-writes**: you always see your own updates.
+- **Monotonic reads**: once you've seen a value, you never see an older one.
+- **Monotonic writes**: your writes apply in the order you made them.
+- **Writes-follow-reads**: if you read X then write Y, others who see Y also see X.
+
+**Eventual consistency**: if writes stop, all replicas **eventually** converge. No promise about *when* or what you'll see in the meantime.
+
+<MentalModel>
+Watching a football match. **Linearizable**: everyone watches the same live broadcast with zero delay. **Causal**: different people have different broadcast delays, but nobody ever sees a goal celebration before the goal. **Read-your-writes**: when *you* post "GOAL!" in the group chat, you see your own message immediately. **Eventual**: someone checks the score on a slow website that updates "at some point". By the end of the day everyone agrees on the result.
+</MentalModel>
+
+## Convergence: resolving conflicts
+
+Weakly consistent systems that accept concurrent writes need a way to **converge**:
+- **Last-write-wins (LWW)**: highest timestamp wins. Simple, but silently drops concurrent writes, and clocks lie.
+- **Application merge**: keep both versions ("siblings"), let the app or user resolve (like a Git merge conflict).
+- **CRDTs** (Conflict-free Replicated Data Types): data structures designed so concurrent updates always merge deterministically (counters, sets, text). They power collaborative editors (Figma-style multiplayer, Yjs, Automerge) and multi-region databases.
+
+## Practical patterns
+
+- Strong consistency where invariants live (payments, inventory, uniqueness), via the primary DB, consensus-backed stores, or conditional writes.
+- Read-your-writes for user-facing edits: read from the leader for that user/session after a write, or return the written value and update the UI optimistically.
+- Eventual consistency for derived data: search indexes, caches, analytics, feeds, counters, **with a known lag bound** you monitor.
+- Tell users the truth in the UI: "Processing…", "Updated a few seconds ago".
+
+<Quiz
+  question="In a chat app, Bob sometimes sees Alice's reply 'Yes!' before Carol's question 'Pizza tonight?'. Which guarantee would fix this without requiring full linearizability?"
+  options={["Monotonic writes", "Causal consistency", "Last-write-wins", "Eventual consistency"]}
+  answer={1}
+  explanation="The reply causally depends on the question. Causal consistency guarantees everyone sees the question before the reply, while still allowing unrelated messages to arrive in different orders."
+/>
+
+<Tradeoffs
+  good={[
+    "Strong models: simple reasoning, invariants hold",
+    "Weaker models: low latency, high availability, geo-distribution",
+    "Session guarantees fix most user-visible weirdness cheaply",
+  ]}
+  bad={[
+    "Strong models: coordination latency and partition unavailability",
+    "Eventual consistency: anomalies users notice unless designed around",
+    "Conflict resolution logic (LWW loses data; CRDTs are specialized)",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows strong vs eventual consistency and that replicas can be stale."
+  mid="Implements read-your-writes and monitors replication/index lag."
+  senior="Chooses the weakest model that preserves each invariant; designs conflict resolution."
+  lead="Makes consistency guarantees explicit in product requirements and cross-team contracts."
+/>
+
+<SeniorLens>
+Product managers rarely say "we need linearizability"; they say "**the user must see their change immediately**" (read-your-writes) or "**we must never oversell**" (linearizable decrement). Seniors translate requirements into the **weakest sufficient model**, because every step up the consistency ladder costs latency and availability.
+</SeniorLens>
+
+<KeyTakeaways>
+- Linearizable ≈ one copy, real-time order. Causal = cause before effect. Eventual = converges someday.
+- Session guarantees (read-your-writes, monotonic reads) fix most UX issues.
+- Concurrent writes need conflict resolution: LWW, merges or CRDTs.
+- Use the weakest model that protects each invariant.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Jepsen: Consistency Models](https://jepsen.io/consistency)**: a clickable map of models.
+- **DDIA chapter 9** (Consistency and Consensus).
+- **Werner Vogels, *Eventually Consistent*** (ACM Queue).
+</GoDeeper>

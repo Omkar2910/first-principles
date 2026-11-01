@@ -1,0 +1,103 @@
+---
+title: NoSQL Families
+description: Key-value, document, wide-column, graph, search and time-series stores. What each is built for and what it gives up.
+minutes: 12
+level: mid
+---
+
+<Problem>
+"Should we use MongoDB or Postgres?" "Do we need Cassandra?" "Can't we just put this in Redis?" These questions come up in every design discussion, often driven by hype. "NoSQL" isn't one thing. It's a family of databases, each optimized for a **specific access pattern** by giving up something relational databases offer (joins, flexible queries, multi-row transactions). Pick by access pattern, not popularity.
+</Problem>
+
+## The families
+
+| Family | Data model | Great at | Gives up | Examples |
+|---|---|---|---|---|
+| **Key-value** | `key → blob` | Ultra-fast lookups by key, caching, sessions, counters | Queries by anything but key | Redis, DynamoDB (also), Memcached |
+| **Document** | `id → JSON document` | Flexible, nested, self-contained entities; evolving schemas | Joins; cross-document transactions are limited/costly | MongoDB, Couchbase, Firestore |
+| **Wide-column** | Partition key → sorted rows of columns | Massive write throughput, huge datasets, time-ordered data per key | Ad-hoc queries; you model around queries | Cassandra, ScyllaDB, HBase, Bigtable |
+| **Graph** | Nodes + edges | Multi-hop relationship queries (friends-of-friends, fraud rings) | Bulk analytics, simple CRUD efficiency | Neo4j, Neptune |
+| **Search** | Inverted index over documents | Full-text search, relevance ranking, faceting | Being the source of truth; strong consistency | Elasticsearch, OpenSearch |
+| **Time-series** | (series, timestamp) → value | Metrics, IoT, high-ingest append + time-window aggregations | General-purpose queries | Prometheus, InfluxDB, TimescaleDB |
+
+<MentalModel>
+Different **storage furniture**. A key-value store is a **coat check**: give a ticket, get exactly that coat, instantly. A document store is a **filing cabinet of folders**: each folder holds everything about one thing. A wide-column store is a **giant ledger book per customer**, always appended in time order. A graph DB is a **corkboard with strings** between photos. A relational DB is a **well-organized spreadsheet workbook** that can cross-reference anything, if you don't need it to be the size of a stadium.
+</MentalModel>
+
+## The core NoSQL design shift: model around queries
+
+In relational design you normalize first and query flexibly later. In Cassandra/DynamoDB, you **start from the queries** and design tables to answer each one with a single partition lookup, often duplicating data across tables.
+
+```text
+Query: "Get the latest 50 messages in conversation X"
+Cassandra table: messages_by_conversation
+  PRIMARY KEY ((conversation_id), sent_at DESC, message_id)
+  → partition = conversation, rows sorted by time, so one fast sequential read
+```
+
+Need "messages by user" too? That's **another table**, written alongside. Writes get more complex; reads become trivially fast at any scale.
+
+## Document vs relational: the real question
+
+Document stores shine when data is **naturally a tree read as a whole**: a product catalog entry with variable attributes, a CMS page, a user's settings. They struggle when data is a **graph of shared entities** (orders referencing products referencing suppliers) that you query from many angles. Meanwhile Postgres's `JSONB` columns give you flexible documents *inside* a relational database, which covers many "we need schemaless" use cases.
+
+## Polyglot persistence
+
+Large systems use several stores, each for what it's good at, with **one source of truth** per fact:
+
+```text
+Postgres (orders: source of truth) ──CDC──▶ Elasticsearch (search)
+                                     └────▶ Redis (cache of hot product data)
+                                     └────▶ Data warehouse (analytics)
+```
+
+The cost is keeping derived stores in sync (Track 4: CDC, outbox) and operating more systems.
+
+<Quiz
+  question="You need to store 2 million writes/second of IoT sensor readings and query 'the last hour of readings for device X'. Which family fits best?"
+  options={[
+    "Graph database",
+    "Wide-column or time-series store, partitioned by device and sorted by time",
+    "A single Postgres table without indexes",
+    "Elasticsearch as the primary store",
+  ]}
+  answer={1}
+  explanation="Huge append-heavy writes and per-key time-range reads are the textbook wide-column/time-series workload. Partition by device, cluster by timestamp."
+/>
+
+<Tradeoffs
+  good={[
+    "Each family is extremely good at its access pattern",
+    "Horizontal scale built in (wide-column, key-value)",
+    "Flexible schemas for evolving or heterogeneous data",
+  ]}
+  bad={[
+    "Weaker or limited joins and multi-entity transactions",
+    "Query-driven modeling means new queries can require new tables and backfills",
+    "Every additional database is another system to operate and keep consistent",
+  ]}
+/>
+
+<LevelTags
+  junior="Can name the families and a typical use for each."
+  mid="Models a Redis or DynamoDB/Cassandra schema around access patterns."
+  senior="Chooses stores by workload, designs polyglot architectures with a clear source of truth and sync strategy."
+  lead="Limits the org's database zoo to what it can operate well; sets criteria for adopting new stores."
+/>
+
+<SeniorLens>
+Seniors push back on "let's use X" with: **What are the access patterns? What consistency do we need? What scale, really? Who will operate it at 3am?** Very often the answer is "Postgres, maybe with a cache and a search index". Choosing a specialized store should be a response to a concrete requirement Postgres can't meet.
+</SeniorLens>
+
+<KeyTakeaways>
+- NoSQL = several families, each optimized for a specific access pattern.
+- Key-value: lookups. Document: self-contained trees. Wide-column: massive writes per key. Graph: relationships. Search: text.
+- NoSQL modeling starts from queries and often duplicates data.
+- Polyglot persistence needs one source of truth and a sync strategy.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 2** (data models) and chapter 3 (LSM trees).
+- **Alex DeBrie, *The DynamoDB Book***: the best guide to access-pattern-first modeling.
+- **[Cassandra data modeling docs](https://cassandra.apache.org/doc/latest/cassandra/data_modeling/)**.
+</GoDeeper>

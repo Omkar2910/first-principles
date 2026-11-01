@@ -1,0 +1,128 @@
+---
+section: Case studies
+title: "Case Study: Chat System"
+description: WebSockets at scale, message routing across servers, ordering, delivery receipts, presence and offline sync.
+minutes: 14
+level: senior
+---
+
+<Problem>
+Design a chat app like WhatsApp or Slack DMs: 1:1 and small group chats, real-time delivery, message history, online/last-seen presence, and delivery/read receipts. Unlike request/response APIs, chat needs **persistent connections** and **server-initiated pushes**, which changes how you scale.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: send/receive messages in real time (1:1, groups up to ~500); history sync across devices; sent/delivered/read receipts; presence; push notifications when offline.
+**Non-functional**: 500M DAU; low latency (under 200 ms delivery when both online); messages never lost; ordered within a conversation; high availability.
+
+## 2. Estimates
+
+- 500M DAU × 40 messages/day = 20B/day ≈ **230K messages/s** average (peaks ~1M).
+- Concurrent connections: maybe 100–200M at peak. At ~100K connections per gateway server, that's **1,000–2,000 connection servers**.
+- Storage: 20B × 200 bytes ≈ 4 TB/day.
+
+## 3. Connection layer
+
+Clients hold a **WebSocket** (or MQTT) connection to a **chat gateway** server. The gateway is stateful: it holds the socket for that user's devices.
+
+The routing problem: Alice is connected to gateway 17, Bob to gateway 942. When Alice sends to Bob, how does gateway 17 reach Bob's socket?
+
+**Session registry**: on connect, record `user/device → gateway_id` in a fast store (Redis). To deliver, look up Bob's gateway and forward via internal RPC or a per-gateway pub/sub channel.
+
+<Flow nodes={["Alice", "Gateway 17", "Chat service", "Message store", "Session registry", "Gateway 942", "Bob"]} caption="Persist first, then route to the recipient's gateway; if offline, push notification + sync on reconnect." />
+
+## 4. Sending a message, step by step
+
+```text
+1. Alice → Gateway 17: {clientMsgId, conversationId, text}
+2. Chat service: assign per-conversation sequence number, persist to message store   ← durability first
+3. ACK to Alice ("sent ✓") with server msgId + seq
+4. Look up recipients' sessions in registry
+      online  → forward to their gateways → push over WebSocket → device ACKs → "delivered ✓✓"
+      offline → enqueue push notification (APNs/FCM)
+5. When Bob opens the chat → client sends read receipt → relayed to Alice ("read")
+```
+
+**clientMsgId** makes sends idempotent: if Alice's app retries after a dropped connection, the server dedupes.
+
+## 5. Data model and storage
+
+```text
+messages: (conversation_id, seq) PK | sender_id | body | created_at | type
+→ partition by conversation_id, cluster by seq DESC
+```
+
+A wide-column store (Cassandra/ScyllaDB/HBase) fits perfectly: huge write volume, and the main query is "latest N messages of conversation X" = one partition, sequential read. (Discord famously moved from MongoDB to Cassandra, then to ScyllaDB, for exactly this.)
+
+Per-user **inbox / sync state**: for each device, the last seq it has seen per conversation. On reconnect, the client asks "give me everything after seq N" for each conversation. That's how offline sync and multi-device work.
+
+## 6. Ordering
+
+Global ordering is unnecessary and expensive. You need order **within a conversation**: assign a monotonically increasing **sequence per conversation** at the chat service (e.g., an atomic counter in Redis or the DB keyed by conversation, or route a conversation's messages to one partition/owner). Clients render by seq, not by timestamp.
+
+## 7. Presence
+
+Online/last-seen is high-churn, low-value data: heartbeats every ~30 s update `presence:{user}` in Redis with a TTL. Fan-out presence changes only to users who currently have that contact's chat open or in view (not to all 500 contacts), and **batch and throttle** updates. Eventual consistency is fine.
+
+## 8. Groups
+
+Small groups (≤500): fan out each message to members' sessions (the same push model). Store once per conversation; per-member delivery state. Very large channels (Slack/Discord servers with 100K members) switch to **pull**: clients fetch when viewing the channel, plus lightweight "new activity" notifications.
+
+<MentalModel>
+The gateways are **switchboard operators**, each holding thousands of open phone lines. The session registry is the **directory of which operator holds whose line**. The message store is the **official transcript**. Write to the transcript first, then patch the call through if the person's line is open, and if not, leave a voicemail notice (push notification) so they call back and read the transcript.
+</MentalModel>
+
+## 9. Failure handling
+
+- **Gateway dies**: clients reconnect (with backoff + jitter!) to another gateway, re-register, and sync missed messages by seq. Nothing is lost because messages were persisted before delivery.
+- **Deploys**: drain gateways gradually; clients reconnect elsewhere.
+- **End-to-end encryption** (WhatsApp/Signal protocol): the server routes ciphertext it can't read; keys live on devices. That shapes features like server-side search, which becomes impossible.
+
+<Quiz
+  question="Why should the chat service persist a message BEFORE pushing it to the recipient's WebSocket?"
+  options={[
+    "Databases are faster than WebSockets",
+    "If the push fails or a gateway crashes, the message isn't lost: the recipient syncs from the store by sequence number on reconnect",
+    "To make messages searchable",
+    "WebSockets require it",
+  ]}
+  answer={1}
+  explanation="Durability first makes delivery a best-effort optimization over a reliable sync mechanism. Devices can always catch up from the store."
+/>
+
+<Tradeoffs
+  good={[
+    "WebSockets: true real-time, bidirectional",
+    "Persist-then-route + seq-based sync: no lost messages, multi-device support",
+    "Wide-column storage: massive write throughput, fast per-conversation reads",
+  ]}
+  bad={[
+    "Stateful gateways complicate deploys, balancing and failover",
+    "Presence fan-out is expensive; must be throttled",
+    "E2E encryption limits server-side features",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses WebSockets and stores messages in a DB."
+  mid="Adds a session registry for cross-server routing and receipts."
+  senior="Designs per-conversation sequencing, seq-based sync, idempotent sends, presence throttling and reconnect storms."
+  lead="Weighs E2E encryption, compliance and cost against product features; plans multi-region."
+/>
+
+<SeniorLens>
+Chat interviews reward thinking about **the unhappy paths**: phones on flaky networks, apps killed mid-send, a gateway crashing with 100K connections (and those 100K clients all reconnecting at once). A design where **delivery is an optimization and sync is the source of truth** handles all of them gracefully.
+</SeniorLens>
+
+<KeyTakeaways>
+- Persistent connections to stateful gateways; a session registry routes between them.
+- Persist first (with per-conversation sequence), then push; sync by seq on reconnect.
+- Idempotent sends via client message IDs.
+- Presence is cheap, lossy and throttled; huge channels switch to pull.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Discord engineering:** *How Discord Stores Trillions of Messages*.
+- **WhatsApp architecture** talks (Erlang, millions of connections per server).
+- **Slack engineering:** *Real-time messaging* architecture posts.
+</GoDeeper>

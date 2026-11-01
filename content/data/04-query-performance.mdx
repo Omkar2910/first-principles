@@ -1,0 +1,118 @@
+---
+title: Query Performance in Practice
+description: N+1 queries, pagination that scales, connection pools, and the ORM habits that quietly kill performance.
+minutes: 11
+level: mid
+---
+
+<Problem>
+Most slow backends aren't slow because the database is weak. They're slow because the application **talks to it badly**: 300 queries per page, `OFFSET 500000` pagination, a connection pool of 200 hammering a database that can serve 50, or an ORM loading entire object graphs to display one name. These are the patterns to recognize on sight.
+</Problem>
+
+## 1. The N+1 query problem
+
+```java
+List<Order> orders = orderRepo.findByUserId(userId);   // 1 query
+for (Order o : orders) {
+    o.getItems().size();                                // lazy load → 1 query per order
+}
+// 1 + N queries. With 200 orders: 201 round trips.
+```
+
+Fixes:
+- **Fetch join**: `@Query("select o from Order o join fetch o.items where o.userId = :id")`.
+- **Entity graphs** / batch fetching (`@BatchSize`, `hibernate.default_batch_fetch_size`): loads children in `IN (...)` batches.
+- **Projections/DTO queries**: select exactly the columns you need.
+
+Detect it: enable SQL logging or a query counter in tests (e.g. assert a request runs ≤ 5 queries).
+
+## 2. Pagination that scales
+
+```sql
+-- OFFSET pagination: the DB still reads and discards 500,000 rows
+SELECT * FROM posts ORDER BY created_at DESC LIMIT 20 OFFSET 500000;
+
+-- Keyset (cursor) pagination: jumps straight there via the index
+SELECT * FROM posts
+WHERE (created_at, id) < ('2026-10-01T12:00:00Z', 98231)   -- the last row of the previous page
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+```
+
+Offset gets slower the deeper you go and shows duplicates/skips when rows are inserted between pages. **Keyset pagination** is constant-time and stable. The API returns an opaque `nextCursor`. The tradeoff: no "jump to page 734".
+
+## 3. Select only what you need
+
+`SELECT *` pulls large text/JSON columns you don't use, defeats covering indexes, and breaks when columns are added. In ORMs, use projections for read-heavy endpoints rather than loading full entities.
+
+## 4. Connection pools
+
+Opening a DB connection costs a TCP + TLS handshake + authentication + (in Postgres) **a whole new backend process**. So apps keep a **pool** (HikariCP in Spring).
+
+The counterintuitive part: **bigger pools are often slower**. A database with 8 cores can only truly run ~8–16 queries at once; 500 connections just add contention and memory. A common starting formula is `connections ≈ (cores × 2) + effective_spindles`, and the total across **all** app instances must stay below what the DB can handle.
+
+```text
+20 app instances × pool size 50 = 1,000 connections → Postgres falls over.
+20 app instances × pool size 10 = 200 connections, or a pooler like PgBouncer in between.
+```
+
+<MentalModel>
+A connection pool is a **taxi rank**. Hailing a brand-new taxi from the depot for every trip (new connection) is slow. Keeping a few taxis waiting at the rank is fast. But if 500 taxis crowd into a street that has room for 10, traffic stops for everyone. Size the rank to the road, not to the crowd.
+</MentalModel>
+
+## 5. Keep transactions short
+
+A transaction holds locks and (in Postgres) prevents cleanup of old row versions. Never do network calls (HTTP, email) inside a DB transaction. Read, compute, then open a short transaction to write.
+
+## 6. Batch writes
+
+Inserting 10,000 rows one by one = 10,000 round trips. Use JDBC batching (`hibernate.jdbc.batch_size`), multi-row `INSERT`, or `COPY` for bulk loads. It's often 10–100× faster.
+
+<Quiz
+  question="Your API's 'list orders' page gets slower the further users scroll. The SQL uses LIMIT 20 OFFSET n. What's the fix?"
+  options={[
+    "Add more RAM to the database",
+    "Switch to keyset/cursor pagination using an indexed sort key",
+    "Increase the connection pool size",
+    "Cache page 1",
+  ]}
+  answer={1}
+  explanation="OFFSET makes the DB walk and discard all previous rows. A cursor (WHERE sort_key < last_seen) jumps directly to the right place in the index, so every page costs the same."
+/>
+
+<Tradeoffs
+  good={[
+    "Fetch joins/batching: collapse hundreds of round trips into a few",
+    "Keyset pagination: constant-time pages, stable under inserts",
+    "Right-sized pools: higher throughput with less contention",
+  ]}
+  bad={[
+    "Fetch joins can over-fetch or multiply rows with multiple collections",
+    "Keyset pagination can't jump to arbitrary pages",
+    "Small pools queue requests under bursts; monitor pool wait time",
+  ]}
+/>
+
+<LevelTags
+  junior="Recognizes N+1 and SELECT * problems and fixes them with joins/projections."
+  mid="Uses keyset pagination, batches writes, keeps transactions short, sizes Hikari pools."
+  senior="Plans total DB connection budgets across services, introduces PgBouncer, sets query-count guards in tests."
+  lead="Establishes performance budgets and DB review practices so these issues are caught before production."
+/>
+
+<SeniorLens>
+Seniors read ORM code with the SQL in their heads. When reviewing a PR that adds `order.getCustomer().getAddress().getCity()` inside a loop, they see the 3N queries immediately. A great habit: in integration tests, **assert the number of queries** per endpoint. It turns performance regressions into failing builds.
+</SeniorLens>
+
+<KeyTakeaways>
+- N+1: fix with fetch joins, batch fetching or projections.
+- Prefer keyset pagination over deep OFFSET.
+- Size connection pools to the database, not to traffic; total across all instances.
+- Short transactions, no network calls inside them, batch writes.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Vlad Mihalcea's blog** and *High-Performance Java Persistence*: the reference for JPA/Hibernate performance.
+- **[HikariCP: About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing)**.
+- **Use The Index, Luke**: pagination chapter ("We need tool support for keyset pagination").
+</GoDeeper>

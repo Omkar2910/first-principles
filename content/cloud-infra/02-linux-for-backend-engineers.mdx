@@ -1,0 +1,103 @@
+---
+title: Linux for Backend Engineers
+description: The commands and concepts you need to debug services on real machines and containers.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Your service is misbehaving in production. Dashboards say "CPU high" but not why. You `kubectl exec` into the container or SSH into the box and… then what? Nearly every server and container runs Linux. A small toolkit of commands and concepts turns "it's slow somehow" into "this process is stuck on disk I/O" in minutes.
+</Problem>
+
+## Core concepts (quick refresher)
+
+- **Everything is a file**: devices, sockets, process info (`/proc`).
+- **Processes** have PIDs, owners, parents, environment variables, open file descriptors.
+- **Users and permissions**: `rwx` for owner/group/others; services should run as **non-root** users.
+- **Signals**: SIGTERM (graceful), SIGKILL (forced). See Track 0.
+- **Standard streams**: stdin/stdout/stderr; containers should log to stdout/stderr.
+
+## The debugging toolkit
+
+| Question | Command |
+|---|---|
+| What's using CPU/memory? | `top` / `htop` (sort by CPU `P`, memory `M`) |
+| Load and memory overview | `uptime`, `free -h`, `vmstat 1` |
+| Disk space / big files | `df -h`, `du -sh * \| sort -h` |
+| Disk I/O wait | `iostat -x 1`, `iotop` |
+| What's listening / connected? | `ss -tulpn`, `ss -s`, `ss -tan state established \| wc -l` |
+| Which process holds a file/port? | `lsof -i :8080`, `lsof -p <pid>` |
+| Open file descriptors of a process | `ls /proc/<pid>/fd \| wc -l` and `cat /proc/<pid>/limits` |
+| Is the network path OK? | `curl -v`, `dig`, `nc -zv host 5432`, `traceroute`/`mtr` |
+| Follow logs | `tail -f`, `journalctl -u myservice -f` |
+| Search logs | `grep -E "ERROR\|WARN" app.log \| tail`, `grep -c`, `awk`, `jq` for JSON |
+| What is the process doing? (syscalls) | `strace -p <pid> -f -e trace=network` |
+| Java-specific | `jcmd <pid> Thread.print` (thread dump), `jcmd <pid> GC.heap_info`, `jstat -gc <pid> 1s` |
+
+## Reading `top`
+
+```text
+load average: 7.92, 6.10, 4.02     ← runnable/waiting processes; compare to number of cores
+%Cpu(s): 35.2 us, 4.1 sy, 0.0 ni, 12.3 id, 47.9 wa ...
+                                     ↑ user code    ↑ idle   ↑ waiting on I/O (disk/NFS): the bottleneck here!
+```
+
+High `us` → your code is busy (profile it). High `sy` → kernel work (lots of syscalls/context switches). High `wa` → waiting on disk. High `st` → noisy neighbor stealing CPU from your VM.
+
+<MentalModel>
+Debugging a Linux box is like being a **doctor with a quick checkup routine**: temperature and pulse (`top`, load), blood pressure (memory), lungs (disk I/O), circulation (network sockets), and then the specialist test for whatever looks off (`strace`, thread dumps). You don't run every test; you follow the symptoms.
+</MentalModel>
+
+## A worked example: "the service is slow"
+
+```bash
+top                          # java at 380% CPU on a 4-core box → CPU-bound
+jcmd 1 Thread.print > td.txt # thread dump: 30 threads in the same regex-matching method
+# → a catastrophic-backtracking regex on user input. Fix the regex (and add input length limits).
+```
+
+Or: `top` shows 5% CPU, high `wa`, so `iostat` shows the disk at 100% util, which turns out to be **debug logging to disk** at 50 MB/s. Turn it down.
+
+## Containers are still Linux
+
+A container is a Linux process with **namespaces** (isolated view of PIDs, network, filesystem) and **cgroups** (CPU/memory limits). So:
+- The same tools work inside (if installed; for minimal images, use `kubectl debug` with an ephemeral debug container).
+- **Memory limit exceeded → OOM kill** (exit code 137). Check `kubectl describe pod` for `OOMKilled`.
+- **CPU limits → throttling**: the app gets paused when it exceeds its quota, causing latency spikes even at "low" average CPU. Check `cpu.stat` throttled counts.
+- The JVM must know container limits (modern JVMs do; set `-XX:MaxRAMPercentage=75`).
+
+<Quiz
+  question="top shows 6% user CPU, 2% system, 85% iowait. The app is slow. Where do you look next?"
+  options={[
+    "Profile the Java code for hot methods",
+    "Disk I/O: iostat/iotop to find what is reading or writing heavily (logs, swap, temp files, a local DB)",
+    "Increase thread pool size",
+    "Network bandwidth",
+  ]}
+  answer={1}
+  explanation="High iowait means CPUs are idle waiting on disk. The bottleneck is storage, not computation."
+/>
+
+<LevelTags
+  junior="Navigates the filesystem, reads logs, uses top, ps, grep, curl."
+  mid="Diagnoses CPU vs I/O vs memory vs network issues with ss, lsof, iostat, thread dumps."
+  senior="Uses strace/perf, understands cgroup throttling and OOM behavior in containers."
+  lead="Ensures teams have debugging access, tooling and runbooks in production environments."
+/>
+
+<SeniorLens>
+Brendan Gregg's **USE method** is a great senior habit: for every resource (CPU, memory, disk, network), check **U**tilization, **S**aturation and **E**rrors. It turns ad-hoc poking into a systematic 60-second triage, and it works the same on any box.
+</SeniorLens>
+
+<KeyTakeaways>
+- Learn a core toolkit: top, free, df, iostat, ss, lsof, curl, dig, journalctl, grep/jq.
+- Read CPU breakdowns: us (code), sy (kernel), wa (disk), st (steal).
+- Containers = namespaces + cgroups: watch OOM kills and CPU throttling.
+- Use the USE method for systematic triage.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Brendan Gregg, *Linux Performance*** site and the **USE method** article.
+- **Julia Evans' zines**: *Bite Size Linux*, *Linux debugging tools*.
+- **The Linux Command Line** (William Shotts, free online).
+</GoDeeper>

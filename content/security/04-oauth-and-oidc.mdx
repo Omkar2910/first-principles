@@ -1,0 +1,128 @@
+---
+title: OAuth 2.0 and OpenID Connect
+description: Delegated authorization and federated login, demystified. Flows, tokens, scopes and common mistakes.
+minutes: 13
+level: senior
+---
+
+<Problem>
+"Sign in with Google." "Allow this app to read your calendar." "Service A calls Service B on behalf of a user." "Our 40 internal apps need single sign-on." All of these run on **OAuth 2.0** and **OpenID Connect (OIDC)**, which are notoriously confusing because they're frameworks with many flows and terms. You'll integrate them constantly, so you need a clear mental model and the handful of rules that keep them secure.
+</Problem>
+
+## OAuth 2.0 vs OIDC
+
+- **OAuth 2.0** is about **authorization / delegation**: letting an app access a resource **on a user's behalf** with limited scope, without sharing the user's password. Output: an **access token**.
+- **OpenID Connect** is a layer on top of OAuth for **authentication**: proving **who the user is**. Adds an **ID token** (a JWT with identity claims) and a standard `userinfo` endpoint.
+
+"Sign in with Google" = OIDC. "Let this app read my Google Drive" = OAuth.
+
+## The roles
+
+| Role | Example |
+|---|---|
+| **Resource owner** | The user |
+| **Client** | The app wanting access (your web app, mobile app, CLI) |
+| **Authorization server** | Issues tokens (Google, Okta, Auth0, Keycloak, Cognito, Entra) |
+| **Resource server** | The API accepting access tokens (your backend, Google Drive API) |
+
+<MentalModel>
+A **hotel key card**. You (resource owner) prove your identity at the front desk (authorization server) once. The desk gives a valet (client) a card that opens **only the garage, only until tomorrow** (scoped, expiring access token). The valet never learns your passport details (password), the garage door (resource server) just checks the card is valid, and you can cancel the card anytime. OIDC adds a **name badge** (ID token) saying who checked in.
+</MentalModel>
+
+## The flow you'll use: Authorization Code + PKCE
+
+For web apps, SPAs, mobile and CLIs, use **Authorization Code with PKCE**:
+
+```text
+1. App creates code_verifier (random) and code_challenge = SHA256(verifier)
+2. Redirect user → auth server /authorize?response_type=code&client_id=…&redirect_uri=…
+                   &scope=openid profile email orders:read&state=<csrf>&code_challenge=…
+3. User logs in + consents at the auth server (password/MFA/passkey: your app never sees it)
+4. Auth server redirects back → redirect_uri?code=AUTH_CODE&state=…   (app checks state)
+5. App backend → POST /token {code, code_verifier, client credentials}
+6. Auth server returns { access_token, id_token (OIDC), refresh_token, expires_in }
+7. App calls API with  Authorization: Bearer <access_token>
+```
+
+PKCE prevents an intercepted code from being exchanged by an attacker (they don't have the verifier). The **Implicit flow** (tokens in the URL fragment) and **password grant** are deprecated; don't use them.
+
+**Machine-to-machine**: the **Client Credentials** flow, where a service authenticates as itself (client ID + secret, or better, a private-key JWT / mTLS) and gets an access token for another service. No user involved.
+
+**Devices without browsers** (TVs, CLIs): the **Device Authorization** flow ("go to example.com/device and enter code ABCD-1234").
+
+## Tokens
+
+- **Access token**: short-lived (minutes), presented to resource servers. Often a JWT the API validates locally (signature via the auth server's JWKS public keys, `iss`, `aud`, `exp`, scopes); or opaque, validated via introspection.
+- **ID token**: for the **client** to learn who the user is. **Never send ID tokens to APIs as access tokens.**
+- **Refresh token**: long-lived, used to get new access tokens; must be stored securely and rotated.
+
+## The BFF pattern for browser apps
+
+Storing tokens in browser JavaScript exposes them to XSS. The recommended pattern for SPAs is a **Backend-for-Frontend**: the BFF does the OAuth flow, keeps tokens server-side, and gives the browser an **HttpOnly session cookie**. The browser never touches tokens.
+
+## Validating tokens in your API (Spring)
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://login.example.com/   # fetches JWKS, validates signature + iss + exp
+          audiences: orders-api                     # reject tokens minted for other APIs
+```
+
+Check **audience** (token meant for *your* API), **issuer**, **expiry**, and **scopes/roles** for each endpoint.
+
+## Common mistakes
+
+- Not validating `state` (CSRF on login) or `aud` (accepting tokens issued for another API).
+- Using ID tokens as API credentials.
+- Long-lived access tokens; refresh tokens stored in localStorage.
+- Overly broad scopes ("give me everything").
+- Open redirect URIs: register **exact** redirect URIs.
+- Rolling your own authorization server instead of using a proven one.
+
+<Quiz
+  question="Service A (a nightly batch job, no user involved) needs to call Service B's API. Which OAuth flow fits?"
+  options={["Authorization Code + PKCE", "Client Credentials", "Implicit", "Device Authorization"]}
+  answer={1}
+  explanation="Client Credentials is for machine-to-machine access where the client acts on its own behalf, not a user's. It gets a scoped access token from the auth server."
+/>
+
+<Tradeoffs
+  good={[
+    "Apps never see user passwords; access is scoped and revocable",
+    "Single sign-on and centralized MFA across many apps",
+    "Standard tooling in every framework",
+  ]}
+  bad={[
+    "Complex specs with many flows; easy to misconfigure",
+    "Token lifecycle (expiry, refresh, revocation) needs design",
+    "Dependency on the identity provider's availability",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows OAuth = delegated access, OIDC = login; uses the framework integration."
+  mid="Implements Auth Code + PKCE and resource-server validation with aud/scope checks."
+  senior="Designs token architecture: BFF, token exchange between services, scopes, lifetimes, revocation."
+  lead="Owns identity strategy: IdP choice, SSO, service identity, partner/third-party access policies."
+/>
+
+<SeniorLens>
+A senior-level understanding means knowing **which token goes where**: ID tokens stay with the client, access tokens go to APIs (with the right audience), refresh tokens never leave secure storage. When designing service-to-service calls on behalf of users, look at **token exchange (RFC 8693)** rather than forwarding the user's original token everywhere.
+</SeniorLens>
+
+<KeyTakeaways>
+- OAuth = delegated authorization (access tokens); OIDC = authentication (ID tokens).
+- Use Authorization Code + PKCE for users, Client Credentials for services.
+- Validate issuer, audience, expiry, scopes; never use ID tokens as API credentials.
+- Keep tokens out of browser JS (BFF + HttpOnly cookies).
+</KeyTakeaways>
+
+<GoDeeper>
+- **[oauth.net](https://oauth.net/2/)** and the **OAuth 2.0 Security Best Current Practice** (RFC 9700).
+- **Aaron Parecki, *OAuth 2.0 Simplified***.
+- **Spring Security docs:** OAuth2 Login, Client and Resource Server.
+</GoDeeper>

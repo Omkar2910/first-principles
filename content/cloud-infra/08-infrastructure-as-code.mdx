@@ -1,0 +1,112 @@
+---
+title: Infrastructure as Code
+description: Defining cloud resources in version-controlled code with Terraform and friends, and doing it safely.
+minutes: 9
+level: mid
+---
+
+<Problem>
+Production was set up by clicking around the AWS console two years ago. Nobody knows exactly which security group rules exist or why. Staging "should be the same" but isn't. Rebuilding after a disaster would take weeks of archaeology. **Infrastructure as Code (IaC)** makes infrastructure **reviewable, reproducible and versioned**, just like application code.
+</Problem>
+
+## The idea
+
+Describe the infrastructure you want in files; a tool computes the difference from reality and applies it.
+
+```hcl
+# Terraform: a private S3 bucket with encryption and versioning
+resource "aws_s3_bucket" "uploads" {
+  bucket = "shop-prod-uploads"
+}
+
+resource "aws_s3_bucket_versioning" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_public_access_block" "uploads" {
+  bucket                  = aws_s3_bucket.uploads.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+```bash
+terraform plan    # show exactly what will change; reviewed in the PR
+terraform apply   # make it so
+```
+
+<MentalModel>
+IaC is the difference between **a recipe and a dish someone once cooked**. If all you have is the dish (a manually configured environment), you can't reliably make another one, and nobody remembers why there's so much salt. With a recipe (code), anyone can recreate it, compare versions, and propose changes that others review before they're cooked.
+</MentalModel>
+
+## Tools
+
+| Tool | Style | Notes |
+|---|---|---|
+| **Terraform / OpenTofu** | Declarative HCL, multi-cloud | Most widely used; state file tracks reality |
+| **AWS CloudFormation / CDK** | Declarative YAML / code (TS, Java, Python) generating it | AWS-native |
+| **Pulumi** | Real programming languages | Loops/abstractions in TS, Java, Go, Python |
+| **Crossplane** | Kubernetes-native controllers | Infra as K8s resources, GitOps-friendly |
+| **Helm / Kustomize** | Kubernetes manifests | App deployment config rather than cloud infra |
+
+## Practices that keep IaC safe
+
+- **Remote state with locking** (e.g. S3 + DynamoDB lock / Terraform Cloud) so two applies can't collide. State may contain secrets, so protect it.
+- **Plan in CI on every PR**; apply only from the pipeline after approval. No laptop applies to production.
+- **Modules** for reusable patterns (a "standard service" module: ECR repo, IAM role, log group, alarms).
+- **Separate state per environment/component** to limit blast radius.
+- **Drift detection**: scheduled plans to catch console changes.
+- **Policy as code** (OPA/Conftest, Sentinel, Checkov, tfsec) to block public buckets, unencrypted volumes, `0.0.0.0/0` SSH rules before they're created.
+- Watch for **destructive changes** in plans (`-/+ destroy and then create replacement`). A renamed resource can mean a deleted database. Use `prevent_destroy` on critical resources.
+
+<Quiz
+  question="A terraform plan for a small rename shows '-/+ aws_db_instance.main must be replaced'. What should you do?"
+  options={[
+    "Apply it; Terraform knows best",
+    "Stop: replacement means destroying the database. Use a moved block / state mv to rename without replacement, and protect critical resources with prevent_destroy",
+    "Delete the state file",
+    "Apply during low traffic",
+  ]}
+  answer={1}
+  explanation="Renaming a resource address makes Terraform think it's a different resource. 'moved' blocks or state moves preserve the real infrastructure. Always read plans for destroy/replace operations."
+/>
+
+<Tradeoffs
+  good={[
+    "Reproducible environments and disaster recovery",
+    "Code review and history for infrastructure changes",
+    "Policy checks before resources exist",
+  ]}
+  bad={[
+    "State management complexity and risk",
+    "A bad plan applied blindly can destroy production resources",
+    "Learning curve; drift if people still click in consoles",
+  ]}
+/>
+
+<LevelTags
+  junior="Reads Terraform and makes small, reviewed changes."
+  mid="Writes modules, runs plans in CI, understands state and replacements."
+  senior="Designs module structure, state boundaries, policy-as-code and safe migration of existing infra."
+  lead="Mandates IaC for all environments and establishes platform modules as golden paths."
+/>
+
+<SeniorLens>
+The most important IaC skill is **reading a plan**. Seniors scan every plan for `destroy`, `replace` and IAM/network changes before approving, because a three-line diff can delete a database or open a port to the internet. Treat `terraform plan` output with the same care as a schema migration.
+</SeniorLens>
+
+<KeyTakeaways>
+- Infrastructure in version control: reviewable, reproducible, auditable.
+- Plan in CI, apply from pipelines, remote locked state.
+- Modules for reuse, policy-as-code for guardrails, drift detection.
+- Read every plan for destroys and replacements.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Yevgeniy Brikman, *Terraform: Up & Running***.
+- **[Terraform docs: refactoring with moved blocks](https://developer.hashicorp.com/terraform/language/modules/develop/refactoring)**.
+- **Checkov / tfsec** documentation for policy scanning.
+</GoDeeper>

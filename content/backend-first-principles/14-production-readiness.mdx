@@ -1,0 +1,112 @@
+---
+title: "Production Readiness: Health Checks and Lifecycle"
+description: Liveness vs readiness, graceful startup and shutdown, and the checklist before a service takes real traffic.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Your service passes all tests and gets deployed. Then: the load balancer sends traffic before the app has warmed up, so the first users get errors. A pod with a deadlocked thread pool keeps receiving traffic because "the process is running". A database blip causes Kubernetes to restart *every* pod at once. Running in production requires your service to **tell the platform about its health honestly**, and to start and stop gracefully.
+</Problem>
+
+## Liveness vs readiness (vs startup)
+
+| Probe | Question | On failure | Should check |
+|---|---|---|---|
+| **Startup** | Has it finished starting? | Keep waiting (don't run other probes yet) | Initialization done |
+| **Liveness** | Is the process hopelessly stuck? | **Restart** the container | Only the app itself: event loop/threads responsive |
+| **Readiness** | Can it serve traffic *right now*? | **Remove from load balancer** (no restart) | Warmed up, critical deps reachable, not shutting down |
+
+The most common mistake: **checking the database in the liveness probe**. When the DB has a hiccup, every pod fails liveness, Kubernetes restarts all of them simultaneously, and you've turned a 10-second DB blip into a full outage with cold starts. Dependencies belong in **readiness** (if at all), never liveness.
+
+<MentalModel>
+A shop. **Readiness** is the "Open/Closed" sign: flip it to Closed while restocking or when the supplier is late, and customers go elsewhere temporarily. **Liveness** is checking whether the shopkeeper has fainted: only then do you call an ambulance (restart). You don't call an ambulance because a delivery truck is late.
+</MentalModel>
+
+## In Spring Boot
+
+```properties
+management.endpoint.health.probes.enabled=true
+management.endpoint.health.group.liveness.include=livenessState
+management.endpoint.health.group.readiness.include=readinessState,db
+server.shutdown=graceful
+spring.lifecycle.timeout-per-shutdown-phase=20s
+```
+
+```yaml
+# Kubernetes
+startupProbe:   { httpGet: { path: /actuator/health/liveness,  port: 8080 }, failureThreshold: 30, periodSeconds: 2 }
+livenessProbe:  { httpGet: { path: /actuator/health/liveness,  port: 8080 }, periodSeconds: 10 }
+readinessProbe: { httpGet: { path: /actuator/health/readiness, port: 8080 }, periodSeconds: 5 }
+```
+
+## A zero-downtime rollout, step by step
+
+1. New pod starts → **startup probe** waits for initialization (JIT warm-up, caches, pools).
+2. **Readiness** passes → the pod joins the Service/LB and starts receiving traffic.
+3. Old pod gets `SIGTERM` → readiness flips to failing so the LB stops sending new requests (a short `preStop` sleep helps the LB catch up).
+4. Old pod **drains** in-flight requests (graceful shutdown), closes pools, flushes logs/metrics, exits `0`.
+5. If it takes longer than the grace period → `SIGKILL`.
+
+## The production-readiness checklist
+
+Before a service takes real traffic, you should be able to answer yes to:
+
+- **Health**: startup, liveness and readiness probes, correctly scoped.
+- **Lifecycle**: graceful shutdown; config validated at startup; fails fast if misconfigured.
+- **Timeouts and retries**: on every outbound call, with sane limits.
+- **Resource limits**: CPU/memory requests and limits set; JVM heap sized to the container (`-XX:MaxRAMPercentage`).
+- **Observability**: structured logs with request IDs, RED metrics (rate, errors, duration), tracing, dashboards.
+- **Alerts**: on symptoms users feel (error rate, latency SLOs), routed to an owner.
+- **Scaling**: stateless instances, autoscaling rules, load-tested to a known capacity.
+- **Data**: backups and tested restore; migrations backward-compatible.
+- **Security**: authN/authZ on every endpoint, secrets from a manager, dependencies scanned.
+- **Runbook**: what it does, its dependencies, how to debug the top 3 failure modes, who owns it.
+
+<Quiz
+  question="Your liveness probe calls the database. The DB has a 30-second failover. What happens?"
+  options={[
+    "Nothing; probes ignore dependencies",
+    "All pods fail liveness and get restarted together, turning a brief DB blip into a full outage with cold starts",
+    "Only one pod restarts",
+    "Traffic is rerouted to another region automatically",
+  ]}
+  answer={1}
+  explanation="Liveness failure means restart. If every pod shares the same failing dependency, they all restart at once. Keep liveness about the process itself; put dependency checks in readiness (carefully) or just in metrics/alerts."
+/>
+
+<Tradeoffs
+  good={[
+    "Readiness gating: no traffic to cold or draining instances",
+    "Liveness: automatic recovery from deadlocks and stuck processes",
+    "Checklist: catches operability gaps before users do",
+  ]}
+  bad={[
+    "Over-eager probes cause restart storms and flapping",
+    "Readiness checks on shared deps can remove ALL pods at once",
+    "Readiness reviews take time; keep the checklist lightweight and automated where possible",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows liveness vs readiness and enables graceful shutdown."
+  mid="Configures probes correctly, sizes resources, ensures zero-downtime deploys."
+  senior="Runs production-readiness reviews, designs for failure of each dependency, writes runbooks."
+  lead="Makes readiness standards part of the platform (templates, golden paths) and of the launch process."
+/>
+
+<SeniorLens>
+**Production readiness reviews** are one of the highest-leverage habits a senior can bring to a team. A 30-minute walk through the checklist before launch catches missing timeouts, absent alerts and untested restores, which are the things that otherwise become 3am pages. The best teams bake the checklist into their service template so new services are ready by default.
+</SeniorLens>
+
+<KeyTakeaways>
+- Liveness = restart if stuck (never check deps). Readiness = route traffic or not.
+- Zero-downtime deploys need startup/readiness gating + graceful draining.
+- Run a production-readiness checklist before launch.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Kubernetes docs:** configure liveness, readiness and startup probes.
+- **Spring Boot Actuator docs:** Kubernetes probes.
+- **Google SRE Book:** "Launch Coordination Checklist" appendix.
+</GoDeeper>

@@ -1,0 +1,124 @@
+---
+title: Testing Backends
+description: Unit, integration, contract and end-to-end tests. What each catches, what it costs, and a practical mix.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Your team has 2,000 unit tests with mocks everywhere, all green, and production still breaks every other release: the SQL query was wrong, the JSON field was renamed, the downstream API changed. Or the opposite: a slow, flaky end-to-end suite nobody trusts. Testing isn't about counts or coverage percentages. It's about **getting confidence cheaply** that the system works.
+</Problem>
+
+## What each kind of test catches
+
+| Test type | Scope | Catches | Speed | Example |
+|---|---|---|---|---|
+| **Unit** | One class/function, no I/O | Logic bugs in rules and calculations | ms | Discount calculation, state transitions |
+| **Integration** | Your code + real dependencies (DB, broker) | Wrong queries, mappings, transactions, serialization | seconds | Repository against real Postgres via Testcontainers |
+| **API / component** | The whole service over HTTP, dependencies faked at the network edge | Routing, validation, auth, error format | seconds | `POST /orders` returns 400 for qty=0 |
+| **Contract** | The agreement between two services | Breaking API changes between teams | fast | Consumer-driven contracts (Pact, Spring Cloud Contract) |
+| **End-to-end** | Many real services together | Wiring and config across the system | minutes, flaky | Checkout flow in staging |
+
+<MentalModel>
+Testing a car. **Unit tests** check each part on a bench: does the brake pad have the right friction? **Integration tests** bolt the brakes to a real wheel. **Contract tests** check that the brake pedal from supplier A fits the mount from supplier B. **End-to-end tests** are a test drive. You need a few test drives, but you'd never find a faulty pad by driving around all day.
+</MentalModel>
+
+## A practical shape for backend services
+
+The classic "test pyramid" (lots of unit tests, fewer integration, very few E2E) is a reasonable guide, but for typical CRUD-heavy services many teams find a **"testing trophy"** more useful: a solid layer of **integration/API tests with real dependencies**, unit tests for genuinely complex logic, and few E2E tests.
+
+Why? In many backends the bugs live in the **seams**: SQL, transactions, serialization, framework configuration. Mock-heavy unit tests can't see them.
+
+## Unit tests: test behavior, not implementation
+
+```java
+@Test
+void appliesTenPercentForGoldMembersOnOrdersOver100() {
+    var order = Order.of(Money.of("150.00"), Tier.GOLD);
+    assertThat(pricing.discountFor(order)).isEqualTo(Money.of("15.00"));
+}
+```
+
+Good unit tests describe **rules** in domain language. If a refactor that doesn't change behavior breaks 40 tests, they were testing implementation details (over-mocking).
+
+## Integration tests with real infrastructure
+
+**Testcontainers** spins up real Postgres/Kafka/Redis in Docker for the test run:
+
+```java
+@SpringBootTest(webEnvironment = RANDOM_PORT)
+@Testcontainers
+class OrderApiTest {
+    @Container @ServiceConnection
+    static PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:16");
+
+    @Autowired TestRestTemplate http;
+
+    @Test
+    void rejectsOrderWhenOutOfStock() {
+        givenProductWithStock(42, 1);
+        var res = http.postForEntity("/orders", new CreateOrderRequest(42, 2), ProblemDetail.class);
+        assertThat(res.getStatusCode().value()).isEqualTo(409);
+        assertThat(res.getBody().getProperties()).containsEntry("code", "OUT_OF_STOCK");
+    }
+}
+```
+
+Fake **external** HTTP dependencies at the network level (WireMock) rather than mocking your own classes.
+
+## What to test that teams forget
+
+- **Authorization negative cases**: user A can't read user B's order.
+- **Validation and error formats**: clients depend on them.
+- **Concurrency**: two simultaneous purchases of the last item.
+- **Idempotency**: the same request twice.
+- **Migrations**: run your DB migrations against a production-like schema in CI.
+
+<Quiz
+  question="A query works in unit tests (repository mocked) but fails in production because of a typo in a column name. Which test type would have caught it most cheaply?"
+  options={[
+    "More unit tests with mocks",
+    "An integration test running the repository against a real database (e.g. Testcontainers)",
+    "A manual QA pass",
+    "A load test",
+  ]}
+  answer={1}
+  explanation="Mocks only verify you *called* the repository; they can't validate SQL. A real database in an integration test exercises the actual query."
+/>
+
+<Tradeoffs
+  good={[
+    "Unit: instant feedback, precise failures, great for complex rules",
+    "Integration with real deps: catches the seam bugs that actually hit production",
+    "Contract: decouples teams' release cycles safely",
+  ]}
+  bad={[
+    "Unit with heavy mocking: high maintenance, false confidence",
+    "Integration: slower, needs Docker in CI",
+    "E2E: slow, flaky, expensive to debug, so keep them few and critical-path only",
+  ]}
+/>
+
+<LevelTags
+  junior="Writes readable unit tests for logic and runs the suite before pushing."
+  mid="Uses Testcontainers/WireMock for realistic integration tests; tests auth and error cases."
+  senior="Designs the team's test strategy, kills flaky tests, introduces contract testing between services."
+  lead="Makes testing a delivery-speed lever: CI time budgets, quality gates, and test ownership norms."
+/>
+
+<SeniorLens>
+Seniors judge a test suite by two questions: **"Would it catch the last five production bugs?"** and **"Do people trust it enough to deploy on green?"** Coverage percentage answers neither. A fast suite people trust enables continuous deployment, which is one of the biggest productivity multipliers a team can have.
+</SeniorLens>
+
+<KeyTakeaways>
+- Different test types catch different bugs; use the cheapest one that catches each.
+- Backend bugs cluster at seams (SQL, serialization, config), so integration tests with real deps are high value.
+- Test behavior, not implementation; avoid over-mocking.
+- Always test authZ negatives, validation, concurrency and idempotency.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the testing episode.
+- **[Testcontainers](https://testcontainers.com/)** guides for Spring Boot.
+- **Martin Fowler, *The Practical Test Pyramid*** (article).
+</GoDeeper>

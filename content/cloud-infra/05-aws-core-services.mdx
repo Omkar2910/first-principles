@@ -1,0 +1,97 @@
+---
+title: The Core Cloud Services Map
+description: The 20 AWS services (and their GCP/Azure equivalents) that cover most backend architectures.
+minutes: 10
+level: mid
+---
+
+<Problem>
+AWS has 200+ services, and their names don't help ("Kinesis", "Athena", "Cognito"…). But a typical backend architecture uses about 20 of them. Knowing that core set, what each one is *for*, and the equivalents on other clouds lets you read any architecture diagram and design with managed building blocks instead of reinventing them.
+</Problem>
+
+## The core map
+
+| Category | AWS | GCP | Azure | Use it for |
+|---|---|---|---|---|
+| **Compute (VMs)** | EC2 | Compute Engine | Virtual Machines | Full control, special workloads |
+| **Containers** | ECS / Fargate, EKS | Cloud Run, GKE | Container Apps, AKS | Running services |
+| **Serverless functions** | Lambda | Cloud Functions | Functions | Event-driven glue, spiky low-volume APIs |
+| **Object storage** | S3 | Cloud Storage | Blob Storage | Files, backups, data lakes, static sites |
+| **Relational DB** | RDS, Aurora | Cloud SQL, AlloyDB | Azure SQL / PostgreSQL | Primary transactional data |
+| **Key-value / document** | DynamoDB | Firestore / Bigtable | Cosmos DB | Massive-scale key access |
+| **Cache** | ElastiCache (Redis/Valkey) | Memorystore | Cache for Redis | Caching, sessions, rate limits |
+| **Queue** | SQS | Pub/Sub, Cloud Tasks | Service Bus Queues | Background jobs, decoupling |
+| **Pub/sub & events** | SNS, EventBridge | Pub/Sub, Eventarc | Event Grid, Service Bus Topics | Fan-out, event routing |
+| **Streaming** | Kinesis, MSK (Kafka) | Pub/Sub, Managed Kafka | Event Hubs | Event streams, CDC |
+| **Search** | OpenSearch Service | (Elastic Cloud / Vertex search) | AI Search | Full-text search |
+| **Analytics / warehouse** | Redshift, Athena | BigQuery | Synapse / Fabric | Analytics, reporting |
+| **CDN / edge** | CloudFront | Cloud CDN | Front Door | Static assets, edge caching |
+| **DNS** | Route 53 | Cloud DNS | Azure DNS | Domains, health-checked routing |
+| **Load balancing** | ALB (L7), NLB (L4) | Cloud Load Balancing | App Gateway, Load Balancer | Traffic distribution |
+| **API gateway** | API Gateway | API Gateway / Apigee | API Management | Public API edge |
+| **Identity & access** | IAM | IAM | Entra ID / RBAC | Permissions for people & services |
+| **User auth** | Cognito | Identity Platform | Entra External ID | End-user sign-in |
+| **Secrets & keys** | Secrets Manager, KMS | Secret Manager, Cloud KMS | Key Vault | Credentials, encryption keys |
+| **Observability** | CloudWatch, X-Ray | Cloud Monitoring/Logging/Trace | Monitor, App Insights | Metrics, logs, traces |
+| **Workflows** | Step Functions | Workflows | Logic Apps / Durable Functions | Orchestrated multi-step processes |
+| **AI / LLMs** | Bedrock, SageMaker | Vertex AI | Azure AI Foundry | Model hosting and APIs |
+
+## A typical architecture on AWS
+
+```text
+Route 53 → CloudFront (static + cache) → ALB → ECS Fargate / EKS services
+                                                   ├─ Aurora PostgreSQL (Multi-AZ) + read replica
+                                                   ├─ ElastiCache Redis
+                                                   ├─ S3 (uploads via pre-signed URLs)
+                                                   ├─ SQS queues → worker services
+                                                   └─ EventBridge / SNS → other services
+Secrets Manager · KMS · IAM roles per service · CloudWatch + X-Ray / OpenTelemetry
+```
+
+## IAM: the service that matters most
+
+Every API call in the cloud is authorized by IAM. Principles:
+- **Roles, not long-lived keys**: services assume roles (EC2 instance profiles, ECS task roles, EKS IRSA/Pod Identity). No access keys in code or env files.
+- **Least privilege**: `s3:GetObject` on one bucket prefix, not `s3:*` on `*`.
+- **Separate accounts** per environment (dev/staging/prod) for blast-radius isolation.
+- Audit with CloudTrail.
+
+<MentalModel>
+The cloud catalog is a **giant hardware store**. You don't need every aisle. Most projects use the same core: lumber (compute), storage bins (S3), a filing cabinet (RDS), sticky notes (cache), a mailroom (queues), locks and keys (IAM, KMS). Learn those aisles well and visit the specialty aisles only when a project needs them.
+</MentalModel>
+
+<Quiz
+  question="Your service needs to read objects from one S3 bucket. What's the right way to grant access?"
+  options={[
+    "Put an IAM user's access key in application.yml",
+    "Attach an IAM role to the service (task role/IRSA) with a least-privilege policy allowing s3:GetObject on that bucket/prefix",
+    "Make the bucket public",
+    "Use the root account credentials",
+  ]}
+  answer={1}
+  explanation="Roles provide short-lived, automatically rotated credentials scoped to exactly what the service needs. Static keys leak; public buckets leak more."
+/>
+
+<LevelTags
+  junior="Knows what S3, EC2, RDS, SQS and IAM are for."
+  mid="Builds services using managed components with IAM roles and least privilege."
+  senior="Designs architectures from managed building blocks; weighs cost, limits and lock-in."
+  lead="Sets account structure, guardrails (SCPs), and approved-service catalog for the org."
+/>
+
+<SeniorLens>
+For each managed service, seniors know its **limits and failure modes**: SQS's 256 KB message limit and visibility timeouts, Lambda's cold starts and concurrency limits, DynamoDB's partition throughput, RDS failover time. Limits found in a design review are cheap; limits found in production are incidents.
+</SeniorLens>
+
+<KeyTakeaways>
+- ~20 services cover most backends: compute, storage, DBs, cache, queues, events, CDN, DNS, LB, IAM, secrets, observability.
+- Every cloud has equivalents; learn the categories, not just the names.
+- IAM roles + least privilege; no static keys.
+- Know each service's limits before depending on it.
+</KeyTakeaways>
+
+<GoDeeper>
+- **AWS Well-Architected Framework** and **AWS Architecture Center** reference architectures.
+- **[Google Cloud developer cheat sheet](https://github.com/priyankavergadia/google-cloud-4-words)**: every GCP service in 4 words.
+- **AWS service quotas documentation** for the services you use.
+</GoDeeper>

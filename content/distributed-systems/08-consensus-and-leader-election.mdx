@@ -1,0 +1,106 @@
+---
+title: Consensus and Leader Election
+description: How a cluster of machines agrees on one value or one leader despite failures. Raft, quorums, and where you rely on it daily.
+minutes: 12
+level: senior
+---
+
+<Problem>
+Three database nodes must agree on who the leader is. Two nodes think the leader is dead (the network flaked) and elect a new one, while the old leader, still alive, keeps accepting writes. Now you have **two leaders** and diverging data (split brain). Getting a group of unreliable machines to **agree** on something (a leader, a config value, the order of log entries) despite crashes and partitions is the **consensus problem**. It's hard, it's solved, and you depend on it every day.
+</Problem>
+
+## What consensus provides
+
+A consensus algorithm lets a group of nodes agree on a sequence of values such that:
+- **Agreement**: all nodes that decide, decide the same value.
+- **Validity**: the decided value was actually proposed.
+- **Termination**: non-failed nodes eventually decide (as long as a majority is up and can talk).
+
+With consensus you can build a **replicated log** → a replicated state machine → strongly consistent, fault-tolerant storage, leader election, distributed locks, and configuration.
+
+## Quorums: the core trick
+
+Decisions require a **majority** (quorum) of nodes: 2 of 3, 3 of 5. Any two majorities **overlap** in at least one node, so two conflicting decisions can't both get a majority. That's what prevents split brain.
+
+| Cluster size | Quorum | Failures tolerated |
+|---|---|---|
+| 3 | 2 | 1 |
+| 5 | 3 | 2 |
+| 7 | 4 | 3 |
+
+Clusters use **odd** sizes: 4 nodes tolerate the same 1 failure as 3 while costing more.
+
+## Raft in brief
+
+Raft is designed to be understandable (Paxos is famously not). Every node is a **follower**, **candidate** or **leader**.
+
+1. **Leader election**: followers expect heartbeats from the leader. If one hears nothing for a randomized timeout, it becomes a candidate, increments the **term** number, votes for itself and asks others for votes. With a majority, it becomes leader for that term. Randomized timeouts make split votes rare.
+2. **Log replication**: clients send writes to the leader, which appends them to its log and replicates to followers. Once a **majority** has stored an entry, it's **committed** and applied.
+3. **Safety**: a node only votes for candidates whose log is at least as up-to-date as its own, so a new leader always has every committed entry. Higher terms always win, and stale leaders step down when they see a higher term.
+
+<MentalModel>
+A **committee that only acts on majority votes**. The chair (leader) proposes each decision, and it's official once a majority signs the minutes. If the chair goes silent, a member calls a new election, and the **term number** works like a dated mandate: anyone holding an older mandate must defer. Because any two majorities share at least one member, two contradictory decisions can never both be official.
+</MentalModel>
+
+## Fencing tokens: stopping zombie leaders
+
+A paused old leader (long GC) may wake up and act on stale leadership. Systems issue a monotonically increasing **fencing token** (e.g. the Raft term or a lock version) with each leadership/lock grant, and storage rejects writes carrying an older token. Without fencing, "distributed locks" are unsafe.
+
+## Where you use consensus (without implementing it)
+
+- **etcd** (Raft): Kubernetes' brain; all cluster state.
+- **ZooKeeper** (ZAB): Kafka's metadata in older versions, HBase, many Hadoop-era systems.
+- **Kafka KRaft**: Kafka's own Raft-based metadata quorum.
+- **Consul** (Raft): service discovery and config.
+- **CockroachDB, TiDB, YugabyteDB** (Raft per data range), **Spanner** (Paxos).
+
+**You should almost never implement consensus yourself.** Use these systems for leader election ("only one instance runs the scheduler") and coordination, via leases with fencing.
+
+<Quiz
+  question="A 5-node etcd cluster loses 3 nodes in a zone outage. What happens to writes?"
+  options={[
+    "Writes continue on the 2 remaining nodes",
+    "Writes stop: 2 of 5 is not a majority, so the cluster can't commit (it stays consistent but unavailable)",
+    "The 2 nodes elect two separate leaders",
+    "Writes continue but may be lost",
+  ]}
+  answer={1}
+  explanation="Consensus needs a quorum (3 of 5). With only 2 nodes, no leader can be elected and nothing can commit. That's the CP choice. Spreading nodes across 3+ zones avoids losing a majority to a single zone failure."
+/>
+
+<Tradeoffs
+  good={[
+    "Strong consistency and automatic failover without split brain",
+    "Tolerates minority failures",
+    "Battle-tested implementations available (etcd, ZooKeeper, Raft libraries)",
+  ]}
+  bad={[
+    "Every write needs a majority round trip, so latency grows with distance",
+    "Unavailable when a majority is lost (CP)",
+    "Throughput limited by the single leader per group",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows clusters use majority voting and odd node counts."
+  mid="Uses etcd/ZooKeeper/DB locks for leader election with leases, and understands quorums."
+  senior="Explains Raft, fencing tokens and zone placement; designs coordination safely."
+  lead="Ensures critical coordination systems (etcd, Kafka metadata) are deployed and operated for the right failure domains."
+/>
+
+<SeniorLens>
+Two practical consequences seniors remember: **place consensus nodes across failure domains** (3 AZs for a 3-node cluster, so one AZ loss keeps a majority), and **never trust a lock without fencing**. Martin Kleppmann's critique of Redis-based "Redlock" is a great read on why.
+</SeniorLens>
+
+<KeyTakeaways>
+- Consensus = agreement on values/leaders despite failures; enables replicated state machines.
+- Majority quorums overlap, which prevents split brain; use odd cluster sizes.
+- Raft: elections with terms, majority-committed log replication, up-to-date-log voting.
+- Use etcd/ZooKeeper/DBs; use fencing tokens with any lock or lease.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[The Raft paper + visualization](https://raft.github.io/)**: play with the interactive Raft cluster there.
+- **[The Secret Lives of Data: Raft](http://thesecretlivesofdata.com/raft/)**: animated walkthrough.
+- **Martin Kleppmann, *How to do distributed locking*** (blog post on fencing).
+</GoDeeper>

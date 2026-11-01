@@ -1,0 +1,116 @@
+---
+title: Timeouts, Retries and Circuit Breakers
+description: The resilience trio. Failing fast, retrying safely with backoff and jitter, and stopping cascades.
+minutes: 12
+level: mid
+---
+
+<Problem>
+The recommendation service gets slow. Product pages call it without a timeout, so threads pile up waiting. The product service runs out of threads. Checkout calls product and also stalls. Within two minutes, a non-essential feature has taken down the whole site. This is a **cascading failure**, and timeouts, retries and circuit breakers are how you contain it.
+</Problem>
+
+## 1. Timeouts: bound every wait
+
+Every network call needs a **connect timeout** and a **request/read timeout**. Defaults are often infinite or very long.
+
+```java
+HttpClient client = HttpClient.newBuilder()
+    .connectTimeout(Duration.ofMillis(500))
+    .build();
+HttpRequest req = HttpRequest.newBuilder(uri)
+    .timeout(Duration.ofMillis(800))          // based on p99.9 of healthy latency
+    .build();
+```
+
+**Deadline propagation**: if the user-facing request has a 2-second budget and 1.5 s is already spent, downstream calls should get the remaining 0.5 s, not their own fresh 2 s. gRPC propagates deadlines natively.
+
+## 2. Retries: only when safe, never naively
+
+Retries help with **transient** failures (a dropped packet, a brief overload, a failover). They hurt with persistent ones, multiplying load on a system that's already struggling.
+
+Rules:
+- Retry only **idempotent** operations (or ones made idempotent with keys).
+- Retry only **retryable** errors: timeouts, `503`, `429`, connection resets. Not `400`/`404`.
+- Use **exponential backoff with jitter**: wait `random(0, base × 2^attempt)`, capped.
+- **Limit attempts** (2–3) and respect the overall deadline.
+- **Retry at one layer** of the stack, not every layer.
+- Use **retry budgets**: retries may add at most ~10% extra load; beyond that, fail fast.
+
+<RetryStormSim />
+
+<MentalModel>
+A crowded shop door jams for a minute. If everyone keeps **shoving at the same instant** (no backoff, no jitter), the door can't be fixed and the crowd gets bigger. If people step back, wait a random little while and try again (**backoff + jitter**), the door gets unjammed and people trickle through. If there's a sign saying **"Closed for 5 minutes"** (circuit breaker), people stop trying entirely and go elsewhere, giving staff time to fix it.
+</MentalModel>
+
+## 3. Circuit breakers: stop calling what's broken
+
+A circuit breaker wraps calls to a dependency and tracks failures:
+
+```text
+CLOSED ──(failure rate > 50% over last 20 calls)──▶ OPEN ──(after 30s)──▶ HALF-OPEN
+  ▲                                                   │ fail fast,          │ allow a few trial calls
+  └────────────(trial calls succeed)──────────────────┴── no remote call ◀──┘ (fail → OPEN again)
+```
+
+While **open**, calls fail immediately (or return a fallback) without touching the network. Your threads stay free, the dependency gets breathing room to recover, and your service degrades instead of dying.
+
+```java
+// Resilience4j with Spring Boot
+@CircuitBreaker(name = "recommendations", fallbackMethod = "noRecommendations")
+@Retry(name = "recommendations")
+@TimeLimiter(name = "recommendations")
+public CompletableFuture<List<Product>> recommendationsFor(long userId) { ... }
+
+private CompletableFuture<List<Product>> noRecommendations(long userId, Throwable t) {
+    return CompletableFuture.completedFuture(List.of());   // page renders without recommendations
+}
+```
+
+## 4. Bulkheads and fallbacks
+
+- **Bulkheads**: isolate resources per dependency (separate thread pools / connection pools / concurrency limits), so a slow recommendations service can only exhaust *its* pool, not the whole server's.
+- **Fallbacks / graceful degradation**: cached data, default values, or hiding a non-essential feature. Decide per dependency: **is it critical (fail the request) or optional (degrade)?**
+
+<Quiz
+  question="Service A → B → C → D. Each layer retries failed calls 3 times. D goes down. How many requests can one user request generate at D?"
+  options={["4", "12", "64", "3"]}
+  answer={2}
+  explanation="Each layer multiplies by (1 + 3) = 4 attempts: 4 × 4 × 4 = 64 calls to D per user request. Retry at one layer with budgets, and use circuit breakers to fail fast."
+/>
+
+<Tradeoffs
+  good={[
+    "Timeouts: bound resource usage, enable fast failure",
+    "Retries with backoff + jitter: ride out transient blips",
+    "Circuit breakers + bulkheads: contain cascading failures",
+  ]}
+  bad={[
+    "Retries add load and latency; dangerous for non-idempotent calls",
+    "Breakers need tuning; can trip on noise or stay open too long",
+    "Fallbacks are code paths that rarely run, so they must be tested",
+  ]}
+/>
+
+<LevelTags
+  junior="Sets timeouts on every remote call and doesn't retry 4xx errors."
+  mid="Configures Resilience4j: backoff + jitter, circuit breakers, fallbacks, bulkheads."
+  senior="Designs retry policy across layers, deadline propagation and critical-vs-optional dependency behavior."
+  lead="Standardizes resilience defaults in shared libraries/mesh and verifies them with chaos testing."
+/>
+
+<SeniorLens>
+For every dependency in a design, seniors write down: **timeout, retry policy, breaker settings, and what the user experiences when it's down**. That last one is a product question ("can checkout proceed without the fraud score?"), and it's best answered calmly in a design review instead of frantically during an incident.
+</SeniorLens>
+
+<KeyTakeaways>
+- Timeouts on every call; propagate deadlines.
+- Retry only idempotent, retryable errors, with exponential backoff + jitter, at one layer, within a budget.
+- Circuit breakers fail fast and let dependencies recover.
+- Bulkheads isolate; fallbacks degrade gracefully.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Michael Nygard, *Release It!***: the book that popularized circuit breakers and bulkheads.
+- **AWS Builders' Library:** *Timeouts, retries, and backoff with jitter*.
+- **[Resilience4j docs](https://resilience4j.readme.io/)**.
+</GoDeeper>

@@ -1,0 +1,82 @@
+---
+title: Choosing a Database
+description: A practical decision framework, bringing the whole Data track together.
+minutes: 8
+level: senior
+---
+
+<Problem>
+Database choices outlive almost every other decision: teams, frameworks and even product directions change, but migrating off a datastore is a multi-quarter project. Yet the decision is often made in a 20-minute meeting based on familiarity or hype. Here's a structured way to make it, and to defend it in a design review or interview.
+</Problem>
+
+## Start with questions, not products
+
+1. **What are the access patterns?** Key lookups? Complex ad-hoc queries and joins? Full-text search? Time-range scans? Graph traversals? Aggregations over billions of rows?
+2. **What are the consistency requirements?** Money and inventory need strong consistency and transactions. A like counter or view count can be eventually consistent.
+3. **What's the scale, really?** Reads/sec, writes/sec, data size today and in 2–3 years. Most systems are smaller than their designers imagine; a single Postgres handles tens of thousands of transactions per second and multiple TB.
+4. **What's the shape of the data?** Highly relational? Self-contained documents? Append-only events?
+5. **What are the latency needs?** Sub-millisecond (in-memory) vs tens of ms (fine for most)?
+6. **What can the team operate?** Managed service available? In-house expertise? On-call burden?
+
+## A pragmatic decision table
+
+| If you need… | Reach for |
+|---|---|
+| General business data, transactions, flexible queries | **Postgres** (or MySQL) |
+| Sub-ms key lookups, caching, counters, rate limits, leaderboards | **Redis** |
+| Massive write throughput, known query patterns, multi-region availability | **Cassandra / ScyllaDB / DynamoDB** |
+| Serverless, pay-per-request key-value/document at scale | **DynamoDB** |
+| Flexible nested documents, rapidly evolving schema | **MongoDB**, or Postgres `JSONB` |
+| Full-text search, relevance, faceting | **Elasticsearch / OpenSearch** (as a derived index) |
+| Relationship-heavy multi-hop queries | **Neo4j** / graph DB |
+| Metrics and time-series | **Prometheus**, TimescaleDB, InfluxDB |
+| Analytics over huge datasets | **Columnar warehouse**: BigQuery, Snowflake, Redshift, ClickHouse |
+| Global strong consistency with SQL | **Spanner / CockroachDB / YugabyteDB** |
+| Vector similarity search for AI features | **pgvector**, or a dedicated vector DB (Track 10) |
+| Large files / blobs | **Object storage** (S3), with metadata in a DB |
+
+<MentalModel>
+Choosing a database is like **choosing a vehicle**. A sedan (Postgres) handles 90% of trips well. You buy a truck (Cassandra) when you're genuinely hauling tons every day, a motorbike (Redis) for quick nimble trips, and you rent a bus (data warehouse) for the big analytics outing. Buying a fleet of specialty vehicles before you need them mostly buys you maintenance bills.
+</MentalModel>
+
+## How to present a choice (design docs and interviews)
+
+> "Orders need multi-row transactions and flexible reporting queries, and we expect around 500 writes/sec, well within a single Postgres primary. We'll use Postgres with read replicas for reporting. Product search needs relevance and typo tolerance, so we'll index products into OpenSearch via CDC; Postgres stays the source of truth. Session and rate-limit data go in Redis since they're ephemeral and latency-sensitive. We'd revisit sharding if writes exceed ~10k/sec."
+
+That's the pattern: **requirement → choice → why → what would change our mind**.
+
+<Quiz
+  question="A startup expects 200 writes/sec and needs transactions across orders, payments and inventory. A teammate proposes Cassandra 'for scale'. Best response?"
+  options={[
+    "Agree, since Cassandra scales better",
+    "Push back: the workload needs multi-entity transactions and is far below a single Postgres's capacity; choose Postgres and revisit if requirements change",
+    "Use both from day one",
+    "Use Redis as the primary database",
+  ]}
+  answer={1}
+  explanation="Cassandra gives up the transactions this domain needs, to solve a scale problem that doesn't exist. Pick for the requirements you have, with a clear trigger for revisiting."
+/>
+
+<LevelTags
+  junior="Uses the team's standard database correctly."
+  mid="Explains why a given store fits a feature's access patterns."
+  senior="Makes and documents database choices with explicit requirements, tradeoffs and revisit triggers."
+  lead="Curates the org's 'paved road' of supported datastores and the bar for exceptions."
+/>
+
+<SeniorLens>
+The best database decisions are **boring and reversible-ish**: start with the most general, well-understood option, isolate data access behind repositories/services so a future migration is contained, and write down the trigger that would make you reconsider. "We chose X because Y; we'll revisit if Z" is the hallmark of senior judgment.
+</SeniorLens>
+
+<KeyTakeaways>
+- Decide from access patterns, consistency, scale, data shape, latency and operability.
+- Postgres is the strong default; add specialized stores for named needs.
+- Keep one source of truth; derive search/cache/analytics stores from it.
+- State requirement → choice → reason → revisit trigger.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA**: the whole book, honestly. Chapters 1–7 underpin this entire track.
+- **Dan McKinley, *Choose Boring Technology*** (essay).
+- **Engineering blogs** (Uber, Discord, Notion, Figma) on why they migrated datastores. Each one is a lesson in requirements changing over time.
+</GoDeeper>

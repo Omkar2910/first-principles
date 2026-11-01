@@ -1,0 +1,63 @@
+---
+section: Level 2 · Mid → Senior (SDE2 → SDE3)
+title: "Mid → Senior: Influence Across Teams"
+description: Getting things done beyond your team without authority. Relationships, written proposals and aligning incentives.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Your project needs the payments team to add a field to their API. They're busy and it's not on their roadmap. Or you've spotted that three teams are each building their own retry library. Senior engineers regularly need things from people who **don't report to them and have their own priorities**. Influence without authority is one of the defining skills from senior upward.
+</Problem>
+
+## Why it's hard
+
+Other teams have their own goals, roadmaps, constraints and incentives. "It would help me" rarely moves them. What moves people: **shared goals, low cost to them, clear benefits, trust, and making it easy**.
+
+<MentalModel>
+Influence is like **being a good neighbor** in a shared building. You can't order the neighbors around. But if you've been friendly, you show up with a clear and reasonable request, you've done most of the legwork, and it helps them too ("let's fix the shared drain so neither of us floods"), they'll usually say yes. And they'll help you again next time.
+</MentalModel>
+
+## The playbook
+
+1. **Build relationships before you need them**: know the engineers and leads on adjacent teams; help them; attend their design reviews occasionally; be reliable.
+2. **Understand their world**: their roadmap, pressures, pain points. Find where your ask **aligns with their goals**.
+3. **Make the ask concrete and cheap**: a clear, small, well-specified request. Better: offer to do the work yourself (a PR to their repo, following their conventions, with tests), with them only reviewing.
+4. **Write it down**: a short proposal (problem, proposal, impact, cost to them, alternatives) is easier to say yes to and to share with their manager.
+5. **Bring data**: "This causes 40% of our support tickets about refunds."
+6. **Escalate gracefully and rarely**: if it truly matters and you're stuck, involve managers with a shared framing ("we need help prioritizing between X and Y"), never as a complaint.
+7. **Give credit generously** when they help.
+
+## Driving cross-team initiatives
+
+For things like a shared library or common standard:
+- Start with a **small coalition** of teams who feel the pain most.
+- **Pilot with one team**, show results, then expand.
+- **Make adoption easy**: migration guides, codemods, office hours, doing the first migration yourself.
+- **Track adoption and impact** publicly.
+
+<Scenario
+  situation="Your feature needs the user-profile team to expose a new 'preferred language' field via their API. Their lead says they have no capacity this quarter. What's the most effective next step?"
+  choices={[
+    { text: "Ask your manager to escalate to their director immediately", feedback: "Escalating first damages the relationship and usually isn't necessary." },
+    { text: "Offer to implement it yourself in their codebase following their conventions, with a short spec and tests, asking only for review time, and explain the user impact", feedback: "You lowered their cost to nearly zero, respected their ownership, and made it easy to say yes. Classic influence without authority.", best: true },
+    { text: "Read their database directly from your service to get the field", feedback: "Bypassing their API creates hidden coupling and breaks service ownership; it'll cause pain later." },
+  ]}
+/>
+
+<SeniorLens>
+Your **reputation is your influence budget**. Every time you deliver what you promised, help another team, give credit, and disagree respectfully, you add to it. When you need to drive something big across five teams, that accumulated trust is what makes people say "if they think it's important, let's do it."
+</SeniorLens>
+
+<KeyTakeaways>
+- Influence comes from aligned goals, low cost to others, data, trust and clear writing.
+- Build relationships early; understand other teams' priorities.
+- Make asks concrete and cheap; offer to do the work.
+- Pilot, prove, make adoption easy, share credit; escalate rarely and constructively.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Tanya Reilly, *The Staff Engineer's Path***: chapters on influence and "being glue".
+- **Tanya Reilly, *Being Glue*** (talk/blog post).
+- **Robert Cialdini, *Influence***: the psychology, used ethically.
+</GoDeeper>

@@ -1,0 +1,72 @@
+---
+section: Start here
+title: Self-Assessment and Growth Plan
+description: Rate yourself across 12 competencies, find your gaps for the next level, and turn them into a concrete plan.
+minutes: 15
+level: junior
+---
+
+<Problem>
+"I want to be senior" isn't a plan. "I consistently operate at senior level in system design and debugging, but at mid level in written communication and cross-team influence" **is** the start of one. Honest self-assessment turns vague ambition into specific skills to practice, specific lessons to study, and specific opportunities to ask your manager for.
+</Problem>
+
+## How to rate yourself honestly
+
+- Rate what you do **consistently**, not your best day. One great design doc doesn't make you senior in writing.
+- Use **evidence**: "Which concrete examples from the last 6 months prove this?"
+- It's normal to be **uneven**: strong technically, weaker in communication, or vice versa.
+- Compare against the **next level's** descriptions, not against colleagues.
+- Re-take it every quarter and see what moved.
+
+<SelfAssessment />
+
+## Turning gaps into a plan
+
+For your top **2–3 gaps** (not all of them; focus wins):
+
+1. **Learn**: study the linked lesson(s) and one external resource.
+2. **Practice**: find a real opportunity at work to exercise the skill. Examples:
+   - *Written communication gap* → write the design doc for your next feature, even if not required.
+   - *Production ownership gap* → join the on-call rotation; write a runbook; lead the next postmortem.
+   - *Influence gap* → propose one improvement that affects another team and drive it to adoption.
+   - *Estimation gap* → estimate every task this quarter, track actuals, review the misses.
+3. **Get feedback**: tell your manager what you're working on and ask for specific feedback and stretch opportunities.
+4. **Collect evidence**: log outcomes in your brag document (lesson 18).
+
+```text
+Growth plan: Q4
+Target: Senior (SDE3)
+Gap 1: Written communication (Mid → Senior)
+  Learn: Career lesson 7 (design docs); read 3 great design docs from our org
+  Practice: write design doc for the notification-retry project; get review from Staff eng
+  Evidence: doc approved, decisions referenced by 2 teams
+Gap 2: Cross-team influence (Mid → Senior)
+  Practice: drive adoption of shared idempotency library with payments + orders teams
+  Evidence: adopted by 2 teams; duplicate-charge incidents → 0
+Check-in: monthly with manager
+```
+
+<MentalModel>
+Self-assessment is like a **fitness assessment before training**. You don't train everything at once; you find the weakest links (maybe flexibility, maybe endurance), work on them deliberately, and measure again later. Training only your strengths feels good but doesn't move the overall score much.
+</MentalModel>
+
+<Scenario
+  situation="Your self-assessment shows you're solidly senior technically, but mid-level in stakeholder communication and influence. Your next quarter has a big, technically interesting project and a smaller cross-team initiative nobody wants to lead. Which plan best supports your growth to senior?"
+  choices={[
+    { text: "Take only the big technical project; it's what you're best at", feedback: "You'll do great work, but it reinforces a strength instead of closing the gap that's actually blocking you." },
+    { text: "Take the cross-team initiative (or a meaningful part of it) while contributing technically to the big project, and tell your manager it's a deliberate growth goal", feedback: "This targets your real gap with a real opportunity, keeps you technically engaged, and makes your intent visible so you get support and credit.", best: true },
+    { text: "Wait until someone assigns you leadership work", feedback: "Waiting rarely works; senior engineers seek out the opportunities their growth needs." },
+  ]}
+/>
+
+<KeyTakeaways>
+- Rate consistent behavior, backed by evidence; expect unevenness.
+- Pick 2–3 gaps; for each: learn, practice on real work, get feedback, collect evidence.
+- Share your plan with your manager; re-assess quarterly.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Your company's career ladder**: map these competencies onto its exact wording.
+- **Camille Fournier, *The Manager's Path***: useful for understanding how managers evaluate growth.
+- **Lara Hogan's blog**: growth plans, feedback and sponsorship.
+</GoDeeper>

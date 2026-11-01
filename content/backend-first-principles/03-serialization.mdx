@@ -1,0 +1,112 @@
+---
+title: Serialization and Deserialization
+description: Turning objects into bytes and back. JSON, Protobuf, and the subtle bugs that live in the conversion.
+minutes: 9
+level: junior
+---
+
+<Problem>
+Your Java service has an `Order` object in memory. The client is a JavaScript app, a Python script, or another service written in Go. Memory layouts don't travel over networks; **bytes do**. Every request and response is converted to bytes and back, and that conversion is where you get silent data loss (big numbers rounded in JavaScript), security bugs (accidentally serializing a password hash) and performance hits.
+</Problem>
+
+## The idea
+
+- **Serialization**: in-memory object → a format that can be sent or stored (JSON text, Protobuf bytes).
+- **Deserialization**: bytes → in-memory object.
+
+Both sides must agree on the **format** (how to encode) and the **schema** (what fields exist and their types).
+
+<MentalModel>
+Shipping furniture. You can't mail an assembled wardrobe, so you **flat-pack it** with instructions (serialize), ship the box, and the receiver **reassembles it** (deserialize). JSON is flat-packing with instructions written in plain English: anyone can read them, but the box is bigger. Protobuf is a compact numbered parts list: smaller and faster, but you need the matching manual (the `.proto` schema) to rebuild it.
+</MentalModel>
+
+## Common formats
+
+| Format | Type | Pros | Cons | Typical use |
+|---|---|---|---|---|
+| **JSON** | Text | Human-readable, universal, browser-native | Verbose, no schema by default, number ambiguity | Public REST APIs |
+| **Protobuf** | Binary | Small, fast, typed schema, safe evolution | Not human-readable, needs codegen | gRPC, internal services |
+| **Avro** | Binary | Schema stored with data, great for evolution | Tooling heavier | Kafka, data pipelines |
+| **XML** | Text | Rich schemas, legacy enterprise | Very verbose | SOAP, older integrations |
+
+## In Spring: Jackson does the work
+
+```java
+public record OrderDto(long id, BigDecimal total, Instant createdAt, List<ItemDto> items) {}
+
+// Jackson turns this into:
+// {"id":9001,"total":59.98,"createdAt":"2026-10-11T09:30:00Z","items":[...]}
+```
+
+Deserialization goes the other way: Jackson reads the JSON request body and constructs your request object.
+
+## Bugs that live in the conversion
+
+1. **Leaking internal fields.** Returning your JPA `User` entity directly serializes *every* getter, including `passwordHash` and lazy relations (and may trigger extra DB queries). **Always use DTOs** for API boundaries.
+2. **Large numbers in JavaScript.** JS numbers are 64-bit floats, exact only up to 2^53. A Java `long` ID like `9007199254740993` silently becomes `...992` in the browser. Twitter famously added `id_str` for this. Send large IDs as **strings**.
+3. **Money as floating point.** `0.1 + 0.2 != 0.3`. Use `BigDecimal` server-side and send amounts as strings or integer minor units (`"amountCents": 5998`).
+4. **Dates and time zones.** Always use ISO-8601 with a zone (`2026-10-11T09:30:00Z`) or epoch millis. Never ambiguous local strings.
+5. **Unknown fields.** Should the server reject a request with an extra field, or ignore it? Ignoring is more forward-compatible; rejecting catches client typos. Decide deliberately.
+6. **Null vs missing.** In a PATCH, `{"nickname": null}` (clear it) is different from `{}` (don't touch it). Many frameworks blur this.
+
+<Quiz
+  question="Your API returns a 64-bit order ID as a JSON number. The web app sometimes fetches the wrong order. Why?"
+  options={[
+    "JSON doesn't support numbers",
+    "JavaScript numbers lose precision above 2^53, so the ID gets rounded",
+    "The database is returning the wrong row",
+    "Jackson is buggy",
+  ]}
+  answer={1}
+  explanation="JSON itself allows big numbers, but JavaScript parses them into doubles. IDs above ~9 quadrillion get rounded. Serialize large IDs as strings."
+/>
+
+## Schema evolution
+
+Services deploy independently, so old and new versions talk to each other. Safe changes: **add optional fields**, and keep ignoring unknown fields. Unsafe: renaming, removing, changing types. Protobuf makes this explicit with numbered fields: never reuse a field number, and mark removed ones `reserved`.
+
+```proto
+message Order {
+  int64 id = 1;
+  string status = 2;
+  reserved 3;            // was "legacy_code"; never reuse 3
+  string currency = 4;   // new optional field: old clients just ignore it
+}
+```
+
+<Tradeoffs
+  good={[
+    "JSON: debuggable with curl, universal support",
+    "Protobuf: 3–10× smaller and faster, enforced schema",
+    "DTOs: explicit control of what crosses the boundary",
+  ]}
+  bad={[
+    "JSON: no types for dates, money or 64-bit ints, so you need conventions",
+    "Binary formats: harder to debug, need tooling",
+    "Serialization is CPU work, and it shows up in profiles at high throughput",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses DTOs, ISO dates, and knows not to expose entities directly."
+  mid="Handles money, big IDs, null-vs-missing and unknown fields deliberately."
+  senior="Chooses formats per boundary (JSON public, Protobuf internal) and designs schemas to evolve safely."
+  lead="Sets org-wide conventions (date format, money representation, error format) so all APIs look alike."
+/>
+
+<SeniorLens>
+Most "random" production data bugs at API boundaries are serialization conventions nobody wrote down. A short API style guide covering **IDs as strings, money as minor units, ISO-8601 UTC timestamps, camelCase, and a single error format** prevents a whole category of cross-team bugs. That's a cheap, high-leverage senior contribution.
+</SeniorLens>
+
+<KeyTakeaways>
+- Serialization converts objects ↔ bytes; both sides must agree on format and schema.
+- Use DTOs at boundaries; never serialize entities directly.
+- Watch big integers, money, dates and null-vs-missing.
+- Evolve schemas additively.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the serialization/deserialization episode.
+- **[Protocol Buffers docs: updating a message type](https://protobuf.dev/programming-guides/proto3/#updating)**.
+- **Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 4** (Encoding and Evolution).
+</GoDeeper>

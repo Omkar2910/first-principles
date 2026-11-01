@@ -1,0 +1,100 @@
+---
+title: Time, Clocks and Ordering
+description: Why wall clocks lie, logical clocks, and how distributed systems decide what happened first.
+minutes: 10
+level: senior
+---
+
+<Problem>
+Two replicas each receive an update to the same record. Replica A's update has timestamp 10:00:00.200, B's has 10:00:00.150. "Last write wins" keeps A's. But B's clock was 300 ms behind, so B's write actually happened *later*, and the newest data was silently discarded. In distributed systems, **"when" is surprisingly hard**, and getting ordering wrong causes lost updates, broken audit trails and confusing bugs.
+</Problem>
+
+## Physical clocks are unreliable
+
+- **Drift**: quartz clocks drift (tens of ppm, i.e. seconds per day) until corrected.
+- **NTP corrections** can make a clock **jump backward or forward**.
+- **Leap seconds**, VM pauses and misconfigured hosts add surprises.
+- Typical sync across machines: within a few milliseconds in a good datacenter; worse across the internet.
+
+Two kinds of clocks in every OS:
+- **Wall-clock time** (`System.currentTimeMillis()`, `Instant.now()`): human time; can jump. Use for timestamps shown to people.
+- **Monotonic time** (`System.nanoTime()`): only moves forward; meaningless across machines. **Use for measuring durations and timeouts.**
+
+```java
+long start = System.nanoTime();      // ✅ elapsed time
+doWork();
+long ms = (System.nanoTime() - start) / 1_000_000;
+// ❌ currentTimeMillis() deltas can be negative if NTP steps the clock back
+```
+
+## Logical clocks: ordering without wall time
+
+**Lamport clocks**: each node keeps a counter. Increment on every event; attach it to messages; on receive, set `counter = max(local, received) + 1`. This guarantees: if A **happened-before** B (causally), then `L(A) < L(B)`. But the reverse isn't true: a smaller number doesn't prove causality.
+
+**Vector clocks**: each node keeps a counter **per node**. Comparing two vectors tells you whether one event happened before the other, or whether they're **concurrent** (neither knew about the other). That's exactly what you need to detect conflicting writes (Dynamo-style databases, CRDTs).
+
+<MentalModel>
+Physical timestamps are **people's wristwatches**: each slightly wrong, so comparing them across people is unreliable. Lamport clocks are **page numbers in a shared notebook passed around**: whoever writes next uses a higher page number than anything they've seen, so replies always come after what they reply to. Vector clocks are each person **keeping a tally of how many notes they've read from every other person**, which reveals whether two notes were written without knowledge of each other.
+</MentalModel>
+
+## Hybrid and bounded-uncertainty clocks
+
+- **Hybrid Logical Clocks (HLC)**: combine physical time with a logical counter: close to wall time and still causally consistent. Used by CockroachDB, YugabyteDB, MongoDB.
+- **Google Spanner's TrueTime**: GPS and atomic clocks give a time **interval** with bounded uncertainty (a few ms). Spanner waits out the uncertainty before committing ("commit wait"), achieving globally consistent ordering. It's expensive hardware solving a hard problem.
+
+## Practical guidance
+
+- Don't use wall-clock timestamps to order events **across machines** when correctness depends on it. Use sequence numbers from a single authority (a DB sequence, a Kafka offset within a partition), version numbers, or logical clocks.
+- Use **monotonic clocks** for durations, timeouts, rate limiters.
+- Store timestamps in **UTC** with time zone; convert at the edges.
+- Be careful with **TTL/lease logic** that assumes synchronized clocks between nodes.
+- For IDs that sort roughly by time, use **ULIDs / UUIDv7 / Snowflake IDs**, but don't treat their order as exact causality.
+
+<Quiz
+  question="You measure request duration with Instant.now() at start and end, and occasionally log negative durations. Why, and what's the fix?"
+  options={[
+    "The CPU is too fast",
+    "Wall-clock time jumped (e.g. NTP adjustment); use a monotonic clock like System.nanoTime() for durations",
+    "Java has a bug",
+    "Use a bigger data type",
+  ]}
+  answer={1}
+  explanation="Wall clocks can be adjusted backward. Monotonic clocks are guaranteed never to go backward within a process and are the right tool for elapsed time."
+/>
+
+<Tradeoffs
+  good={[
+    "Logical clocks capture causality without synchronized clocks",
+    "Vector clocks detect concurrent (conflicting) updates",
+    "HLC/TrueTime give near-real-time ordering with guarantees",
+  ]}
+  bad={[
+    "Wall clocks: drift and jumps make cross-node ordering unsafe",
+    "Vector clocks grow with the number of nodes",
+    "TrueTime-style guarantees need special infrastructure and add commit latency",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses UTC timestamps and monotonic clocks for durations."
+  mid="Avoids wall-clock ordering across machines; uses DB sequences, versions or offsets instead."
+  senior="Understands Lamport/vector clocks and HLC; designs conflict detection and ordering guarantees."
+  lead="Recognizes clock assumptions in architecture (leases, LWW, audit ordering) and ensures they're sound."
+/>
+
+<SeniorLens>
+Whenever a design says "we'll use the timestamp to decide which one wins", a senior asks: **whose clock, and what if it's wrong by a second?** If the answer matters (money, permissions, audit), replace timestamps with versions, sequence numbers or a single serialization point.
+</SeniorLens>
+
+<KeyTakeaways>
+- Wall clocks drift and jump; never rely on them for cross-machine ordering.
+- Monotonic clocks for durations and timeouts.
+- Lamport clocks order causally; vector clocks detect concurrency.
+- HLC and TrueTime bridge physical and logical time in modern databases.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Leslie Lamport, *Time, Clocks, and the Ordering of Events in a Distributed System*** (1978): foundational and readable.
+- **DDIA chapter 8**, "Unreliable Clocks".
+- **Google Spanner paper**: the TrueTime section.
+</GoDeeper>

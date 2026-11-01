@@ -1,0 +1,122 @@
+---
+section: Principles and patterns
+title: API Design
+description: Designing APIs other teams love. Resource modeling, pagination, errors, versioning, idempotency and evolution.
+minutes: 12
+level: mid
+---
+
+<Problem>
+An API is a **user interface for developers**, and it's much harder to change than a UI. Once mobile apps, partners and other teams depend on it, every field name, error shape and pagination quirk is frozen for years. Good API design means clients integrate quickly, make fewer mistakes and rarely need to talk to you. Bad API design generates support tickets forever.
+</Problem>
+
+## Principles
+
+1. **Design from the client's use cases**, not your database tables.
+2. **Be consistent**: naming, casing, pagination, errors, dates. Every endpoint should feel the same.
+3. **Make the common case easy and the wrong thing hard**.
+4. **Evolve additively**; never break existing clients without a deprecation path.
+
+## Resource modeling
+
+```http
+GET    /v1/orders?status=open&cursor=...     list (filtered, paginated)
+POST   /v1/orders                            create (Idempotency-Key header)
+GET    /v1/orders/{id}                       read
+PATCH  /v1/orders/{id}                       partial update
+POST   /v1/orders/{id}/cancel                state-changing action (not a plain field update)
+GET    /v1/orders/{id}/items                 sub-collection
+```
+
+Actions with business meaning (`cancel`, `refund`, `approve`) are better as explicit endpoints than as `PATCH {status: "CANCELLED"}`, because they carry their own validation and side effects.
+
+## Requests and responses
+
+- **Consistent envelope for lists**: `{ "data": [...], "nextCursor": "..." }`.
+- **IDs as strings** (prefixed IDs like `ord_8f2k...` are great for debugging, à la Stripe).
+- **Timestamps** ISO-8601 UTC; **money** as `{ "amount": 5998, "currency": "USD" }` in minor units.
+- **Expandable relations** (`?expand=customer`) instead of always embedding or forcing N extra calls.
+- Return the **created/updated resource** from POST/PATCH so clients don't need another GET.
+
+## Pagination
+
+Prefer **cursor-based** (`?limit=50&cursor=abc`) for anything large or frequently updated; offsets only for small, stable admin lists. Cap `limit`. Return `nextCursor: null` at the end.
+
+## Errors
+
+One shape everywhere (Problem Details), with a **stable machine-readable `code`**, a human `message`, field-level details for validation, and a request ID:
+
+```json
+{ "type": "https://api.shop.com/errors/insufficient_stock", "status": 409,
+  "code": "insufficient_stock", "detail": "Only 2 left", "requestId": "req_7Hx..." }
+```
+
+Document which errors each endpoint can return and whether they're retryable.
+
+## Idempotency and concurrency
+
+- `Idempotency-Key` on all non-idempotent POSTs (Track 4).
+- **Optimistic concurrency** for updates: return an `ETag` (or `version`); clients send `If-Match`; mismatched versions get `412 Precondition Failed`. That prevents lost updates between two editors.
+
+## Versioning and evolution
+
+- Additive changes (new optional fields, new endpoints) are non-breaking. Clients must **ignore unknown fields**.
+- Breaking changes → new version (`/v2`) or date-based versions (Stripe pins each account to an API version and transforms responses).
+- **Deprecation process**: announce, add `Deprecation`/`Sunset` headers, measure usage of the old version, reach out to remaining clients, then remove.
+
+## Contract-first and tooling
+
+Write the **OpenAPI spec** (or proto/GraphQL schema) first, review it like code, generate server stubs/clients, and run **breaking-change detection in CI** (e.g. `openapi-diff`, `buf breaking`). Good docs with copy-pasteable examples are part of the API.
+
+<MentalModel>
+An API is a **contract with tenants in a building you can't renovate freely**. Once tenants have arranged their furniture around your doors and outlets, moving a door means everyone rearranges. So you design the floor plan carefully up front, add new rooms instead of moving walls, and give long notice before closing anything.
+</MentalModel>
+
+<Quiz
+  question="Two admins edit the same product at the same time; the second save silently overwrites the first's changes. What API feature prevents this?"
+  options={[
+    "Rate limiting",
+    "Optimistic concurrency: return an ETag/version and require If-Match on updates, rejecting stale writes with 412",
+    "Cursor pagination",
+    "Using PUT instead of PATCH",
+  ]}
+  answer={1}
+  explanation="Conditional requests detect that the resource changed since the client read it. The second editor gets a 412 and can merge or reload instead of clobbering."
+/>
+
+<Tradeoffs
+  good={[
+    "Consistent, predictable APIs reduce integration time and support load",
+    "Contract-first enables parallel work and generated clients",
+    "Additive evolution keeps old clients working",
+  ]}
+  bad={[
+    "Upfront design effort and review process",
+    "Supporting multiple versions has ongoing cost",
+    "Over-generic APIs (everything is PATCH) push business logic to clients",
+  ]}
+/>
+
+<LevelTags
+  junior="Builds endpoints following the team's conventions."
+  mid="Designs consistent resources, cursor pagination, error codes, idempotency keys."
+  senior="Leads API reviews; designs for evolution, concurrency control and client ergonomics."
+  lead="Owns API governance: style guide, review process, versioning and deprecation policy."
+/>
+
+<SeniorLens>
+Seniors review APIs by **writing the client code first**: "How would the mobile app show an order list with customer names?" If the answer is "1 + N calls" or "parse the error message string", the API needs work. Stripe's API is the gold standard worth studying for consistency and evolution.
+</SeniorLens>
+
+<KeyTakeaways>
+- Model resources from client use cases; explicit action endpoints for business operations.
+- Consistent envelopes, string IDs, ISO dates, minor-unit money, one error format.
+- Cursor pagination, idempotency keys, ETags for concurrency.
+- Contract-first, additive evolution, deliberate deprecation.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Stripe API reference](https://stripe.com/docs/api)**: study it as a design example.
+- **[Google API Improvement Proposals (AIPs)](https://google.aip.dev/)**.
+- **[Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/)**.
+</GoDeeper>

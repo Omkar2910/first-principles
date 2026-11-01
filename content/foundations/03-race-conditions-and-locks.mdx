@@ -1,0 +1,145 @@
+---
+title: Race Conditions and Locks
+description: Why shared state across threads goes wrong, and the tools (locks, atomics, immutability) that keep it correct.
+minutes: 12
+level: junior
+---
+
+<Problem>
+Your flash sale sells 100 units. The dashboard says 104 orders went through. Nobody wrote a bug you can point at: every line of code looks correct when you read it alone. The problem is **two threads reading and writing the same data at the same time**. This class of bug is rare in testing, common in production, and one of the most important things to understand before you touch distributed systems, where the exact same problem reappears at a bigger scale.
+</Problem>
+
+## The classic race
+
+```java
+class Inventory {
+    private int stock = 100;
+
+    boolean buy() {
+        if (stock > 0) {      // 1. read
+            stock = stock - 1; // 2. compute + write
+            return true;
+        }
+        return false;
+    }
+}
+```
+
+Two threads call `buy()` when `stock == 1`:
+
+```text
+Thread A: reads stock = 1  → passes check
+Thread B: reads stock = 1  → passes check     (A hasn't written yet!)
+Thread A: writes stock = 0 → sells
+Thread B: writes stock = 0 → sells again      → oversold
+```
+
+This pattern is called **check-then-act** (or *read-modify-write*). Any time the decision depends on a value that can change between your read and your write, you have a race. Even `count++` is three steps (read, add, write) and is not safe across threads.
+
+<MentalModel>
+Two people editing the same Google Sheet cell offline, then syncing. Each one's change made sense based on what they saw, but what they saw was already stale by the time they saved. A **lock** is the rule "only one person may have the sheet open for editing at a time."
+</MentalModel>
+
+## Tool 1: Locks (mutual exclusion)
+
+A lock makes a block of code a **critical section**: only one thread can be inside at a time.
+
+```java
+synchronized boolean buy() {          // only one thread at a time per Inventory
+    if (stock > 0) { stock--; return true; }
+    return false;
+}
+```
+
+Locks are correct but have costs:
+- **Contention**: threads queue up waiting. A hot lock turns your 32-core server into a 1-core server for that code path.
+- **Deadlock**: Thread A holds lock X and waits for Y; Thread B holds Y and waits for X. Both wait forever. The standard defense is to **always acquire locks in the same global order**.
+- **Holding locks during I/O** is a cardinal sin: never call the network or DB inside a `synchronized` block.
+
+## Tool 2: Atomic operations
+
+CPUs provide instructions like **compare-and-swap (CAS)**: "set this to 5, *only if* it's currently 4." Java exposes them through `AtomicInteger`, `AtomicLong`, `ConcurrentHashMap`, etc.
+
+```java
+private final AtomicInteger stock = new AtomicInteger(100);
+
+boolean buy() {
+    while (true) {
+        int current = stock.get();
+        if (current == 0) return false;
+        if (stock.compareAndSet(current, current - 1)) return true; // retry if someone beat us
+    }
+}
+```
+
+No thread ever blocks; if another thread changed the value, CAS fails and we retry. This is called **optimistic concurrency**. Hold onto that term: databases use the exact same idea with version columns (Track 2).
+
+## Tool 3: Don't share mutable state
+
+The best lock is the one you don't need:
+- **Immutability**: objects that never change (Java `record`s, `List.of(...)`) can be shared freely.
+- **Confinement**: keep data local to one thread (local variables, request-scoped objects).
+- **Message passing**: instead of sharing a variable, send messages to the single owner of the data (actors, queues, Kafka partitions).
+
+In practice, typical backend services are **stateless**: request data lives on the thread's stack, shared data lives in the **database**. That moves the race condition from your Java heap to the DB, which is why transactions and isolation levels (Track 2) matter so much.
+
+<Quiz
+  question="Two app server instances both run the synchronized buy() method against the same database row. Is the oversell bug fixed?"
+  options={[
+    "Yes, synchronized prevents concurrent access",
+    "No, synchronized only coordinates threads inside one JVM; two instances are two processes",
+    "Yes, as long as both instances run the same code version",
+    "Only if the servers are in the same datacenter",
+  ]}
+  answer={1}
+  explanation="In-memory locks only work within a single process. Across instances you need the shared resource itself to enforce it: a DB row lock, an atomic conditional UPDATE (`UPDATE ... SET stock = stock - 1 WHERE id = ? AND stock > 0`), or a distributed lock."
+/>
+
+## The fix that actually ships
+
+For the inventory case in a real system, you push the atomic check-then-act down into the database in a **single statement**:
+
+```sql
+UPDATE products SET stock = stock - 1
+WHERE id = 42 AND stock > 0;
+-- rows affected = 1 → sold; 0 → sold out
+```
+
+The database guarantees this one statement is atomic. No application lock needed, and it works across any number of app servers.
+
+<Tradeoffs
+  good={[
+    "Locks: simplest way to make a critical section correct",
+    "Atomics/CAS: no blocking, great under low-to-moderate contention",
+    "Immutability/statelessness: no coordination needed at all",
+  ]}
+  bad={[
+    "Locks: contention, deadlocks, and they only work within one process",
+    "CAS: retry storms under heavy contention; only works on single variables",
+    "Statelessness: pushes the coordination problem to the database",
+  ]}
+/>
+
+<LevelTags
+  junior="Recognizes check-then-act and knows count++ is not thread-safe."
+  mid="Uses atomics, concurrent collections and DB-level conditional updates instead of ad-hoc synchronized blocks."
+  senior="Spots races that span processes and services (double-submits, concurrent consumers) and designs them out with idempotency and single-writer patterns."
+  lead="Makes 'what happens if this runs twice at the same time?' a standard question in design reviews."
+/>
+
+<SeniorLens>
+Interviewers love asking you to design a ticket booking or inventory system precisely because of this. The strong answer isn't "add a lock". It's choosing **where** the atomicity lives (DB conditional update, row lock with `SELECT ... FOR UPDATE`, optimistic version check, or a single-writer queue) and explaining the throughput and failure-mode tradeoffs of each.
+</SeniorLens>
+
+<KeyTakeaways>
+- A race condition happens when correctness depends on the timing of concurrent reads and writes.
+- Check-then-act and read-modify-write are the patterns to watch for.
+- Locks serialize access; atomics retry optimistically; immutability avoids the problem.
+- In-process locks don't work across instances. Push atomicity to the shared store.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Java Concurrency in Practice** (Goetz): chapters 2–3 are timeless.
+- **Sriniously:** the concurrency episode of *Backend from First Principles*.
+- **[Deadlock Empire](https://deadlockempire.github.io/)**: an interactive game where you play the scheduler and break concurrent code.
+</GoDeeper>

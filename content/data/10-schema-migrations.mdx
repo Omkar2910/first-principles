@@ -1,0 +1,97 @@
+---
+title: Zero-Downtime Schema Migrations
+description: Changing a live database without breaking running code, using expand/contract, backfills and safe DDL.
+minutes: 10
+level: senior
+---
+
+<Problem>
+You rename a column from `name` to `full_name` and deploy. For the 3 minutes while the rollout is in progress, old instances query `name`, which no longer exists, and error. Or an `ALTER TABLE` on a 200 million-row table takes an exclusive lock and freezes every write for 40 minutes. Schema changes on live systems are where many outages come from, and there's a well-known discipline for doing them safely.
+</Problem>
+
+## The core constraint
+
+During a rolling deploy, **old and new code run at the same time against the same database**. Rollbacks also mean old code may run again *after* a migration. So every schema state must be compatible with **both** the current and the previous application version.
+
+<MentalModel>
+Renovating a **busy train station** while trains keep running. You can't close a platform and build a new one in place. You **build the new platform alongside, route trains to both, move all trains over, then demolish the old one**. Each step leaves the station fully working.
+</MentalModel>
+
+## Expand → migrate → contract
+
+Renaming `name` → `full_name`, safely:
+
+1. **Expand**: add the new column (nullable). Deploy code that **writes both** columns and still reads `name`.
+2. **Backfill**: copy existing data to `full_name` in **small batches** (e.g., 5,000 rows per transaction, with pauses) to avoid long locks and replication lag.
+3. **Switch reads**: deploy code that reads `full_name` (still writing both, for rollback safety).
+4. **Stop writing old**: deploy code that only uses `full_name`.
+5. **Contract**: drop `name` in a later release, once you're sure no code (or rollback) needs it.
+
+Five steps for a rename. That's the price of zero downtime, and why renames should be rare.
+
+## Dangerous DDL and safe alternatives (Postgres)
+
+| Risky | Why | Safer |
+|---|---|---|
+| `CREATE INDEX` | Blocks writes during build | `CREATE INDEX CONCURRENTLY` |
+| `ADD COLUMN ... NOT NULL` without default (older PG) / with volatile default | Rewrites table / fails on existing rows | Add nullable → backfill → add constraint `NOT VALID` → `VALIDATE` |
+| `ALTER COLUMN TYPE` | Full table rewrite with exclusive lock | New column + backfill + switch |
+| Adding a foreign key | Validates all rows under lock | `ADD CONSTRAINT ... NOT VALID`, then `VALIDATE CONSTRAINT` |
+| Any DDL on a busy table | Waits for an exclusive lock and queues everything behind it | Set `lock_timeout` (e.g. 3s) and retry |
+
+That last point surprises people: even a "fast" `ALTER TABLE` must acquire a lock. If a long-running query holds a conflicting lock, your ALTER waits, and **every new query queues behind your ALTER**. Always set a `lock_timeout`.
+
+## Tooling
+
+- **Flyway** or **Liquibase** for versioned, repeatable migrations in Spring projects, run in CI against a real database.
+- Large online changes in MySQL: **gh-ost** or **pt-online-schema-change**.
+- Treat migrations as code: reviewed, tested against production-like data volumes, and run separately from (and before) app deployment when possible.
+
+<Quiz
+  question="You need to drop a column. What's the safe order?"
+  options={[
+    "Drop the column, then deploy code that doesn't use it",
+    "Deploy code that no longer reads or writes the column; after it's fully rolled out (and rollback risk has passed), drop the column",
+    "Drop and deploy at the same time",
+    "Rename it first",
+  ]}
+  answer={1}
+  explanation="Old code still running during a rollout would crash if the column vanished first. Remove usage first, then drop in a later release. (Watch ORMs that SELECT all mapped columns.)"
+/>
+
+<Tradeoffs
+  good={[
+    "No downtime and safe rollbacks at every step",
+    "Batched backfills protect production performance",
+    "Versioned migrations make schema history auditable",
+  ]}
+  bad={[
+    "Multiple deploys for a single logical change",
+    "Temporary dual-write code to maintain and remove",
+    "Requires discipline; one careless DDL can still lock a table",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses Flyway/Liquibase and never edits already-applied migrations."
+  mid="Writes backward-compatible migrations; uses CONCURRENTLY and batched backfills."
+  senior="Plans multi-step expand/contract migrations on large tables with lock timeouts and monitoring."
+  lead="Sets migration review standards and tooling so risky DDL is caught before production."
+/>
+
+<SeniorLens>
+A useful review rule: **every migration PR must state whether it's compatible with the previous app version, how long it locks, and how it's rolled back.** Teams that adopt this rarely have migration outages. Teams that don't eventually learn about `lock_timeout` during an incident.
+</SeniorLens>
+
+<KeyTakeaways>
+- Old and new code coexist during deploys; every schema state must support both.
+- Expand → backfill → switch → contract.
+- Use CONCURRENTLY, NOT VALID + VALIDATE, batched backfills, and lock_timeout.
+- Remove code usage before dropping schema.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Stripe engineering blog:** *Online migrations at scale*.
+- **[strong_migrations](https://github.com/ankane/strong_migrations)** README: a great catalog of dangerous operations (Rails, but universal).
+- **Flyway** and **Liquibase** docs.
+</GoDeeper>

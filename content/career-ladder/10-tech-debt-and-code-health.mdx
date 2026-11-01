@@ -1,0 +1,74 @@
+---
+section: Level 2 · Mid → Senior (SDE2 → SDE3)
+title: "Mid → Senior: Tech Debt and Code Health"
+description: Recognizing, prioritizing and paying down technical debt, and making the business case for it.
+minutes: 10
+level: mid
+---
+
+<Problem>
+"We need a quarter to refactor everything" never gets approved. Meanwhile, every feature takes longer, bugs cluster in the same modules, and new hires take months to become productive. Mid-level engineers complain about tech debt; senior engineers **quantify it, prioritize it and pay it down strategically**, often without ever asking for a "refactoring quarter".
+</Problem>
+
+## What tech debt is (and isn't)
+
+Technical debt is the **future cost of past shortcuts or outdated decisions**: code, architecture, tests, tooling or infrastructure that makes change slower or riskier than it should be.
+
+Like financial debt, some is **deliberate and fine** (ship the MVP fast, knowingly), some is **accidental** (we didn't know better), and some comes from **the world changing** (requirements, scale, libraries moved on). The problem isn't having debt; it's **unmanaged** debt with growing interest.
+
+Not everything ugly is debt that matters. Ugly code in a module nobody touches costs nothing. **Debt matters in proportion to how often you work in that area.**
+
+<MentalModel>
+Tech debt is like a **messy workshop**. A bit of clutter while working is normal. But if every job starts with 20 minutes of finding tools, moving boxes and working around a broken bench, everything takes longer and accidents happen. You don't close the shop for a month to reorganize; you **clean the area you use most, every time you use it**, and occasionally fix the broken bench properly.
+</MentalModel>
+
+## Prioritizing: interest × frequency
+
+For each debt item, estimate:
+- **Interest**: how much it slows work or causes incidents (hours lost per change, bugs, pages, onboarding time).
+- **Frequency**: how often the team touches that area (from git history: change frequency per file/module).
+- **Cost to fix** and **risk** of fixing.
+
+High interest × high frequency → fix soon. Low frequency → probably leave it. Tools that combine **code complexity with change frequency** ("hotspot analysis") make this visible.
+
+## Paying it down
+
+- **Boy-scout rule**: leave code a bit better each time you touch it (small refactors in feature PRs, kept separate in commits).
+- **Attach to features**: "To build feature X well, we'll first extract the pricing module (+3 days)." Debt work tied to delivery gets approved.
+- **Reserve capacity**: many teams allocate ~10–20% of each sprint to engineering health.
+- **Strangler fig** for big rewrites: replace incrementally behind an interface; never "big bang" rewrite.
+- **Prevent new debt**: linters, architecture tests, PR templates, design reviews, definition of done that includes tests and docs.
+
+## Making the business case
+
+Translate debt into outcomes leaders care about:
+
+> "Changes to the billing module take ~3× longer than elsewhere (12 days vs 4 for comparable tickets last quarter) and caused 5 of our 9 incidents. Extracting the tax calculation behind an interface with tests is ~2 weeks of work. It would cut billing change time roughly in half, which matters because the Q1 roadmap has 6 billing features."
+
+Data + connection to upcoming roadmap + scoped proposal = approval.
+
+<Scenario
+  situation="You want to fix a messy, untested module that the team changes every sprint. Your PM is focused on a deadline. How do you get the work done?"
+  choices={[
+    { text: "Wait for a refactoring quarter", feedback: "That quarter rarely comes, and the debt keeps compounding meanwhile." },
+    { text: "Rewrite the module secretly over a weekend", feedback: "Unreviewed big-bang rewrites of hot code are risky and erode trust." },
+    { text: "Bring data (time per change, incidents), propose a scoped, incremental plan tied to the next feature that touches the module, and add characterization tests first", feedback: "Incremental, data-backed and tied to delivery: the way debt actually gets paid down in real teams.", best: true },
+  ]}
+/>
+
+<SeniorLens>
+The senior skill isn't hating bad code. It's **economic judgment**: knowing which debt to pay, which to live with, and which to never take on. Seniors also accept deliberate debt when it's the right business call (ship the experiment!), as long as it's **recorded** with a plan to revisit.
+</SeniorLens>
+
+<KeyTakeaways>
+- Debt = future cost of past shortcuts or outdated decisions; it matters where you work often.
+- Prioritize by interest × frequency vs cost/risk.
+- Pay down incrementally: boy-scout rule, tie to features, reserve capacity, strangler fig.
+- Make the case with data and roadmap impact; record deliberate debt.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Martin Fowler, *Technical Debt Quadrant*** and *Refactoring* (2nd ed.).
+- **Michael Feathers, *Working Effectively with Legacy Code***: characterization tests and safe change.
+- **Adam Tornhill, *Your Code as a Crime Scene***: hotspot analysis.
+</GoDeeper>

@@ -1,0 +1,110 @@
+---
+title: CDNs and Edge Computing
+description: Serving content from servers near your users. How CDNs work, cache headers, invalidation, and what runs at the edge.
+minutes: 9
+level: mid
+---
+
+<Problem>
+Your servers are in Virginia. A user in Mumbai loads your homepage: HTML, 40 JavaScript and CSS files, 30 images. Each round trip is ~200 ms. Even with a fast server, the page takes 4 seconds. You can't make light travel faster, but you can **move the content closer**. That's a Content Delivery Network.
+</Problem>
+
+## How a CDN works
+
+A CDN is a global network of **edge servers** (points of presence, PoPs) in hundreds of cities. Users are routed (via DNS or anycast) to the nearest one.
+
+```text
+User (Mumbai) → CDN edge (Mumbai) ─ cache HIT → response in ~20 ms
+                                   └ cache MISS → origin (Virginia) → cache it → respond
+```
+
+After the first miss, every other user near that edge gets the cached copy. Your origin sees a tiny fraction of the traffic.
+
+<MentalModel>
+A CDN is a **chain of local warehouses**. Instead of shipping every order from the central factory overseas, popular items are pre-stocked in warehouses in every city. Customers get them the same day; the factory only ships to restock the warehouses.
+</MentalModel>
+
+## What to put on a CDN
+
+- **Static assets** (JS, CSS, fonts, images, video): always. Use **content-hashed filenames** (`app.3f9a1c.js`) with a very long TTL, so a new deploy produces new URLs and nothing needs invalidating.
+- **Public, cacheable pages and API responses**: product pages, articles, public catalog APIs, with short TTLs.
+- **Large downloads and video**: CDNs are built for this.
+- **Not** private, per-user responses (unless you know exactly what you're doing with cache keys).
+
+## Controlling it with HTTP headers
+
+```http
+# Hashed static asset: cache "forever"
+Cache-Control: public, max-age=31536000, immutable
+
+# Public product page: CDN caches 60s, browsers 0; serve stale while refreshing
+Cache-Control: public, max-age=0, s-maxage=60, stale-while-revalidate=300
+
+# Private user data: never cache in shared caches
+Cache-Control: private, no-store
+```
+
+`s-maxage` applies to shared caches (CDNs); `max-age` to browsers. `Vary: Accept-Encoding` (and carefully, other headers) tells caches which request headers change the response. Get `Vary` or cache keys wrong and you can **serve one user's page to another**, a real and serious class of incident.
+
+## Invalidation
+
+- **Versioned URLs** (best): new content gets a new URL; old one simply ages out.
+- **Purge API**: tell the CDN to drop a path or tag (Fastly surrogate keys, Cloudflare cache tags). Useful for "product updated, purge its page".
+- **Short TTLs + stale-while-revalidate** for content that changes unpredictably.
+
+## Beyond caching: the edge
+
+Modern CDNs also provide:
+- **TLS termination** close to users (faster handshakes).
+- **DDoS protection and WAF**: absorb attacks before they reach you.
+- **Edge compute** (Cloudflare Workers, Lambda@Edge, Vercel/Netlify edge functions): run code at the PoP for redirects, auth checks, A/B bucketing, personalization or even full API responses.
+- **Image optimization** on the fly (resize, WebP/AVIF).
+
+<Quiz
+  question="After a deploy, some users still get the old JavaScript for hours. Assets are named app.js with max-age=86400. What's the robust fix?"
+  options={[
+    "Purge the whole CDN on every deploy",
+    "Content-hashed filenames (app.3f9a1c.js) referenced from HTML, with long immutable caching on assets and short caching on the HTML",
+    "Set max-age=0 on everything",
+    "Stop using a CDN",
+  ]}
+  answer={1}
+  explanation="A new build creates new URLs, so caches never serve the wrong version. Only the small HTML entry point needs a short TTL."
+/>
+
+<Tradeoffs
+  good={[
+    "Massive latency reduction for distant users",
+    "Offloads most traffic from origin servers",
+    "DDoS protection, TLS at the edge, edge compute",
+  ]}
+  bad={[
+    "Stale content and invalidation complexity",
+    "Misconfigured cache keys can leak private data",
+    "Cost at very high bandwidth; another vendor dependency",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows static assets belong on a CDN and what Cache-Control does."
+  mid="Uses hashed asset names, s-maxage, stale-while-revalidate and purge APIs correctly."
+  senior="Designs edge caching for dynamic content, cache keys and Vary safely; uses edge compute where it pays."
+  lead="Owns the edge strategy (CDN, WAF, DDoS), vendor choice and cost."
+/>
+
+<SeniorLens>
+Seniors treat CDN configuration as **security-sensitive code**: cache keys, `Vary` and `private` headers are reviewed like auth logic, because a mistake there can show one user's account page to thousands of others. Several major companies have had exactly this incident.
+</SeniorLens>
+
+<KeyTakeaways>
+- CDNs cache content at edges near users; most requests never reach your origin.
+- Hashed filenames + long TTLs for assets; short TTLs or purges for pages.
+- Cache-Control (max-age, s-maxage, stale-while-revalidate, private) is your control panel.
+- Edges also do TLS, DDoS/WAF and compute.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[MDN: HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching)**.
+- **Cloudflare Learning Center:** What is a CDN?
+- **Fastly blog:** surrogate keys and purging.
+</GoDeeper>

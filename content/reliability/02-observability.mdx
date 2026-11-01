@@ -1,0 +1,117 @@
+---
+title: "Observability: Logs, Metrics and Traces"
+description: The three signals, what each is for, RED/USE/golden signals, cardinality, and OpenTelemetry.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Checkout latency jumped from 300 ms to 4 s. Is it the database? The payment provider? One bad pod? A specific customer's huge cart? With only CPU graphs and grep, you'll spend an hour guessing. **Observability** is the ability to ask arbitrary new questions about your system's behavior from the outside, and get answers in minutes.
+</Problem>
+
+## The three signals
+
+| Signal | What | Strengths | Weaknesses | Answers |
+|---|---|---|---|---|
+| **Metrics** | Numeric time series (counters, gauges, histograms) | Cheap, fast, great for alerting and trends | Aggregated: lose individual details; cardinality limits | "Is something wrong? How much? Since when?" |
+| **Logs** | Timestamped event records | Rich detail and context | Expensive at volume; hard to aggregate | "What exactly happened in this case?" |
+| **Traces** | A request's path across services as a tree of spans | Shows where time goes across services | Sampling; instrumentation effort | "Where is the slow/failing part of this request?" |
+
+They work together: **alert on metrics → find a slow trace → read the logs for that trace ID**.
+
+<MentalModel>
+Diagnosing a city's traffic problem. **Metrics** are the traffic dashboard: average speed per road, number of cars, so you know something's wrong and where to look. **Traces** are following one car's GPS route end to end to see exactly which intersections delayed it. **Logs** are the dashcam footage: the detailed record of what happened at a specific moment.
+</MentalModel>
+
+## What to measure: standard frameworks
+
+**RED** (for request-driven services), on every endpoint and dependency:
+- **R**ate: requests per second
+- **E**rrors: failed requests per second (or ratio)
+- **D**uration: latency distribution (**percentiles**: p50, p95, p99, not averages)
+
+**USE** (for resources: CPU, memory, disks, pools, queues):
+- **U**tilization, **S**aturation (queueing), **E**rrors
+
+**Google's four golden signals**: latency, traffic, errors, saturation.
+
+## Percentiles, not averages
+
+Averages hide pain. If p50 = 80 ms and p99 = 3 s, 1 in 100 requests is terrible, and a page making 20 backend calls hits the p99 on ~18% of loads. Use **histograms** to compute percentiles correctly across instances (you can't average percentiles).
+
+## Cardinality: the cost trap
+
+Every unique combination of metric labels is a separate time series. `http_requests_total{endpoint, status, method}` is fine. Adding `userId` or `orderId` as a label creates millions of series and melts your metrics system (and bill). High-cardinality detail belongs in **logs and traces**, not metric labels.
+
+## Distributed tracing
+
+Each request gets a **trace ID**; each operation (HTTP handler, DB query, outbound call) is a **span** with timing and attributes. Context propagates via the `traceparent` header.
+
+```text
+Trace 4bf92f… (total 2,140 ms)
+├─ GET /checkout                                order-svc     2,140 ms
+│  ├─ SELECT cart_items …                       postgres         12 ms
+│  ├─ POST /price                               pricing-svc      45 ms
+│  └─ POST /charges                             payment-svc   2,050 ms  ◀── here
+│     └─ POST https://api.psp.com/v1/charges    external      2,031 ms  ◀── the PSP is slow
+```
+
+## OpenTelemetry
+
+**OpenTelemetry (OTel)** is the vendor-neutral standard for generating and exporting all three signals. Instrument once and send to any backend (Grafana/Prometheus/Tempo/Loki, Datadog, Honeycomb, New Relic, CloudWatch). For Java, the **OTel Java agent** auto-instruments Spring, JDBC, HTTP clients and Kafka with zero code changes. Spring Boot's Micrometer integrates too.
+
+```java
+// Custom span + attribute for business context
+@WithSpan("pricing.calculate")
+Price calculate(@SpanAttribute("cart.items") int itemCount, Cart cart) { ... }
+```
+
+<Quiz
+  question="You want to find which specific customers experience slow checkouts. Where should customerId go?"
+  options={[
+    "As a label on the latency metric",
+    "As an attribute on traces/spans and a field in structured logs, not as a metric label (high cardinality)",
+    "Nowhere; it's not useful",
+    "In the URL path only",
+  ]}
+  answer={1}
+  explanation="Per-customer metric labels would create a time series per customer. Traces and logs handle high-cardinality fields well and let you query slow requests by customer."
+/>
+
+<Tradeoffs
+  good={[
+    "Metrics: cheap, real-time alerting and trends",
+    "Traces: pinpoint latency and failures across services",
+    "Logs: full detail for root cause",
+    "OpenTelemetry: one instrumentation, any backend",
+  ]}
+  bad={[
+    "Telemetry volume is expensive; needs sampling and retention policies",
+    "High-cardinality labels can break metrics systems",
+    "Incomplete context propagation leaves gaps in traces",
+  ]}
+/>
+
+<LevelTags
+  junior="Adds structured logs and uses dashboards to check their service."
+  mid="Instruments RED metrics with histograms, uses traces to debug latency, propagates context."
+  senior="Designs observability strategy: SLIs, sampling, cardinality control, cross-service tracing."
+  lead="Owns observability platform and budget; makes 'observable by default' part of service templates."
+/>
+
+<SeniorLens>
+The test of observability isn't the number of dashboards. It's **how fast you can answer a question you didn't anticipate**. Seniors push for high-context events (traces/wide structured logs with many attributes) over hundreds of pre-built graphs, because the next incident will always be a question nobody built a dashboard for.
+</SeniorLens>
+
+<KeyTakeaways>
+- Metrics to detect, traces to locate, logs to explain.
+- RED for services, USE for resources; percentiles not averages.
+- Keep metric label cardinality low; put IDs in traces/logs.
+- OpenTelemetry for vendor-neutral instrumentation; propagate trace context.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Charity Majors et al., *Observability Engineering***.
+- **[OpenTelemetry docs](https://opentelemetry.io/docs/)**, Java agent section.
+- **Google SRE Book:** *Monitoring Distributed Systems* (golden signals).
+</GoDeeper>

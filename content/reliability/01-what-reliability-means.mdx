@@ -1,0 +1,88 @@
+---
+title: What Reliability Means
+description: Availability, the nines, how dependencies compound, and designing for failure instead of hoping against it.
+minutes: 10
+level: mid
+---
+
+<Problem>
+"The system must be highly available." How available? 99.9% allows 43 minutes of downtime a month; 99.999% allows 26 seconds. The difference in cost and engineering effort is enormous. And your service's availability can't exceed the product of everything it depends on. Reliability starts with **being precise about what you're promising** and understanding the math behind it.
+</Problem>
+
+## Reliability, availability, durability
+
+- **Availability**: fraction of time (or requests) the system serves correctly. "Is it up?"
+- **Reliability**: performs correctly over time, including correct results, not just responding.
+- **Durability**: data, once stored, isn't lost (S3's famous "11 nines" is durability, not availability).
+- **Latency** is part of reliability too: a page that takes 30 seconds is effectively down for users.
+
+Measure availability from the **user's point of view**: successful requests ÷ total requests, as seen at the edge, not "the process is running".
+
+## The nines and dependency math
+
+<AvailabilityCalculator />
+
+Two rules fall out of the math:
+1. **Serial dependencies multiply**: four components at 99.9% each give ~99.6% end to end. Every hard dependency you add lowers your ceiling.
+2. **Redundancy adds nines**, but only if failures are **independent**. Two replicas in the same AZ running the same bad deploy fail together.
+
+## Designing for failure
+
+Assume every component will fail. For each, decide in advance:
+- **Redundancy**: N+1 instances, multi-AZ, replicas.
+- **Isolation**: bulkheads and cells so one failure doesn't spread (one bad tenant, one bad shard).
+- **Graceful degradation**: optional features turn off; core flows continue (lesson 5).
+- **Fast detection and recovery**: health checks, alerts, automated failover, quick rollbacks. **MTTR** (mean time to recover) often matters more than MTBF (mean time between failures).
+- **Avoid making soft dependencies hard**: if recommendations are down, the product page should still load.
+
+<MentalModel>
+A chain is only as strong as its weakest link, and a **longer chain has more links to break**. Reliability engineering is shortening the chain (fewer hard dependencies), doubling up the weakest links (redundancy), and making sure a broken link doesn't drop everything (degradation). Plus having a spare link ready to snap in fast (recovery).
+</MentalModel>
+
+## Blast radius and cells
+
+Large systems use **cell-based architecture**: split users/tenants into independent cells (complete stacks), each serving a subset. A bad deploy or overload affects one cell's users, not everyone. Deploy changes cell by cell. AWS uses this extensively, and so does Slack.
+
+<Quiz
+  question="Your service depends synchronously on 5 internal services, each at 99.9% availability. What's your best possible availability (assuming independent failures)?"
+  options={["99.9%", "~99.5%", "99.99%", "~95%"]}
+  answer={1}
+  explanation="0.999⁵ ≈ 0.995. Each hard dependency lowers your ceiling. Reduce hard dependencies, add caching/fallbacks, or make calls asynchronous."
+/>
+
+<Tradeoffs
+  good={[
+    "Precise targets focus effort where it matters",
+    "Redundancy and isolation contain failures",
+    "Fast recovery limits user impact even when failures happen",
+  ]}
+  bad={[
+    "Each extra nine costs roughly 10× more effort",
+    "Redundancy adds cost and complexity",
+    "Correlated failures undermine naive redundancy math",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows the nines roughly and that dependencies affect availability."
+  mid="Measures availability from the user's view; designs multi-AZ redundancy."
+  senior="Reduces hard dependencies, designs degradation and cells, optimizes for MTTR."
+  lead="Sets availability targets with the business based on cost/benefit, not aspiration."
+/>
+
+<SeniorLens>
+"Five nines" is rarely the right target. Users' own networks and devices are less reliable than 99.99%, so they can't perceive the difference, but they pay for it in slower feature delivery. Seniors negotiate targets **per user journey** (checkout: very high; admin reports: lower) and invest accordingly.
+</SeniorLens>
+
+<KeyTakeaways>
+- Availability is measured from the user's perspective, per request.
+- Serial dependencies multiply; independent redundancy adds nines.
+- Design for failure: redundancy, isolation, degradation, fast recovery.
+- Pick targets per journey based on cost and user perception.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Book**, chapters 3–4 (Embracing Risk, SLOs). Free online.
+- **AWS Builders' Library:** *Workload isolation using shuffle-sharding* and cell-based architecture.
+- **Ben Treynor Sloss, *The Calculus of Service Availability*** (ACM Queue).
+</GoDeeper>

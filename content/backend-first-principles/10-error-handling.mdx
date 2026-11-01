@@ -1,0 +1,131 @@
+---
+title: Error Handling
+description: Expected vs unexpected errors, consistent error responses, and failing in ways clients and operators can act on.
+minutes: 10
+level: mid
+---
+
+<Problem>
+A payment call fails. Your API returns `500 {"message": "NullPointerException at PaymentService.java:88"}`. The client doesn't know whether to retry. Support can't tell users what happened. An attacker learns your stack. And the logs show the same exception 4,000 times with no context. Error handling isn't a `try/catch` detail; it's **a contract with clients and a lifeline for operators**.
+</Problem>
+
+## Two kinds of errors
+
+| | **Expected (domain) errors** | **Unexpected (bugs/infra) errors** |
+|---|---|---|
+| Examples | Not found, out of stock, invalid input, insufficient funds, forbidden | NPE, DB down, timeout, OOM, bug |
+| Status | 4xx (sometimes 409/422) | 5xx |
+| Client action | Show message, fix input, don't retry blindly | Maybe retry with backoff |
+| Logging | INFO/WARN, no stack trace needed | ERROR with stack trace, alert if rate spikes |
+| Message to client | Specific and helpful | Generic: "Something went wrong" + request ID |
+
+Mixing them up causes most error-handling pain: alerts firing for user typos, or real bugs hidden as 400s.
+
+<MentalModel>
+A restaurant. "We're out of salmon" is an **expected error**: tell the customer clearly and suggest something else. "The kitchen is on fire" is an **unexpected error**: tell the customer politely that something went wrong, and set off the alarm for the staff. You don't give customers the fire department's incident report.
+</MentalModel>
+
+## A consistent error format
+
+Pick one shape and use it everywhere. **RFC 9457 Problem Details** is a good standard:
+
+```json
+{
+  "type": "https://api.shop.com/errors/out-of-stock",
+  "title": "Product out of stock",
+  "status": 409,
+  "detail": "Only 2 units of 'Blue Mug' are available.",
+  "code": "OUT_OF_STOCK",
+  "requestId": "a1b2c3"
+}
+```
+
+A stable machine-readable `code` lets clients branch logic; `detail` is for humans; `requestId` connects a user's bug report to your logs.
+
+## Centralized handling in Spring
+
+Throw meaningful domain exceptions in services; translate them to HTTP in one place:
+
+```java
+public class BusinessException extends RuntimeException {
+    private final String code; private final HttpStatus status;
+    // ...
+}
+
+@RestControllerAdvice
+class ApiExceptionHandler {
+    @ExceptionHandler(BusinessException.class)
+    ProblemDetail business(BusinessException e) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(e.status(), e.getMessage());
+        pd.setProperty("code", e.code());
+        return pd;                                   // logged at WARN by a filter, no stack trace
+    }
+
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpected(Exception e) {
+        log.error("Unhandled error", e);              // full stack trace, with requestId from MDC
+        return ProblemDetail.forStatusAndDetail(INTERNAL_SERVER_ERROR, "Something went wrong");
+    }
+}
+```
+
+Controllers stay clean: no try/catch, just business calls.
+
+## Rules of thumb
+
+- **Fail fast** on invalid state; don't limp along with half-initialized objects.
+- **Don't swallow exceptions** (`catch (Exception e) {}`). If you catch, either handle it fully or rethrow with context.
+- **Add context when wrapping**: `throw new PaymentException("charge failed for order " + id, e)`. Keep the cause.
+- **Never leak internals** (stack traces, SQL, hostnames) in responses.
+- **Set timeouts on every outbound call**: a missing timeout turns a slow dependency into hung threads, which is worse than an error.
+- **Distinguish retryable from non-retryable** downstream failures (timeouts/503 vs 400/404).
+- **Handle partial failure explicitly**: if the order saved but the email failed, is that an error for the user? (Usually no: log it and retry async.)
+
+<Quiz
+  question="A downstream inventory service returns 404 for a product ID your user requested. What should your API return?"
+  options={[
+    "500, because a dependency failed",
+    "Depends on meaning: if the product genuinely doesn't exist, a 404 (or 422) to your client; don't blindly propagate as 500",
+    "200 with an empty body",
+    "Retry the call 5 times",
+  ]}
+  answer={1}
+  explanation="Translate errors into *your* API's semantics. A downstream 404 for user-supplied input is an expected client-facing error. A downstream timeout is an unexpected error (5xx, maybe retry)."
+/>
+
+<Tradeoffs
+  good={[
+    "Consistent format: clients handle errors generically",
+    "Central handler: one place to log, map and redact",
+    "Expected vs unexpected split: clean alerts and helpful messages",
+  ]}
+  bad={[
+    "Exception hierarchies can sprawl; keep a few well-chosen types",
+    "Over-generic messages frustrate users; over-specific ones leak information",
+    "Exceptions for control flow can hide logic; some teams prefer Result types",
+  ]}
+/>
+
+<LevelTags
+  junior="Returns proper 4xx/5xx codes, doesn't swallow exceptions, doesn't leak stack traces."
+  mid="Implements centralized handling, a consistent error format, timeouts and request IDs."
+  senior="Designs retry semantics and partial-failure behavior across service boundaries."
+  lead="Defines org-wide error contracts and alerting policy (what pages a human vs what's just logged)."
+/>
+
+<SeniorLens>
+Ask "**who acts on this error, and what do they need?**" The client needs a code and whether to retry. The user needs a human message. The on-call engineer needs a stack trace, request ID and context, and only gets paged when the *rate* of unexpected errors changes. Designing for all three audiences is what separates thoughtful error handling from `catch (Exception e) { return 500; }`.
+</SeniorLens>
+
+<KeyTakeaways>
+- Separate expected (4xx, domain) from unexpected (5xx, bugs/infra) errors.
+- One error format everywhere, with a machine code and request ID.
+- Handle centrally; keep controllers clean; never leak internals.
+- Timeouts everywhere; know which failures are retryable.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the error-handling episode.
+- **[RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457)** and Spring's `ProblemDetail` support.
+- **Google SRE Book**, chapter on handling overload (for retry semantics).
+</GoDeeper>

@@ -1,0 +1,106 @@
+---
+title: Capacity Planning, Load Testing and Chaos Engineering
+description: Knowing your limits before users find them, and proving your system survives the failures you designed for.
+minutes: 10
+level: senior
+---
+
+<Problem>
+"Can we handle Black Friday?" "What happens if an AZ goes down?" "Will the new feature double DB load?" If the honest answer is "we'll find out", users will find out first. **Capacity planning** tells you how much headroom you have, **load testing** verifies it, and **chaos engineering** proves that your redundancy and failover actually work.
+</Problem>
+
+## Capacity planning
+
+1. **Forecast demand**: organic growth trends + known events (launches, sales, marketing, seasonality).
+2. **Know per-unit capacity**: max sustainable throughput per instance/shard while meeting SLOs (from load tests, not guesses).
+3. **Find the bottleneck resource** for each tier: CPU, memory, DB connections, IOPS, downstream quotas, third-party rate limits.
+4. **Plan headroom**: N+1 or N+2 for failures (can you lose an AZ and still serve peak?) + buffer for spikes. Commonly target ≤ 60–70% utilization at peak.
+5. **Lead times**: quota increases, reserved capacity and DB upgrades take time. Request them before you need them.
+
+```text
+Peak forecast:    12,000 RPS (Black Friday, 3× normal)
+Per pod at SLO:   400 RPS          → 30 pods needed
+AZ failure (1/3): need 30 pods in 2 AZs → 45 pods total
+DB:               writes 2,500/s at peak; primary tested to 6,000/s ✓
+                  connections: 45 pods × 10 = 450 > max_connections 400 ✗ → PgBouncer
+```
+
+## Load testing
+
+- **Types**: load (expected peak), **stress** (beyond peak to find the breaking point and failure behavior), **soak** (hours at load: leaks, GC, connection churn), **spike** (sudden jumps).
+- **Realistic traffic**: production-like request mix, data volumes, cache hit rates and think times. Testing one endpoint with one user ID tests your cache, not your system.
+- **Environment**: production-like, or carefully in production (with synthetic users/tenants and kill switches).
+- **Tools**: k6, Gatling (great for JVM teams), Locust, JMeter, vegeta.
+- **Watch**: latency percentiles, error rate, saturation (pools, queues, CPU), and **where it breaks first**.
+
+```javascript
+// k6: ramp to 2,000 virtual users, assert SLOs
+export const options = {
+  stages: [{ duration: '5m', target: 2000 }, { duration: '20m', target: 2000 }, { duration: '2m', target: 0 }],
+  thresholds: { http_req_failed: ['rate<0.001'], http_req_duration: ['p(99)<500'] },
+};
+```
+
+## Chaos engineering
+
+Deliberately inject failures to verify the system behaves as designed:
+- Kill instances/pods; terminate a node; simulate an AZ outage.
+- Add latency or errors to a dependency; drop packets; fill a disk; expire a certificate in staging.
+- Fail over the database; throttle a third-party API.
+
+The method: **hypothesis** ("if one Redis replica dies, p99 stays under 300 ms and no errors occur") → **minimize blast radius** (start in staging, small scope, abort switch) → **run** → **observe** → **fix** what surprised you → automate.
+
+**Game days**: scheduled exercises where the team simulates a major failure and practices the response, testing runbooks, alerts and people as much as software.
+
+<MentalModel>
+Capacity planning is **checking the bridge's weight rating** before the parade. Load testing is **driving trucks across** to confirm the rating. Chaos engineering is **closing one lane on purpose** during a quiet hour to confirm traffic really reroutes the way the plans say. Fire drills exist because the real fire is a bad time to learn where the exits are.
+</MentalModel>
+
+<Quiz
+  question="You run 3 app instances, one per AZ, each at 70% CPU at peak. Is that enough to survive an AZ outage at peak?"
+  options={[
+    "Yes, 70% leaves 30% headroom",
+    "No: losing one AZ shifts its load to two instances (~105% each), so they'd saturate. You need capacity to serve peak with N−1 AZs",
+    "Yes, autoscaling handles it instantly",
+    "It depends on the database only",
+  ]}
+  answer={1}
+  explanation="Headroom must account for failure scenarios. 3 × 70% = 210% of one instance's capacity, spread over 2 instances = 105% each. Plan for peak on N−1 (and remember autoscaling takes minutes)."
+/>
+
+<Tradeoffs
+  good={[
+    "Find limits and failure modes before users do",
+    "Confidence for big events and architecture changes",
+    "Verified failover instead of assumed failover",
+  ]}
+  bad={[
+    "Realistic load tests and environments take effort to build",
+    "Chaos experiments carry risk if blast radius isn't controlled",
+    "Headroom costs money; balance against risk",
+  ]}
+/>
+
+<LevelTags
+  junior="Runs existing load tests and reads their results."
+  mid="Writes realistic load tests with SLO thresholds; finds bottlenecks."
+  senior="Owns capacity plans with failure headroom; designs and runs chaos experiments and game days."
+  lead="Makes capacity reviews and game days part of the operating rhythm before major events."
+/>
+
+<SeniorLens>
+Seniors ask "**when did we last actually test this?**" about every failover mechanism. Database failover, AZ evacuation, backup restore, DR region. If the answer is "never" or "two years ago", it should be treated as broken until proven otherwise. Untested recovery paths are the most common source of incidents that last hours instead of minutes.
+</SeniorLens>
+
+<KeyTakeaways>
+- Forecast demand, know per-unit capacity, find bottlenecks, plan N−1 headroom.
+- Load, stress, soak and spike tests with realistic traffic and SLO thresholds.
+- Chaos engineering: hypothesis, small blast radius, observe, fix, automate.
+- Regularly exercise failover, restores and runbooks (game days).
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Book:** *Software Engineering in SRE*, capacity planning sections.
+- **[Principles of Chaos Engineering](https://principlesofchaos.org/)** and Netflix's Chaos Monkey history.
+- **[k6 docs](https://grafana.com/docs/k6/latest/)** / **[Gatling docs](https://docs.gatling.io/)**.
+</GoDeeper>

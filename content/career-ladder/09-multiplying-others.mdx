@@ -1,0 +1,68 @@
+---
+section: Level 2 · Mid → Senior (SDE2 → SDE3)
+title: "Mid → Senior: Multiplying Others"
+description: Code review as teaching, mentoring, onboarding and knowledge sharing. Making the whole team better.
+minutes: 10
+level: mid
+---
+
+<Problem>
+A brilliant engineer who ships a lot but whose knowledge lives only in their head, who leaves curt review comments, and who never helps newcomers is a **bottleneck**, not a senior. Senior engineers create impact beyond their own output by making everyone around them more effective. The math is simple: helping five teammates be 20% better beats being 50% better yourself.
+</Problem>
+
+## Code review that teaches
+
+Good reviews catch bugs **and** grow people:
+- **Prioritize**: correctness, security, design and maintainability over style nits (let linters handle formatting).
+- **Label severity**: "**blocking**: this can double-charge on retry", "**suggestion**: consider extracting this", "**nit**: naming".
+- **Explain why**, and link to docs or examples: "We use idempotency keys here because SQS redelivers (see payments design doc)."
+- **Ask questions** instead of commanding: "What happens if this list is empty?" invites thinking.
+- **Praise specifics**: "Nice use of a sealed interface here; it makes the states really clear."
+- **Be timely**: a fast review is a gift; a 4-day wait blocks someone.
+- **Pair or call** when a review becomes a long thread.
+
+<MentalModel>
+A senior engineer is like a **good coach on a sports team**. They still play, but their biggest contribution is making every other player better: showing techniques, giving specific feedback, building confidence, and creating a team that wins even when the coach isn't on the field.
+</MentalModel>
+
+## Mentoring
+
+- **Regular 1:1 time** with mentees (even 30 min every two weeks).
+- **Ask before telling**: "What have you tried? What do you think is happening?" builds problem-solving rather than dependency.
+- **Give stretch work with support**: let them own something slightly beyond their comfort zone, with you as a safety net.
+- **Share context**, not just answers: why the system is the way it is, how decisions get made, who to talk to.
+- **Sponsor**: mention their good work in public forums and to your manager. Visibility is a huge career accelerator, especially for underrepresented engineers.
+
+## Scaling knowledge
+
+- **Write it down**: onboarding guides, architecture overviews, runbooks, ADRs. Every question you answer twice deserves a doc.
+- **Teach in groups**: lunch-and-learns, design review walkthroughs, incident review sessions.
+- **Improve the project instructions file** for AI agents and humans alike.
+- **Make the right thing easy**: templates, shared libraries, linters, CI checks. Encode your knowledge in tools.
+- **Onboard new hires well**: a great first month (a starter task that ships in week 1, a buddy, a map of the system) pays off for years.
+
+<Scenario
+  situation="A junior teammate submits a PR with a subtle race condition and several style issues. You could fix it yourself in 10 minutes. What's the most senior response?"
+  choices={[
+    { text: "Push your own fix to their branch and approve it", feedback: "Fast, but they don't learn to see race conditions, and they'll likely write the next one." },
+    { text: "Leave a blocking comment explaining the race with a concrete interleaving, ask how they'd fix it, mark style items as nits (or point to the linter), and offer to pair for 15 minutes", feedback: "You protect the codebase and grow their skills in one move, while respecting their ownership. That's multiplying others.", best: true },
+    { text: "Leave 25 comments listing every problem in detail", feedback: "Thorough but overwhelming; without prioritization the critical issue gets lost among nits." },
+  ]}
+/>
+
+<SeniorLens>
+In promotion discussions, "**makes the team better**" needs evidence just like technical work: "Mentored two engineers through their first on-call; both now lead incidents." "Wrote the service onboarding guide; ramp-up time for new hires dropped from 6 to 3 weeks." "Introduced the PR template and review guidelines adopted across the org." Track these outcomes.
+</SeniorLens>
+
+<KeyTakeaways>
+- Senior impact = your output + how much better you make others.
+- Reviews: prioritize, label severity, explain why, ask questions, be timely, praise specifics.
+- Mentor by asking, stretching and sponsoring.
+- Scale knowledge with docs, talks, templates and tooling.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google Engineering Practices:** *How to do a code review* (the reviewer's guide).
+- **Lara Hogan, *Resilient Management*** (useful for non-managers who mentor).
+- **Kim Scott, *Radical Candor***: caring personally while challenging directly.
+</GoDeeper>

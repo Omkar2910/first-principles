@@ -1,0 +1,126 @@
+---
+title: Configuration and Logging
+description: Running one build in every environment, managing secrets, and writing logs that actually help at 3am.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Staging works, production doesn't, because someone hardcoded a URL. A database password sits in Git history forever. During an incident, you grep through 2 GB of logs that say `"Processing..."` with no user ID, no request ID and no error context. **Configuration** and **logging** are unglamorous, and they decide whether your service is operable.
+</Problem>
+
+## Configuration
+
+**Principle: build once, configure per environment.** The same artifact (JAR, container image) runs in dev, staging and prod; only configuration differs.
+
+Layers of configuration, from least to most specific:
+1. **Defaults in code / `application.yml`**: sensible values for everything.
+2. **Profile/environment overrides**: `application-prod.yml`, or env vars like `SPRING_DATASOURCE_URL`.
+3. **Secrets**: injected at runtime from a **secrets manager** (AWS Secrets Manager, Vault, Kubernetes Secrets), never committed.
+4. **Dynamic config / feature flags**: change behavior without deploying (LaunchDarkly, Unleash, a config service).
+
+```java
+@ConfigurationProperties(prefix = "payments")
+@Validated
+public record PaymentsConfig(
+    @NotNull URI baseUrl,
+    @NotNull Duration timeout,          // "2s" in YAML → Duration
+    @Min(0) @Max(5) int maxRetries) {}
+```
+
+Typed, validated config **fails at startup** if something is missing, which is much better than failing on the first payment at 2am.
+
+**Secrets rules**: never in Git (scan with gitleaks/trufflehog), never in logs, rotate regularly, least-privilege access. If one leaks, **rotate first**, then clean up.
+
+## Logging: who is it for?
+
+Logs are for **humans debugging incidents** and for **machines searching and alerting**. Write them for both.
+
+### Structured, not prose
+
+```text
+❌  Payment failed for user
+✅  {"ts":"2026-10-11T09:30:12Z","level":"ERROR","msg":"payment charge failed",
+     "requestId":"a1b2c3","userId":"42","orderId":"9001","provider":"stripe",
+     "errorCode":"card_declined","durationMs":812}
+```
+
+JSON logs let you query `errorCode:card_declined AND provider:stripe` across all instances.
+
+### Levels with meaning
+
+| Level | Use for | Example |
+|---|---|---|
+| ERROR | Something failed that needs attention | Unhandled exception, data inconsistency |
+| WARN | Unexpected but handled; might need attention if frequent | Retry succeeded, fallback used |
+| INFO | Significant business/lifecycle events | Order placed, service started |
+| DEBUG | Details for development/troubleshooting | Request payloads (sanitized), branch decisions |
+
+Production usually runs at INFO. Make levels changeable at runtime (Spring Boot Actuator `/loggers`).
+
+### What to always include
+
+- **Request/trace ID** (from MDC; see the middleware lesson) so you can follow one request.
+- **Entity IDs** (userId, orderId) so you can find a specific customer's problem.
+- **Outcome and duration** for external calls.
+
+### What to never log
+
+Passwords, tokens, full card numbers, secrets, and sensitive personal data unless your policy allows (and then masked). Log volume costs real money: don't log every cache hit at INFO.
+
+<MentalModel>
+Logs are an **airplane's black box**. Nobody reads it on a normal flight. After a crash, investigators need it to have recorded the right signals, with timestamps, in a format they can analyze. A black box full of "Flying..." messages is useless.
+</MentalModel>
+
+<Quiz
+  question="During an incident you know one customer's order failed but can't find the related log lines among millions. What logging practice would have helped most?"
+  options={[
+    "Logging more at DEBUG level",
+    "Structured logs including orderId/userId and a request ID on every line",
+    "Writing logs to a local file",
+    "Using System.out.println",
+  ]}
+  answer={1}
+  explanation="With orderId on the failure log and a requestId on every line, you search orderId:9001 → get the requestId → see the whole story of that request across services."
+/>
+
+## Logs are one of three signals
+
+Logs (detailed events), **metrics** (cheap aggregated numbers: request rate, error rate, latency percentiles) and **traces** (one request's path across services). Track 8 covers observability fully. The short version: alert on **metrics**, investigate with **traces and logs**.
+
+<Tradeoffs
+  good={[
+    "Externalized config: one artifact, safe promotion across environments",
+    "Typed, validated config fails fast at startup",
+    "Structured logs: searchable, aggregatable, alertable",
+  ]}
+  bad={[
+    "Config sprawl across files, env vars and flag systems gets confusing; document precedence",
+    "Feature flags left forever become hidden complexity",
+    "Verbose logging is expensive and can leak sensitive data",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses env-based config, never commits secrets, logs with levels and IDs."
+  mid="Structured JSON logs with MDC, typed config validated at startup, secrets from a manager."
+  senior="Designs feature-flag strategy, log retention/cost, and PII-safe logging policies."
+  lead="Standardizes logging schema and config/secrets tooling org-wide; owns observability budget."
+/>
+
+<SeniorLens>
+A great test of a service's logging: pick a real customer complaint from last week and try to reconstruct exactly what happened in under 5 minutes. If you can't, improve the logs **before** the next incident, not during it. And treat feature flags as debt with an expiry date: every flag should have an owner and a removal ticket.
+</SeniorLens>
+
+<KeyTakeaways>
+- Build once, configure per environment; validate config at startup.
+- Secrets live in a secrets manager, never in Git or logs.
+- Structured logs with request IDs and entity IDs; meaningful levels.
+- Logs + metrics + traces together make a service observable.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** configuration management and logging episodes.
+- **[The Twelve-Factor App: Config and Logs](https://12factor.net/config)**.
+- **Spring Boot docs:** externalized configuration and structured logging.
+</GoDeeper>

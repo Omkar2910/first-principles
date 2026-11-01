@@ -1,0 +1,130 @@
+---
+title: The Life of a Request
+description: What actually happens between pressing Enter and seeing the page, and why it's the map for everything else.
+minutes: 12
+level: junior
+---
+
+<Problem>
+You type `shop.com/products/42` and the page shows up in 300 ms. Somewhere in that 300 ms, half a dozen machines you've never seen talked to each other. If you can't name them, you can't answer *"why is this endpoint slow?"*, *"where should the cache go?"* or *"what breaks if this box dies?"*. Every system design conversation is really a conversation about this journey.
+</Problem>
+
+## The big picture
+
+A web request is a chain of **hops**. Each hop costs time, and each hop can fail. That's it. Almost every backend concept you'll learn either:
+
+1. **removes a hop** (caching, CDNs, connection reuse),
+2. **makes a hop faster** (indexes, better algorithms, closer servers),
+3. **makes a hop survive failure** (replicas, retries, load balancers), or
+4. **lets a hop handle more traffic** (horizontal scaling, sharding, queues).
+
+Keep these four verbs in your head. You'll see them again in every track.
+
+<MentalModel>
+Think of sending a parcel to a company you've never dealt with. First you **look up their address** (DNS). Then you **call ahead to make sure someone's there** (TCP handshake). You **agree on a secret code** so nobody can read the parcel (TLS). The front desk **routes it to the right department** (load balancer → app server), which may need to **check the filing cabinet** (database) before replying. Every phone call is a round trip, and round trips are what make things slow.
+</MentalModel>
+
+## Step by step
+
+Play with this before reading on. Try **"Other continent"**, then turn on both toggles and watch the total.
+
+<RequestJourney />
+
+### 1. DNS: turning a name into an address
+
+Computers route by IP address (`93.184.216.34`), not names. The browser asks a **DNS resolver** (usually your ISP's, or `8.8.8.8`), which walks the hierarchy: root servers → `.com` servers → `shop.com`'s own nameserver. The answer comes back with a **TTL** (time to live), and everyone along the way caches it.
+
+That's why the first visit to a site is slower than the second, and why "we changed the DNS record but users still hit the old server" is a classic incident: caches respect the TTL, not your urgency.
+
+### 2. TCP: opening a reliable pipe
+
+IP packets can be lost, duplicated or arrive out of order. **TCP** builds a reliable, ordered byte stream on top. Before any data flows, both sides do the **three-way handshake**: `SYN` → `SYN-ACK` → `ACK`. That's **one full round trip** spent just saying hello.
+
+### 3. TLS: making the pipe private
+
+HTTPS = HTTP inside TLS. The client and server agree on encryption keys and the client checks the server's **certificate** (proof that this really is `shop.com`). TLS 1.3 costs **one more round trip**; the older TLS 1.2 cost two.
+
+<Quiz
+  question="A user in Mumbai hits your server in Virginia (≈200 ms round trip). Ignoring DNS and server time, roughly how long before they get the first byte of a brand-new HTTPS request?"
+  options={["~100 ms", "~200 ms", "~600 ms", "~2 seconds"]}
+  answer={2}
+  explanation="TCP handshake (1 RTT) + TLS 1.3 (1 RTT) + request/response (1 RTT) = 3 × 200 ms ≈ 600 ms. This is why CDNs and edge servers exist: you can't make light faster, but you can move the server closer."
+/>
+
+### 4. HTTP: the actual request
+
+Now the browser finally sends what it wanted:
+
+```http
+GET /products/42 HTTP/1.1
+Host: shop.com
+Accept: application/json
+Cookie: session=abc123
+```
+
+It usually lands on a **load balancer** first. The LB knows which app servers are healthy and forwards the request to one of them. To the user it looks like one server; behind it there might be fifty.
+
+### 5. The app server does the work
+
+This is the part you write. In a Spring Boot app, by the time your controller runs, a lot has already happened: the request was parsed, routed, passed through filters (auth, logging), and the JSON body deserialized.
+
+```java
+@GetMapping("/products/{id}")
+ProductDto getProduct(@PathVariable long id) {
+    Product p = productRepository.findById(id)        // ← network hop to the DB
+        .orElseThrow(() -> new NotFoundException(id));
+    return ProductDto.from(p);                        // ← serialized to JSON
+}
+```
+
+That innocent-looking `findById` is **another network hop**: app server → database → app server. If the query lacks an index it might scan a million rows. Very often, *this* is where the time goes.
+
+### 6. The response travels back
+
+The server returns `200 OK` with a JSON body. The connection is usually **kept alive**, so the next request skips steps 1 to 3 entirely. Turn on both toggles in the simulator to see how big a difference that makes.
+
+## Where the time actually goes
+
+Notice two things from the simulator:
+
+- For a far-away user, **network round trips dominate**. Your code could take 0 ms and the request would still feel slow.
+- For a nearby user with a reused connection, **your server and database dominate**. Now your code and queries are the bottleneck.
+
+This is why "make it faster" has no single answer. You first have to know *which hop* is slow, which is exactly what observability (Track 8) is for.
+
+<Tradeoffs
+  good={[
+    "Each layer (DNS, TCP, TLS, HTTP) solves one problem and can be reasoned about separately",
+    "Load balancers let you add servers without clients noticing",
+    "Caching at every level (DNS, connections, HTTP) removes hops for repeat visits",
+  ]}
+  bad={[
+    "Every layer adds round trips, so distance hurts a lot",
+    "More hops means more things that can fail or be misconfigured",
+    "Caches (like DNS TTLs) make changes propagate slowly",
+  ]}
+/>
+
+<LevelTags
+  junior="Can explain each hop and knows the DB call in a handler is a network round trip."
+  mid="Debugs latency by asking 'which hop?' and uses browser dev tools / traces to prove it."
+  senior="Designs to minimize hops: CDNs, connection pooling, colocating services with their data, keeping DNS TTLs sane for failover."
+  lead="Sets latency budgets per hop across teams and decides where the org invests (edge, regions, caching layers)."
+/>
+
+<SeniorLens>
+In interviews, "what happens when you type a URL" isn't a trivia question. It's a test of whether you can **zoom in and out**. A strong answer gives the six-hop overview in 30 seconds, then goes deep on whichever hop the interviewer cares about: DNS caching, the TLS handshake, how the LB picks a server, or why the DB call is slow. At work, the same skill lets you walk into an incident and quickly narrow down *where* the problem lives.
+</SeniorLens>
+
+<KeyTakeaways>
+- A request is a chain of hops: **DNS → TCP → TLS → HTTP → app → DB → back**.
+- **Round trips are the unit of cost.** Distance multiplies them.
+- Connection reuse and caching remove whole hops, which is often the biggest win available.
+- Most backend concepts *remove*, *speed up*, *harden* or *scale* a hop.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously, *Backend from First Principles*:** the HTTP and "what is a backend" episodes cover this same journey from the server's point of view.
+- **[What happens when…](https://github.com/alex/what-happens-when)**: an absurdly detailed community write-up, down to keyboard interrupts.
+- **[High Performance Browser Networking](https://hpbn.co/)** by Ilya Grigorik (free online), chapters 1–4: latency, TCP and TLS.
+</GoDeeper>

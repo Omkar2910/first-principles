@@ -1,0 +1,132 @@
+---
+section: Principles and patterns
+title: "Design Patterns: Structural"
+description: Adapter, Decorator, Facade and Proxy. Composing objects so systems fit together cleanly.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Your code must talk to a legacy SOAP service, a third-party SDK with an awkward API, and a new vendor with yet another interface. You want to add caching, retries and metrics around calls without rewriting them. You want a simple entry point over a messy subsystem. **Structural patterns** are about **wrapping and connecting** objects, and they're everywhere in backend code (Spring itself is built on them).
+</Problem>
+
+## Adapter: make incompatible interfaces fit
+
+Translate one interface into the one your code expects. Essential at **integration boundaries**.
+
+```java
+// Your domain port
+interface ShippingProvider { Quote quote(Parcel p, Address to); }
+
+// Vendor SDK with a different shape
+class FedExClient { FedExRateResponse getRates(FedExRateRequest req) { ... } }
+
+// Adapter: domain ↔ vendor translation lives in one place
+class FedExShippingAdapter implements ShippingProvider {
+    private final FedExClient client;
+    public Quote quote(Parcel p, Address to) {
+        FedExRateResponse r = client.getRates(FedExMapper.toRequest(p, to));
+        return new Quote(Money.of(r.getTotalNetCharge(), r.getCurrency()), Duration.ofDays(r.getTransitDays()));
+    }
+}
+```
+
+Vendor types never leak into your domain; switching to UPS means a new adapter, nothing else. (This is the "anti-corruption layer" in DDD terms.)
+
+## Decorator: add behavior by wrapping
+
+Wrap an object with another implementing the **same interface**, adding behavior before/after delegating. Stackable.
+
+```java
+class CachingShippingProvider implements ShippingProvider {
+    private final ShippingProvider delegate; private final Cache<Key, Quote> cache;
+    public Quote quote(Parcel p, Address to) {
+        return cache.get(new Key(p, to), k -> delegate.quote(p, to));
+    }
+}
+class MeteredShippingProvider implements ShippingProvider { /* timing + metrics around delegate */ }
+
+ShippingProvider provider = new MeteredShippingProvider(new CachingShippingProvider(new FedExShippingAdapter(client), cache));
+```
+
+Java I/O streams (`new BufferedReader(new InputStreamReader(...))`) are decorators. Spring AOP (`@Transactional`, `@Cacheable`, Resilience4j annotations) achieves the same effect with generated proxies.
+
+## Proxy: control access to an object
+
+Same interface as the real object, but controls **access**: lazy loading, remote calls, security checks, caching. Difference from decorator is intent: decorators add features; proxies control access.
+
+You already use proxies daily:
+- **Spring AOP proxies** wrap your beans to start transactions and check security. (That's why self-invocation skips `@Transactional`: the call doesn't go through the proxy.)
+- **Hibernate lazy-loading proxies** stand in for entities until accessed (and cause `LazyInitializationException` outside a session).
+- **gRPC/Feign clients** are proxies for remote services.
+
+## Facade: one simple entry point to a complex subsystem
+
+```java
+class CheckoutFacade {
+    private final CartService carts; private final PricingEngine pricing;
+    private final InventoryService inventory; private final PaymentService payments; private final OrderService orders;
+
+    public OrderConfirmation checkout(UserId user, PaymentToken token) {
+        Cart cart = carts.get(user);
+        Price price = pricing.price(cart);
+        inventory.reserve(cart.items());
+        payments.charge(user, price.total(), token);
+        return orders.place(user, cart, price);
+    }
+}
+```
+
+Controllers call one method instead of orchestrating five services. Facades simplify **usage**; they shouldn't become god objects holding the business rules themselves.
+
+## Composite (briefly)
+
+Treat individual objects and groups uniformly: a `Discount` that's either a single rule or a `CompositeDiscount` of rules; a file system of files and folders; UI component trees.
+
+<MentalModel>
+Structural patterns are **travel accessories**. An **adapter** is a plug adapter: your laptop works abroad without rewiring it. A **decorator** is a phone case with a battery pack: same phone, extra abilities, stackable with a screen protector. A **proxy** is a hotel front desk holding your key: it controls who gets in. A **facade** is a hotel concierge: one person who coordinates taxis, restaurants and tickets for you.
+</MentalModel>
+
+<Quiz
+  question="You want to add retries, metrics and caching around an existing ExchangeRateClient interface without modifying its implementation. Which pattern fits?"
+  options={["Adapter", "Decorator (stack wrappers implementing the same interface)", "Singleton", "Facade"]}
+  answer={1}
+  explanation="Decorators wrap an object with the same interface and add behavior. Each concern is its own wrapper, composed in any order."
+/>
+
+<Tradeoffs
+  good={[
+    "Adapters isolate vendors and legacy systems from your domain",
+    "Decorators/proxies add cross-cutting behavior without touching core logic",
+    "Facades simplify complex subsystems for callers",
+  ]}
+  bad={[
+    "Layers of wrappers can make stack traces and debugging harder",
+    "Proxy-based magic has surprises (self-invocation, lazy loading)",
+    "Facades can grow into god classes",
+  ]}
+/>
+
+<LevelTags
+  junior="Recognizes adapters, decorators and proxies in libraries they use (I/O streams, Spring)."
+  mid="Writes adapters for integrations and decorators for cross-cutting concerns."
+  senior="Designs anti-corruption layers and clean integration boundaries; understands framework proxy pitfalls."
+  lead="Ensures vendor integrations are isolated so the org can switch providers cheaply."
+/>
+
+<SeniorLens>
+Vendor lock-in is often decided by one innocent line: a vendor SDK type appearing in a domain class. Seniors insist on **adapters at every third-party boundary**. It costs an hour now and saves a quarter-long migration later when pricing, compliance or reliability forces a switch.
+</SeniorLens>
+
+<KeyTakeaways>
+- Adapter: translate interfaces at boundaries (anti-corruption layer).
+- Decorator: stackable wrappers adding behavior with the same interface.
+- Proxy: controls access; Spring AOP and Hibernate lazy loading are proxies.
+- Facade: one simple entry point; keep it thin.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Refactoring.Guru: Structural patterns](https://refactoring.guru/design-patterns/structural-patterns)**.
+- **Spring docs:** AOP proxies ("Understanding AOP Proxies").
+- **Eric Evans, *Domain-Driven Design***: anti-corruption layer.
+</GoDeeper>

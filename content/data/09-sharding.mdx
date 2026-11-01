@@ -1,0 +1,101 @@
+---
+title: Sharding and Partitioning
+description: Splitting data across machines when one database can't hold or write it all, and the costs that come with it.
+minutes: 12
+level: senior
+---
+
+<Problem>
+You've optimized queries, added indexes, added read replicas and bought the biggest machine available. Writes still saturate the leader, and the dataset is 30 TB. Replication copies the *same* data everywhere, so it doesn't help with **write volume or data size**. The next step is to split the data itself across machines: **sharding** (horizontal partitioning). It's powerful, and it's also one of the most expensive architectural decisions you can make.
+</Problem>
+
+## Vocabulary
+
+- **Partitioning**: splitting a dataset into pieces. Can be within one DB (Postgres table partitioning by month) or across machines.
+- **Sharding**: partitions spread across **different database servers**. Each shard holds a subset of rows and handles their reads and writes.
+- **Shard key** (partition key): the column used to decide which shard a row lives on.
+
+## Strategies
+
+| Strategy | How | Pros | Cons |
+|---|---|---|---|
+| **Range** | `user_id 1–1M → shard 1`, `1M–2M → shard 2` | Range scans are efficient | **Hotspots** (new users all hit the last shard) |
+| **Hash** | `shard = hash(user_id) % N` | Even distribution | Range queries hit all shards; changing N reshuffles everything |
+| **Consistent hashing** | Hash ring with virtual nodes | Adding a shard moves only ~1/N of keys | More complex (see Track 3) |
+| **Directory / lookup** | A table maps key → shard | Total flexibility, can move tenants individually | The directory is a critical dependency |
+| **Geo / tenant** | Shard by region or customer | Data locality, compliance, isolation | Uneven sizes (one giant tenant) |
+
+<MentalModel>
+A library that outgrew its building opens **branches**. Books A–F at branch 1, G–M at branch 2 (range): easy to browse a section, but the "new releases" branch is mobbed. Assign books by a scrambled code (hash): every branch is equally busy, but "all books by authors starting with S" means visiting every branch. Whatever you choose, **checking out books from two branches in one transaction** is suddenly hard.
+</MentalModel>
+
+## Choosing a shard key: the most important decision
+
+A good shard key:
+1. **Spreads load evenly**: high cardinality, no celebrity keys.
+2. **Matches your main access pattern**: most queries include it, so they hit **one shard**.
+3. **Keeps related data together**: things that are transacted together share a shard.
+
+For a multi-tenant SaaS, `tenant_id` is usually ideal: almost every query is scoped to a tenant, and a tenant's data can be transacted together. For a social app, `user_id` works for profiles and posts, but "feed of everyone I follow" spans shards (that's why feeds are precomputed; see HLD).
+
+## What gets hard after sharding
+
+- **Cross-shard queries** ("top 10 products across all users") become scatter-gather: query every shard and merge.
+- **Cross-shard transactions** need distributed transactions or sagas (Track 4).
+- **Global uniqueness**: auto-increment IDs collide; use UUIDs/ULIDs or Snowflake-style IDs.
+- **Rebalancing**: moving data when shards fill up, live, without downtime.
+- **Hot partitions**: one key (a celebrity, a huge tenant) overwhelms its shard. Mitigations include key salting or giving the big tenant a dedicated shard.
+- **Operations**: N databases to back up, upgrade, monitor and migrate.
+
+## Before you shard
+
+Sharding should be close to the **last** resort. Exhaust these first: query/index optimization, caching, read replicas, vertical scaling (machines are huge now), archiving cold data, splitting unrelated tables into separate databases (vertical partitioning by service), and table partitioning within one database. Or use a database that shards for you (DynamoDB, Cassandra, CockroachDB, Vitess, Citus, Spanner).
+
+<Quiz
+  question="You shard orders by hash(order_id). The most common query is 'list all orders for user X'. What's the problem?"
+  options={[
+    "No problem",
+    "A user's orders are spread across all shards, so the most common query becomes a scatter-gather to every shard",
+    "Order IDs will collide",
+    "Writes become slower",
+  ]}
+  answer={1}
+  explanation="The shard key should match the main access pattern. Sharding by user_id keeps a user's orders on one shard so the common query hits one machine."
+/>
+
+<Tradeoffs
+  good={[
+    "Scales writes and storage nearly linearly",
+    "Smaller per-shard datasets: faster indexes, backups and maintenance",
+    "Blast radius: one shard failing affects only some users",
+  ]}
+  bad={[
+    "Cross-shard queries and transactions become expensive or impossible",
+    "Shard key is very hard to change later",
+    "Rebalancing, hotspots and N× operational burden",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows the difference between replication (copies) and sharding (splits)."
+  mid="Understands shard keys, hash vs range partitioning, and Postgres table partitioning."
+  senior="Chooses shard keys from access patterns, designs ID generation, rebalancing and cross-shard workflows."
+  lead="Decides when sharding is justified versus alternatives, and plans multi-quarter migrations."
+/>
+
+<SeniorLens>
+In interviews, saying "we'll shard the database" isn't an answer. Saying "we'll shard by `user_id` because 95% of queries are user-scoped, use Snowflake IDs, precompute the cross-user feed, and expect celebrity hotspots that we'll handle with a separate path" is. At work, seniors also ask: **can we delay sharding by two years with a bigger box and an archive job?** Often, yes.
+</SeniorLens>
+
+<KeyTakeaways>
+- Sharding splits data across servers to scale writes and storage.
+- Range, hash, consistent hashing, directory, tenant/geo strategies.
+- The shard key must match access patterns and spread load evenly.
+- Cross-shard queries, transactions, IDs and rebalancing are the costs. Shard last.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 6** (Partitioning).
+- **Vitess** (YouTube's MySQL sharding) and **Citus** (Postgres) docs.
+- **Notion's and Figma's engineering blogs** on sharding Postgres: excellent real-world write-ups.
+</GoDeeper>

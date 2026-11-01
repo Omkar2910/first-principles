@@ -1,26 +1,88 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Brand accent: actions, links, focus and "you are here". Swap the ramp here to rebrand. */
+  --color-brand-50: var(--color-indigo-50);
+  --color-brand-100: var(--color-indigo-100);
+  --color-brand-200: var(--color-indigo-200);
+  --color-brand-300: var(--color-indigo-300);
+  --color-brand-400: var(--color-indigo-400);
+  --color-brand-500: var(--color-indigo-500);
+  --color-brand-600: var(--color-indigo-600);
+  --color-brand-700: var(--color-indigo-700);
+  --color-brand-800: var(--color-indigo-800);
+  --color-brand-900: var(--color-indigo-900);
+  --color-brand-950: var(--color-indigo-950);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-padding-top: 5rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}
+
+::selection {
+  @apply bg-brand-200 text-brand-950 dark:bg-brand-500/40 dark:text-white;
+}
+
+/* One focus style everywhere, only for keyboard users. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  @apply rounded-md outline-2 outline-offset-2 outline-brand-500;
+}
+
+/* Faint engineering-paper grid used behind hero areas. */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(15 23 42 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, black 40%, transparent 100%);
+}
+.dark .bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+}
+
+/* Code blocks from rehype-pretty-code (dual light/dark themes) */
+figure[data-rehype-pretty-code-figure] {
+  @apply my-6;
+}
+figure[data-rehype-pretty-code-figure] pre {
+  @apply my-0 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 py-4 text-[13px] leading-relaxed dark:border-slate-800 dark:bg-slate-900/70;
+}
+figure[data-rehype-pretty-code-figure] pre > code {
+  @apply grid;
+}
+figure[data-rehype-pretty-code-figure] [data-line] {
+  @apply px-4;
+}
+code[data-theme] span {
+  color: var(--shiki-light);
+}
+.dark code[data-theme] span {
+  color: var(--shiki-dark);
+}
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
+  content: none;
+}
+.prose :not(pre) > code {
+  @apply rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.85em] font-normal dark:border-slate-700/70 dark:bg-slate-800/70;
+}
+
+/* Tables in lessons: contained, scrollable on phones, quiet header. */
+.prose table {
+  @apply block overflow-x-auto text-sm sm:table;
+}
+.prose thead th {
+  @apply text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400;
 }

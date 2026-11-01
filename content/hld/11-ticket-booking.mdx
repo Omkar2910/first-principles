@@ -1,0 +1,120 @@
+---
+section: Case studies
+title: "Case Study: Ticket Booking (Ticketmaster)"
+description: Massive contention for limited inventory. Seat holds, virtual waiting rooms, and never double-selling.
+minutes: 13
+level: senior
+---
+
+<Problem>
+A stadium concert goes on sale at 10:00. 2 million fans arrive at 09:59 for 50,000 seats. Everyone wants the same front rows. The system must **never sell a seat twice**, must survive a 100× traffic spike that lasts minutes, and should feel fair. This is the purest **contention** problem in system design.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: browse events and seat maps; select seats and hold them briefly; pay; get tickets; release unpaid holds.
+**Non-functional**: zero double-booking (strong consistency for inventory); survive extreme spikes on sale start; reasonable fairness; seat map can be slightly stale.
+
+## 2. The seat lifecycle
+
+```text
+AVAILABLE ──hold (atomic, TTL ~10 min)──▶ HELD ──payment ok──▶ SOLD
+     ▲                                     │
+     └────────── hold expired / released ──┘
+```
+
+## 3. Never double-sell: atomic holds
+
+The hold must be an **atomic conditional write**:
+
+```sql
+UPDATE seats
+SET status = 'HELD', held_by = :userId, hold_expires_at = now() + interval '10 minutes'
+WHERE event_id = :e AND seat_id = ANY(:seatIds)
+  AND (status = 'AVAILABLE' OR (status = 'HELD' AND hold_expires_at < now()));
+-- rows affected must equal number of requested seats, else roll back: someone else got one
+```
+
+All seats in one request held in one transaction (all or nothing). Alternatively, a Redis `SET seat:{event}:{id} user NX EX 600` per seat plus a durable record. Either way, **the database (or atomic store) decides**, never the app reading "available" and then writing.
+
+Payment confirmation flips `HELD → SOLD` only if the hold is still owned by that user and not expired (guarded update again). Expired holds are lazily treated as available (as in the WHERE clause) and swept by a background job.
+
+<MentalModel>
+A busy restaurant with numbered tables. When you pick a table, the host puts a **"reserved for 10 minutes" card with your name** on it (hold). Only you can sit there during that time; if you don't show up, the card is removed. Two people can't get the same card because there's **one physical card per table** (atomic write), however many people are shouting at the host.
+</MentalModel>
+
+## 4. Surviving the spike: the virtual waiting room
+
+Letting 2M users hammer the seat inventory at once would melt the DB and give a random, unfair experience. Instead:
+
+```text
+Users ──▶ CDN-hosted waiting room page ──▶ Queue service (assigns position, e.g. randomized at open, then FIFO)
+                                                │ admits N users/minute (token rate tuned to backend capacity)
+                                                ▼ signed short-lived access token
+                                  Booking flow (seat map, hold, pay)
+```
+
+- The waiting room is **static + cheap** (served from CDN), so millions of waiting users cost almost nothing.
+- Admission rate = what the booking backend can actually handle. It's a **rate limiter for humans**.
+- Tokens are signed and short-lived so people can't skip the line.
+- Randomizing positions among everyone present at sale start avoids rewarding bots that refresh at 09:59:59.999.
+
+## 5. Read path: seat maps
+
+Thousands of admitted users view seat maps constantly. Serve availability from a **cache** updated on holds/sales (or a few seconds stale), and accept that a user might click a seat that was just taken. The atomic hold will reject it with a friendly "just taken, pick another". Strong consistency where it matters (the write), eventual where it's cheap (the read).
+
+## 6. Other details
+
+- **Bots and scalpers**: CAPTCHAs at queue entry, per-account purchase limits, verified fan programs, device fingerprinting.
+- **Payment** follows the payment-system lesson (idempotency!). If payment succeeds after a hold expired, refund or honor by policy.
+- **General admission** (no specific seats) is just a counter: `UPDATE inventory SET remaining = remaining - :n WHERE event_id = :e AND remaining >= :n`.
+- **Hot rows**: one event's seats are a hotspot. Partition seat inventory by section so writes spread across rows/shards.
+
+<Quiz
+  question="Two users click the same seat at the same millisecond. What guarantees only one hold succeeds?"
+  options={[
+    "The frontend disables the button",
+    "A conditional atomic write (UPDATE ... WHERE status='AVAILABLE' or SET NX) so only the first write affects the row; the second sees 0 rows affected",
+    "A cache of available seats",
+    "Sorting requests by timestamp",
+  ]}
+  answer={1}
+  explanation="Only the shared store can arbitrate concurrent writes. A conditional update makes check-and-set a single atomic operation."
+/>
+
+<Tradeoffs
+  good={[
+    "Atomic conditional holds: correctness under any concurrency",
+    "Waiting room: protects backend, fair ordering, cheap to serve",
+    "Hold TTLs: inventory is never locked forever",
+  ]}
+  bad={[
+    "Users may wait a long time in the queue",
+    "Stale seat maps cause 'just taken' errors (acceptable UX trade)",
+    "Bot mitigation is an ongoing arms race",
+  ]}
+/>
+
+<LevelTags
+  junior="Prevents double booking with a DB constraint or conditional update."
+  mid="Designs holds with TTL, guarded HELD→SOLD transitions and expiry sweeps."
+  senior="Adds the virtual waiting room, admission control, cached seat maps and hot-row partitioning."
+  lead="Weighs fairness, anti-bot policy and business rules (limits, verified fans) with product and legal."
+/>
+
+<SeniorLens>
+The senior realization is that this is **two different problems**: a correctness problem (atomic inventory) and a load problem (millions arriving at once). Solving the load problem in front of the system (the waiting room) means the correctness problem only has to handle a controlled trickle, which makes everything behind it simpler and safer.
+</SeniorLens>
+
+<KeyTakeaways>
+- Seat state machine: AVAILABLE → HELD (TTL) → SOLD.
+- Atomic conditional writes make double-selling impossible.
+- A CDN-served virtual waiting room meters users into the booking flow.
+- Strongly consistent writes, cached/eventual reads.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Hello Interview:** Ticketmaster breakdown.
+- **Queue-it** and **Cloudflare Waiting Room** product docs (how waiting rooms work).
+- **Alex Xu, *System Design Interview Vol. 2***: hotel reservation chapter (similar concurrency issues).
+</GoDeeper>

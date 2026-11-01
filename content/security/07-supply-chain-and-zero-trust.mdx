@@ -1,0 +1,93 @@
+---
+title: Supply Chain Security and Zero Trust
+description: Securing dependencies and build pipelines, and why "inside the network" no longer means trusted.
+minutes: 10
+level: senior
+---
+
+<Problem>
+Your code is maybe 10% of what runs in production; the other 90% is open-source dependencies, base images, build tools and CI plugins. Log4Shell (2021) let attackers execute code on millions of Java servers through a logging library. SolarWinds and the xz backdoor showed attackers compromising **build pipelines and maintainers**. Meanwhile, attackers who get inside a network often move freely because internal traffic is trusted. Modern security assumes **neither your dependencies nor your network are automatically safe**.
+</Problem>
+
+## Software supply chain security
+
+**Know what you run**
+- Generate an **SBOM** (Software Bill of Materials; CycloneDX/SPDX) for every build, so when the next Log4Shell drops you can answer "are we affected?" in minutes, not days.
+- **Dependency scanning** (Dependabot, Renovate, Snyk, OWASP Dependency-Check, Trivy) in CI; prioritize by exploitability and reachability, not raw CVE count.
+
+**Control what comes in**
+- **Lock files and pinned versions**; avoid floating versions in builds.
+- Use a **private artifact proxy/registry** (Artifactory, Nexus, CodeArtifact) to cache and vet dependencies.
+- Beware **typosquatting and dependency confusion** (a public package with the same name as your internal one).
+- Minimize dependencies: every library is attack surface and maintenance.
+
+**Secure the pipeline**
+- CI runners are high-value targets: least-privilege tokens, **OIDC federation** to cloud (no long-lived deploy keys), pinned CI actions (by SHA), protected branches, required reviews.
+- **Signed artifacts and provenance** (Sigstore/cosign, SLSA levels): prove an image was built by your pipeline from a specific commit, and **verify signatures at deploy** (admission controllers in Kubernetes).
+- Rebuild regularly to pick up patched base images.
+
+<MentalModel>
+A restaurant's supply chain. You can have a spotless kitchen, but if a supplier delivers contaminated ingredients, customers still get sick. So you **list every ingredient and supplier** (SBOM), **buy through vetted distributors** (artifact proxy), **check seals on deliveries** (signatures), **lock the loading dock** (CI security), and when a recall is announced, you know within minutes which dishes are affected.
+</MentalModel>
+
+## Zero trust
+
+Traditional "castle and moat" security trusts anything inside the corporate network or VPC. Once an attacker gets in (a phished laptop, a compromised container), they can reach everything. **Zero trust**: *never trust, always verify*, based on identity and context rather than network location.
+
+Principles:
+- **Authenticate and authorize every request**, including service-to-service (mTLS identities, signed tokens), not just at the perimeter.
+- **Least privilege per identity**: service A can call only B's endpoints it needs; humans get just-in-time, time-boxed access to production.
+- **Micro-segmentation**: network policies limiting which workloads can talk (Kubernetes NetworkPolicies, security groups per service).
+- **Device and context awareness** for human access (managed device, MFA, location), e.g. BeyondCorp-style access proxies instead of VPNs.
+- **Continuous monitoring**: audit logs, anomaly detection, short-lived credentials everywhere.
+
+In practice for backend teams: a service mesh or SPIFFE/SPIRE for workload identity and mTLS, authZ policies between services, no shared "internal" API keys, production access via audited break-glass workflows.
+
+<Quiz
+  question="A critical CVE is announced in a popular Java JSON library. What capability lets you answer 'which of our 200 services are affected?' fastest?"
+  options={[
+    "Asking each team on Slack",
+    "SBOMs generated per build and indexed centrally, queried by package and version",
+    "Grepping production logs",
+    "Waiting for the vendor's advisory",
+  ]}
+  answer={1}
+  explanation="SBOMs turn dependency questions into a database query across all services and images, including transitive dependencies teams may not know they use."
+/>
+
+<Tradeoffs
+  good={[
+    "SBOMs and scanning give fast, complete answers during vulnerability events",
+    "Signed provenance stops tampered artifacts from deploying",
+    "Zero trust limits lateral movement after a breach",
+  ]}
+  bad={[
+    "Vulnerability scanners generate noise; triage takes effort",
+    "Signing and verification add pipeline complexity",
+    "Zero trust requires identity infrastructure (mesh, IdP, policy) and cultural change",
+  ]}
+/>
+
+<LevelTags
+  junior="Keeps dependencies updated; doesn't add libraries casually."
+  mid="Handles scanner findings, pins versions, keeps CI credentials minimal."
+  senior="Implements SBOMs, signing/verification, OIDC-based CI, service-to-service authN/authZ."
+  lead="Owns supply-chain and zero-trust strategy and incident playbooks for ecosystem-wide CVEs."
+/>
+
+<SeniorLens>
+Seniors treat **adding a dependency as a design decision**: Is it maintained? How many transitive dependencies does it drag in? Could we write the 40 lines ourselves? And they make sure the team can **patch fast**: if upgrading a library across services takes weeks of manual work, that's the real vulnerability.
+</SeniorLens>
+
+<KeyTakeaways>
+- Most of your production code is dependencies: SBOMs, scanning, pinning, private registries.
+- Secure CI: least privilege, OIDC to cloud, pinned actions, signed artifacts with provenance.
+- Zero trust: verify every request by identity, least privilege, micro-segmentation, short-lived credentials.
+- The ability to patch quickly is a core security capability.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[SLSA framework](https://slsa.dev/)** and **[Sigstore](https://www.sigstore.dev/)**.
+- **Google BeyondCorp** papers; **NIST SP 800-207** (Zero Trust Architecture).
+- **CISA guidance on SBOMs**.
+</GoDeeper>

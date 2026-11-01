@@ -1,0 +1,77 @@
+---
+section: Level 1 · Junior → Mid (SDE1 → SDE2)
+title: "Junior → Mid: Estimation and Communicating Progress"
+description: Estimating without fear, surfacing risk early, and status updates that build trust.
+minutes: 9
+level: junior
+---
+
+<Problem>
+"How long will this take?" You guess "two days" to sound competent. It takes eight. You don't mention it until the demo. Your manager loses trust; next time they check in on you constantly. Estimation isn't about predicting the future perfectly. It's about **communicating uncertainty honestly and updating early**, which is what makes you dependable.
+</Problem>
+
+## Why estimates go wrong
+
+- Estimating only the **coding**, forgetting tests, review cycles, deploys, edge cases, meetings and interruptions.
+- **Unknowns** not investigated (unfamiliar code, third-party APIs, data quirks).
+- **Optimism and social pressure** ("it should be simple").
+- Giving a **single number** with no uncertainty.
+
+## A practical approach
+
+1. **Break it down** into tasks no bigger than ~1 day. Big tasks hide unknowns.
+2. **Identify unknowns and spike them first**: "I need 2 hours to check how the export library handles 100k rows before I can estimate."
+3. **Estimate ranges with confidence**: "3–5 days; most likely 4. Biggest risk is the payment provider's sandbox."
+4. **Include the whole lifecycle**: tests, review, deploy, verification, docs.
+5. **Track actuals** against estimates for a few months. Your personal correction factor is real data.
+
+<MentalModel>
+An estimate is a **weather forecast**, not a promise. "70% chance of rain" is useful because it's honest about uncertainty, and forecasters update as new data arrives. A forecaster who says "definitely sunny" every day and never updates isn't optimistic; they're unreliable.
+</MentalModel>
+
+## Communicating progress
+
+Good updates are **short, proactive and specific**:
+
+```text
+Export feature: Wed update
+✅ Done: async job + S3 upload, tests passing
+🔄 Next: email notification, UI status (Thu)
+⚠️ Risk: big accounts (50k orders) take ~4 min to export; fine for async but I want to
+   confirm the 7-day link expiry with legal. Asked Priya, waiting.
+📅 Still on track for Fri, assuming legal confirms by Thu.
+```
+
+Rules:
+- **Bad news early**: the moment you think a date is at risk, say so with the reason and options. Early bad news is a planning input; late bad news is a failure.
+- **Bring options, not just problems**: "We can ship Friday without CSV formatting options, or Tuesday with them."
+- **Close loops**: "Shipped ✅, monitoring metrics, follow-up ticket for X."
+
+## Saying no (or not yet), constructively
+
+When asked to take on more: "I can pick that up, but it would push the export feature to next Wednesday. Which is more important?" You're not refusing; you're making the tradeoff visible so the right person can decide.
+
+<Scenario
+  situation="You estimated 3 days for a task. On day 2, you discover the legacy code you're changing has no tests and hidden dependencies. Realistically it'll take 6 days. What do you do?"
+  choices={[
+    { text: "Work late every day to hit the original 3 days without telling anyone", feedback: "Heroics hide the real cost, risk burnout and rushed bugs, and teach nobody that the estimate was wrong." },
+    { text: "Tell your lead today: what you found, the new estimate, and options (e.g. add characterization tests first for safety vs. a narrower change now plus a follow-up)", feedback: "Early, specific, option-oriented updates are exactly what builds trust. Your lead can now adjust plans while it's cheap.", best: true },
+    { text: "Wait until day 3 and then explain the delay", feedback: "Waiting until the deadline turns a planning input into a surprise." },
+  ]}
+/>
+
+<SeniorLens>
+Senior engineers aren't better at predicting the future; they're better at **managing uncertainty**: they de-risk unknowns first, communicate ranges, and update early. Your manager doesn't need perfect estimates; they need to **never be surprised**.
+</SeniorLens>
+
+<KeyTakeaways>
+- Break work down, spike unknowns, estimate ranges with confidence, include the full lifecycle.
+- Proactive, specific status updates: done, next, risks, date confidence.
+- Share bad news early, with options.
+- Make tradeoffs visible instead of silently overcommitting.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Steve McConnell, *Software Estimation: Demystifying the Black Art***.
+- **Shape Up** (Basecamp, free online): appetite-based planning as an alternative to estimates.
+</GoDeeper>

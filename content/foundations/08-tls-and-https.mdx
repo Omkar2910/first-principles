@@ -1,0 +1,117 @@
+---
+title: TLS and HTTPS
+description: How encryption, certificates and the handshake keep traffic private and authentic, explained without the math.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Every request your users send crosses coffee-shop Wi-Fi, ISPs and internet exchanges you don't control. Without encryption, anyone along the path can **read** passwords and tokens, or **modify** responses. And even with encryption, how does the browser know it's talking to the *real* `bank.com` and not an impostor? TLS solves both problems. You'll configure it, debug expired certificates at 2am, and decide where it terminates in your architecture.
+</Problem>
+
+## The three guarantees
+
+TLS (the "S" in HTTPS) provides:
+1. **Confidentiality**: nobody in the middle can read the data.
+2. **Integrity**: nobody can modify it undetected.
+3. **Authentication**: you're talking to who you think you are (via certificates).
+
+## Two kinds of encryption, used together
+
+- **Symmetric** (AES, ChaCha20): one shared key encrypts and decrypts. *Very fast*. Problem: how do two strangers agree on a secret key over a public network?
+- **Asymmetric** (RSA, elliptic curves): a **public key** anyone can have and a **private key** only the owner has. Slow, but solves the key-agreement and identity problems.
+
+TLS uses asymmetric crypto **only during the handshake** to authenticate the server and agree on a fresh symmetric key, then switches to fast symmetric encryption for the actual data.
+
+<MentalModel>
+Asymmetric crypto is a **padlock you hand out freely**: anyone can snap it shut on a box (encrypt with the public key), but only you have the key to open it (private key). TLS uses that slow padlock exchange once to safely agree on a **shared house key** (symmetric session key), then both sides use the house key for everything after.
+</MentalModel>
+
+## Certificates and the chain of trust
+
+A **certificate** says "this public key belongs to `api.shop.com`", signed by a **Certificate Authority (CA)**. Your OS and browser ship with a list of trusted **root CAs**.
+
+```text
+Root CA (trusted, built into your OS)
+  └─ signs → Intermediate CA
+               └─ signs → api.shop.com certificate (contains public key, valid dates, hostnames)
+```
+
+During the handshake the server sends its certificate chain. The client checks: Is it signed by a trusted root? Is it unexpired? Does the hostname match? Then the server proves it holds the matching private key. An impostor can copy the certificate but not the private key.
+
+## The TLS 1.3 handshake (simplified)
+
+```text
+Client → Server:  ClientHello (supported ciphers, key share)
+Server → Client:  ServerHello (chosen cipher, key share), certificate, proof of private key, Finished
+Client → Server:  Finished  +  first encrypted HTTP request
+```
+
+One round trip (TLS 1.2 needed two). With **session resumption / 0-RTT**, returning clients can send data immediately.
+
+<Quiz
+  question="An attacker on public Wi-Fi intercepts a TLS connection and presents the real api.shop.com certificate they copied. Why doesn't this work?"
+  options={[
+    "Certificates are encrypted",
+    "They can't prove possession of the private key matching the certificate's public key",
+    "The Wi-Fi blocks it",
+    "Browsers only accept certificates once",
+  ]}
+  answer={1}
+  explanation="The certificate is public. Anyone can copy it. The handshake requires the server to sign data with the private key, which never leaves the real server."
+/>
+
+## Where TLS terminates
+
+In real systems, TLS often ends **before** your application:
+
+```text
+Client ══TLS══▶ Load balancer / CDN ──(plain HTTP or new TLS)──▶ App server
+```
+
+- **TLS termination at the LB**: certificates managed in one place (e.g., AWS ACM), app servers stay simple.
+- **End-to-end / mTLS**: re-encrypt inside the network too. Required by many compliance regimes and by zero-trust architectures. **Mutual TLS (mTLS)**, where *both* sides present certificates, is how service meshes (Istio, Linkerd) authenticate services to each other.
+
+## Operational realities
+
+- **Certificates expire.** Automate renewal (Let's Encrypt/ACME, cloud certificate managers). Expired certs are a classic, completely avoidable outage.
+- Keep **private keys** out of source control and images; store them in a secrets manager.
+- Disable old protocols (SSLv3, TLS 1.0/1.1) and weak ciphers.
+- **HSTS** header tells browsers to only ever use HTTPS for your domain.
+
+<Tradeoffs
+  good={[
+    "Confidentiality, integrity and authentication with essentially no code changes",
+    "TLS 1.3 handshake is a single round trip; data encryption is hardware-accelerated",
+    "mTLS gives strong service-to-service identity",
+  ]}
+  bad={[
+    "Extra round trip on new connections (reuse connections!)",
+    "Certificate lifecycle management is an operational burden",
+    "Terminating at the edge means internal traffic is plaintext unless you re-encrypt",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows HTTPS = HTTP over TLS, what a certificate is, and why expired certs break things."
+  mid="Configures TLS on LBs/ingress, debugs chain and hostname errors with openssl, automates renewal."
+  senior="Decides termination points, mTLS for internal traffic, and certificate management strategy."
+  lead="Ensures org-wide cert inventory, expiry alerting and compliance requirements are met by default."
+/>
+
+<SeniorLens>
+In design discussions, "where does TLS terminate, and what's plaintext after that?" is a question that reveals security assumptions fast. And operationally: **every certificate should have an owner, automated renewal and an expiry alert**. Most TLS outages aren't crypto failures; they're calendar failures.
+</SeniorLens>
+
+<KeyTakeaways>
+- TLS gives confidentiality, integrity and server authentication.
+- Asymmetric crypto bootstraps trust and keys; symmetric crypto encrypts the data.
+- Certificates chain up to trusted root CAs; the private key proves identity.
+- Decide where TLS terminates; automate certificate renewal.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)**: every byte of a real handshake, explained.
+- **[High Performance Browser Networking](https://hpbn.co/transport-layer-security-tls/)**, TLS chapter.
+- **Cloudflare blog** posts on TLS 1.3 and 0-RTT.
+</GoDeeper>

@@ -1,0 +1,129 @@
+---
+title: Tool Use and Agents
+description: Letting models call functions, the agent loop, workflows vs agents, and designing tools that models use well.
+minutes: 13
+level: mid
+---
+
+<Problem>
+An LLM alone can only produce text. A customer asks "where's my order 9001 and can you change the delivery address?" Answering requires **looking up** the order and **taking an action**. **Tool use** (function calling) lets the model request that your code run specific functions, and **agents** let it chain many such steps toward a goal. This is how LLMs go from chat to doing real work, and where most AI engineering complexity now lives.
+</Problem>
+
+## Tool use (function calling)
+
+You describe tools (name, description, JSON schema of inputs). The model decides when to call one and with what arguments; **your code executes it** and returns the result; the model continues.
+
+```json
+{
+  "name": "get_order_status",
+  "description": "Look up the current status, items and delivery estimate for a customer's order. Use when the user asks about an order. Requires an order ID like ORD-123456.",
+  "input_schema": {
+    "type": "object",
+    "properties": { "order_id": { "type": "string", "pattern": "^ORD-\\d{6}$" } },
+    "required": ["order_id"]
+  }
+}
+```
+
+```text
+User:  "Where's ORD-009001?"
+Model: tool_use get_order_status {"order_id": "ORD-009001"}
+App:   runs it (with the USER's permissions) → {"status":"SHIPPED","eta":"2026-10-14",...}
+Model: "Your order shipped and should arrive on October 14."
+```
+
+The model **never executes anything itself**. Your application decides what's allowed, and that's where security lives.
+
+## The agent loop
+
+An **agent** is an LLM using tools **in a loop**, deciding its own next step based on results, until the task is done:
+
+```text
+while not done and steps < limit:
+    response = llm(system_prompt, history, tools)
+    if response has tool calls:
+        results = execute each (with validation, permissions, timeouts)
+        history += tool calls + results
+    else:
+        done = True   # final answer
+```
+
+That loop, plus good tools and good context, is the core of coding agents, research agents and support agents.
+
+<MentalModel>
+Tool use is giving the brilliant intern a **phone and a set of internal systems with specific permissions**. They can't walk into the warehouse themselves, but they can call "check order status" or "update address" and act on the answers. An agent is that intern **working through a task list on their own**, deciding which system to call next, checking results, and continuing until done. You decide which systems they can access and which actions need a manager's sign-off.
+</MentalModel>
+
+## Workflows vs agents
+
+Not everything needs an autonomous agent:
+- **Workflows**: LLM calls orchestrated through **predefined code paths** (prompt chaining, routing to specialized prompts, parallel calls, generate-then-review). Predictable, testable, cheaper. Use when the steps are known.
+- **Agents**: the model **dynamically decides** the steps. Use when the path can't be known in advance (open-ended coding, research, complex troubleshooting), and accept more cost, latency and variance.
+
+Start with the simplest thing that works: a single call with good context → a workflow → an agent only if needed.
+
+## Designing good tools
+
+Tools are an interface for a model. Design them like an API for a smart newcomer:
+- **Clear names and rich descriptions**: when to use it, when not to, what inputs look like, what it returns.
+- **Few, well-scoped tools** over dozens of overlapping ones; consolidate multi-step chores into one tool when sensible.
+- **Return concise, relevant results** (not 5 MB of JSON); include helpful error messages the model can act on ("order not found; check the ID format ORD-123456").
+- **Idempotent and safe by default**; separate read tools from write tools.
+- **Enforce permissions in the tool**, using the end user's identity, never the model's judgment.
+
+## Guardrails for agents
+
+- **Human approval** for consequential actions (refunds, emails, deletes, payments, deploys).
+- **Limits**: max steps, max cost/tokens, timeouts.
+- **Least privilege**: an agent's tools only reach what this task needs.
+- **Observability**: log every step (prompt, tool calls, results) for debugging and audit; trace agent runs like distributed requests.
+- **Sandboxing** for code execution or browsing.
+
+<Quiz
+  question="A support agent has a 'refund_order' tool. Where should the rule 'refunds over $500 need a human' be enforced?"
+  options={[
+    "In the system prompt only",
+    "In the tool/application code: the tool checks the amount and routes large refunds to an approval queue regardless of what the model asks",
+    "By using a smarter model",
+    "In the tool description",
+  ]}
+  answer={1}
+  explanation="Prompts guide behavior; code enforces policy. Business rules and permissions must hold even if the model is confused or manipulated (prompt injection)."
+/>
+
+<Tradeoffs
+  good={[
+    "LLMs can fetch live data and take actions, not just chat",
+    "Agents handle open-ended, multi-step tasks",
+    "Tools keep facts and side effects in deterministic code",
+  ]}
+  bad={[
+    "Agents: higher cost, latency and variability; harder to test",
+    "Every write tool is a security and correctness risk",
+    "Debugging multi-step runs needs good tracing",
+  ]}
+/>
+
+<LevelTags
+  junior="Implements a tool with a schema and handles the tool-call loop."
+  mid="Designs clear tools, validates arguments, enforces permissions, adds step limits."
+  senior="Chooses workflows vs agents, designs approval flows, observability and evals for multi-step behavior."
+  lead="Sets agent safety standards (approvals, permissions, audit) and platform tooling for the org."
+/>
+
+<SeniorLens>
+The most common agent mistake is **giving the model too much power and too little context**. Seniors keep tools narrow and safe, put policy in code, write tool descriptions as carefully as public API docs, and measure with task-level evals. "Can the agent complete 50 real tickets correctly, and what did it cost?" beats any demo.
+</SeniorLens>
+
+<KeyTakeaways>
+- Tool use: the model requests function calls; your code executes them with real permissions.
+- Agent = LLM + tools in a loop until the goal is reached.
+- Prefer workflows when steps are known; use agents for open-ended tasks.
+- Good tools: clear descriptions, scoped, concise results, safe, permission-enforcing. Approvals for consequential actions.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic engineering:** *Building effective agents* and *Writing effective tools for agents*.
+- **Anthropic and OpenAI docs:** tool use / function calling.
+- **Spring AI** tool calling and **LangChain4j** AI services (Java).
+</GoDeeper>

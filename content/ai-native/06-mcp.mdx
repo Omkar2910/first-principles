@@ -1,0 +1,111 @@
+---
+title: Model Context Protocol (MCP)
+description: A standard way to connect AI applications to tools and data. Architecture, primitives, and building a server.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Every AI app wants access to the same things: GitHub, Jira, Slack, your database, your internal APIs. Without a standard, every assistant (IDE agents, chat apps, internal bots) needs its own custom integration for every system: an N×M explosion of glue code. **The Model Context Protocol (MCP)** is an open standard so you can build an integration **once** as an MCP server, and any MCP-compatible AI application can use it.
+</Problem>
+
+## The idea
+
+MCP standardizes how AI applications discover and use **tools, data and prompts** from external systems, much like how USB standardized device connections or how the Language Server Protocol standardized editor ↔ language tooling.
+
+```text
+AI application (host: IDE agent, desktop chat app, your custom agent)
+   └─ MCP client(s) ──JSON-RPC──▶ MCP server: GitHub
+                     ──────────▶ MCP server: Postgres (read-only)
+                     ──────────▶ MCP server: Your internal "orders" API
+```
+
+<MentalModel>
+MCP is a **universal adapter standard for AI assistants**. Before USB, every printer, mouse and camera needed its own port and driver for each computer. With a standard plug, any device works with any computer. An MCP server is a "device" exposing a capability; any MCP-compatible assistant can plug it in.
+</MentalModel>
+
+## Core primitives
+
+Servers can expose:
+- **Tools**: functions the model can call (`create_issue`, `query_orders`, `deploy_preview`), described with JSON schemas, just like function calling.
+- **Resources**: readable data/context identified by URIs (files, DB schemas, documents) that the application can pull into context.
+- **Prompts**: reusable prompt templates/workflows the user can invoke.
+
+Clients can offer servers capabilities too (for example **sampling**, letting a server request an LLM completion via the client, and **elicitation**, asking the user for input).
+
+**Transports**: **stdio** for local servers launched by the host (e.g. a CLI tool on your machine), and **streamable HTTP** for remote servers, typically secured with OAuth.
+
+## Building a server (sketch)
+
+Official SDKs exist for TypeScript, Python, Java/Kotlin (and Spring AI integrates MCP), C#, Go and more. Conceptually:
+
+```java
+// Pseudocode with an MCP Java SDK / Spring AI MCP server
+@Tool(description = "Look up an order's status, items and ETA by order ID (format ORD-123456). Read-only.")
+public OrderSummary getOrder(@ToolParam(description = "Order ID like ORD-123456") String orderId) {
+    User caller = currentUser();                       // from the authenticated MCP session
+    Order o = orders.findForUser(orderId, caller)       // permissions enforced HERE
+                    .orElseThrow(() -> new ToolError("Order not found or not accessible"));
+    return OrderSummary.from(o);                        // concise, model-friendly result
+}
+```
+
+Then register the server in your AI application's config, and the model can discover and call `getOrder`.
+
+## Security considerations
+
+MCP makes connecting easy, which makes **security discipline** essential:
+- **Authenticate and authorize** remote servers (OAuth); tools act with the **end user's** permissions, scoped to least privilege.
+- **Treat tool results as untrusted input**: content fetched by a tool (an issue comment, a web page, an email) can contain **prompt injection** attempting to hijack the agent (lesson 9).
+- **Only install trusted servers**: a malicious or compromised MCP server can expose data or misdescribe tools. Review what you connect; pin versions.
+- **Human confirmation** for consequential actions; hosts typically ask before running tools.
+- Prefer **read-only** servers where possible (e.g. read-only DB roles).
+
+<Quiz
+  question="What's the main benefit of exposing your internal 'orders' API as an MCP server rather than writing a custom integration for one specific chatbot?"
+  options={[
+    "MCP makes the API faster",
+    "Any MCP-compatible AI application (IDE agents, chat apps, internal agents) can discover and use it through one standard interface",
+    "MCP removes the need for authentication",
+    "MCP trains the model on your API",
+  ]}
+  answer={1}
+  explanation="MCP turns N×M custom integrations into N+M: build the server once, and every compatible host can use it, with the same auth and permission model."
+/>
+
+<Tradeoffs
+  good={[
+    "Build once, use from many AI applications",
+    "Standard discovery of tools, resources and prompts",
+    "Growing ecosystem of ready-made servers",
+  ]}
+  bad={[
+    "New attack surface: untrusted servers, tool-result injection",
+    "Too many connected tools can confuse models and bloat context",
+    "Still evolving; keep SDKs and specs up to date",
+  ]}
+/>
+
+<LevelTags
+  junior="Understands MCP's purpose and uses existing servers in their tools."
+  mid="Builds an MCP server for an internal API with clear tool descriptions and permissions."
+  senior="Designs secure remote MCP servers (OAuth, scoping, auditing) and curates tool sets for agents."
+  lead="Defines which internal systems are exposed to AI agents and under what governance."
+/>
+
+<SeniorLens>
+An MCP server is a **public API for AI agents**, and deserves the same rigor: authentication, authorization per user, rate limits, audit logs, versioning, and documentation (tool descriptions *are* the docs). Seniors also curate: exposing 80 tools makes agents worse; exposing 8 well-designed ones makes them better.
+</SeniorLens>
+
+<KeyTakeaways>
+- MCP standardizes connecting AI applications to tools, resources and prompts.
+- Hosts run clients that talk to servers over stdio (local) or streamable HTTP (remote).
+- Build once, use from many AI apps.
+- Security: auth, least privilege, treat tool outputs as untrusted, trusted servers only.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[modelcontextprotocol.io](https://modelcontextprotocol.io/)**: specification, concepts and SDKs.
+- **Spring AI MCP** documentation (Java servers and clients).
+- **Anthropic's MCP announcement** and engineering posts on tool design.
+</GoDeeper>

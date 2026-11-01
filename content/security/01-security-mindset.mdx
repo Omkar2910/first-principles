@@ -1,0 +1,95 @@
+---
+title: The Security Mindset and Threat Modeling
+description: Thinking like an attacker, defense in depth, least privilege, and STRIDE threat modeling for your designs.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Developers think about how features **should** be used. Attackers think about how they **can** be used. A password reset flow, a file upload, an "export CSV" button, a webhook endpoint: each is a door, and most breaches come through ordinary features built without asking "how could this be abused?" Security isn't a separate team's job at the end. It's a way of looking at every design.
+</Problem>
+
+## Core principles
+
+- **Least privilege**: every user, service and key gets the minimum access needed, for the minimum time.
+- **Defense in depth**: multiple independent layers (WAF, authN, authZ, validation, parameterized queries, encryption, monitoring), so one failure isn't a breach.
+- **Secure defaults**: deny by default; opt in to exposure, not out.
+- **Minimize attack surface**: fewer endpoints, ports, dependencies, permissions and data stored. **Data you don't keep can't leak.**
+- **Never trust input**: from users, partners, other services, or files. Validate at every trust boundary.
+- **Assume breach**: design so an attacker inside one component can't move freely (segmentation, mTLS, scoped credentials), and so you'd **detect** it (audit logs, alerts).
+- **Don't roll your own crypto or auth.**
+
+<MentalModel>
+Securing a system is like **securing a house**, from the burglar's perspective. You don't just lock the front door. You check windows, the garage, the spare key under the mat, the dog door, the ladder in the yard. You put valuables in a safe (encryption) and install an alarm (detection), because if one layer fails, the next one should stop or catch the intruder.
+</MentalModel>
+
+## Threat modeling: four questions
+
+A lightweight threat model fits in a design review:
+
+1. **What are we building?** Sketch the data flow: actors, components, data stores, **trust boundaries** (internet ↔ edge, service ↔ service, app ↔ DB, your system ↔ third party).
+2. **What can go wrong?** Walk each element and boundary with **STRIDE**:
+
+| Threat | Violates | Example | Typical mitigation |
+|---|---|---|---|
+| **S**poofing | Authentication | Forged JWT, stolen session | Strong authN, signature validation, MFA |
+| **T**ampering | Integrity | Modifying price in a request, altering data in transit | Server-side checks, signatures, TLS |
+| **R**epudiation | Non-repudiation | "I never made that transfer" | Audit logs, signed records |
+| **I**nformation disclosure | Confidentiality | IDOR, verbose errors, public bucket | AuthZ, encryption, data minimization |
+| **D**enial of service | Availability | Huge payloads, expensive queries, bot floods | Rate limits, size limits, timeouts |
+| **E**levation of privilege | Authorization | User calls admin API, container escape | AuthZ checks, least privilege, isolation |
+
+3. **What are we going to do about it?** Mitigate, accept (documented), transfer, or remove the feature.
+4. **Did we do a good job?** Review, test (including security tests and pentests), revisit when the design changes.
+
+## A quick example: "users can upload profile pictures"
+
+- **Tampering/EoP**: uploaded file is actually HTML/JS or SVG with script → serve from a separate domain, set `Content-Type` and `Content-Disposition`, re-encode images.
+- **DoS**: 5 GB upload → size limits at the edge and pre-signed URL constraints.
+- **Info disclosure**: EXIF GPS data leaks home location → strip metadata.
+- **Spoofing/EoP**: overwrite another user's picture by guessing the key → server-generated object keys, authZ on update.
+- **Malware** distributed via your CDN → scan uploads.
+
+<Quiz
+  question="A design sends the item price from the browser in the checkout request, and the server charges that amount. Which STRIDE category is the main threat?"
+  options={["Repudiation", "Tampering: the client can modify the price; the server must compute it from trusted data", "Denial of service", "Spoofing"]}
+  answer={1}
+  explanation="Anything from the client can be modified. Prices, totals, discounts, roles and user IDs must be determined server-side from trusted sources."
+/>
+
+<Tradeoffs
+  good={[
+    "Finds design-level flaws early, when they're cheap to fix",
+    "Shared vocabulary between engineers and security teams",
+    "Defense in depth limits damage from any single mistake",
+  ]}
+  bad={[
+    "Takes time; must be right-sized to the risk",
+    "Can become checkbox theater if not tied to real actions",
+    "Security controls add friction that must be balanced with usability",
+  ]}
+/>
+
+<LevelTags
+  junior="Never trusts client input; knows least privilege and why secrets don't go in code."
+  mid="Applies STRIDE to their features; adds validation, authZ and limits at trust boundaries."
+  senior="Leads threat modeling in design reviews; designs defense in depth and detection."
+  lead="Builds secure-by-default platforms and a security culture with the security team."
+/>
+
+<SeniorLens>
+Seniors add one standard section to every design doc: **"Security considerations: trust boundaries, data classification, authN/authZ, abuse cases."** Ten minutes of thinking there prevents most of the vulnerabilities that otherwise show up in pentests or, worse, in breach notifications.
+</SeniorLens>
+
+<KeyTakeaways>
+- Least privilege, defense in depth, secure defaults, minimal attack surface, never trust input.
+- Threat model: what are we building, what can go wrong (STRIDE), what will we do, did it work.
+- Focus on trust boundaries and abuse cases of ordinary features.
+- Put security considerations in every design doc.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Adam Shostack, *Threat Modeling: Designing for Security*** and the **Threat Modeling Manifesto**.
+- **OWASP Threat Modeling Cheat Sheet**.
+- **Ross Anderson, *Security Engineering*** (free online): the classic.
+</GoDeeper>

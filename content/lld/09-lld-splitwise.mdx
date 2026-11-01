@@ -1,0 +1,149 @@
+---
+section: Interview problems
+title: "LLD Interview: Expense Sharing (Splitwise)"
+description: Modeling splits with strategies, keeping balances correct, and simplifying debts with a greedy algorithm.
+minutes: 13
+level: mid
+---
+
+<Problem>
+"Design Splitwise." Users add expenses in groups; each expense is split equally, by exact amounts, or by percentage; the app shows who owes whom and can **simplify debts** so a group settles with the fewest transactions. It's a great LLD problem because it combines **strategy-based modeling, money correctness, validation and an algorithm**.
+</Problem>
+
+## Requirements
+
+- Users, groups; add an expense (payer, amount, participants, split type: EQUAL / EXACT / PERCENT).
+- Show balances: per user (net), and pairwise "A owes B ₹X".
+- Settle up (record a payment).
+- Simplify debts within a group.
+- Money must be exact (no floating-point), and splits must sum to the total.
+
+## Model
+
+```text
+User (id, name) · Group (id, members)
+Expense (id, groupId, paidBy, amount, splits[], createdAt)
+Split (user, amount)          ← computed by a SplitStrategy
+BalanceSheet (per group): net balance per user
+```
+
+## Splits via strategy
+
+```java
+interface SplitStrategy {
+    List<Split> split(Money total, List<UserId> participants, Map<UserId, BigDecimal> params);
+}
+
+class EqualSplit implements SplitStrategy {
+    public List<Split> split(Money total, List<UserId> users, Map<UserId, BigDecimal> ignored) {
+        long cents = total.minorUnits(), n = users.size();
+        long base = cents / n, remainder = cents % n;            // ₹100 / 3 = 33.33, 33.33, 33.34
+        List<Split> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            out.add(new Split(users.get(i), Money.ofMinor(base + (i < remainder ? 1 : 0), total.currency())));
+        }
+        return out;
+    }
+}
+
+class ExactSplit implements SplitStrategy {
+    public List<Split> split(Money total, List<UserId> users, Map<UserId, BigDecimal> exact) {
+        Money sum = exact.values().stream().map(v -> Money.of(v, total.currency())).reduce(Money.zero(total.currency()), Money::plus);
+        if (!sum.equals(total)) throw new InvalidSplit("exact amounts must sum to " + total);
+        return users.stream().map(u -> new Split(u, Money.of(exact.get(u), total.currency()))).toList();
+    }
+}
+
+class PercentSplit implements SplitStrategy { /* validate sum == 100, compute, distribute rounding remainder */ }
+```
+
+Note the **rounding remainder** handling: ₹100 split three ways must still total exactly ₹100. This is the detail interviewers look for.
+
+## Balances
+
+Track **net balance per user per group** (positive = owed money, negative = owes):
+
+```java
+class BalanceSheet {
+    private final Map<UserId, Money> net = new HashMap<>();
+
+    void apply(Expense e) {
+        credit(e.paidBy(), e.amount());                       // payer is owed the full amount...
+        for (Split s : e.splits()) debit(s.user(), s.amount()); // ...each participant owes their share
+    }
+    void applySettlement(UserId from, UserId to, Money amt) { credit(from, amt); debit(to, amt); }
+}
+```
+
+Invariant: **the sum of all net balances in a group is always zero.** Assert it in tests. (It's the same idea as the double-entry ledger in the payments case study.) For auditability, store expenses and settlements as immutable records and **derive** balances; edits become reversing entries.
+
+## Simplifying debts
+
+Given net balances, produce a minimal-ish set of transfers. Greedy approach: repeatedly match the largest creditor with the largest debtor.
+
+```java
+List<Transfer> simplify(Map<UserId, Money> net) {
+    PriorityQueue<Map.Entry<UserId, Long>> creditors = maxHeap(), debtors = maxHeap();
+    net.forEach((u, m) -> { if (m.minorUnits() > 0) creditors.add(entry(u, m.minorUnits()));
+                            else if (m.minorUnits() < 0) debtors.add(entry(u, -m.minorUnits())); });
+    List<Transfer> out = new ArrayList<>();
+    while (!creditors.isEmpty() && !debtors.isEmpty()) {
+        var c = creditors.poll(); var d = debtors.poll();
+        long amt = Math.min(c.getValue(), d.getValue());
+        out.add(new Transfer(d.getKey(), c.getKey(), amt));   // debtor pays creditor
+        if (c.getValue() > amt) creditors.add(entry(c.getKey(), c.getValue() - amt));
+        if (d.getValue() > amt) debtors.add(entry(d.getKey(), d.getValue() - amt));
+    }
+    return out;     // at most (n - 1) transfers
+}
+```
+
+The greedy approach yields at most n−1 transfers. Finding the true minimum is NP-hard (it relates to subset-sum: groups of people whose balances cancel exactly), and greedy is what's expected unless the interviewer pushes.
+
+<MentalModel>
+Imagine everyone in the group puts their net position on a whiteboard: Alice +600, Bob −200, Carol −400. Instead of tracing who paid for which dinner, you just **move money from the minus column to the plus column** until everyone is at zero. The history doesn't matter for settling; only the net does.
+</MentalModel>
+
+## Edge cases and extensions
+
+- Validation: participants must be group members; amounts positive; exact/percent sums must match.
+- Currency: one currency per group, or per-expense currency with FX conversion at settlement.
+- Concurrency: two expenses added at once. Balance updates must be atomic (DB transaction per expense, or derive balances from the immutable log).
+- Editing/deleting expenses: reverse the old effect, apply the new one (or recompute from the log).
+- Extensions: recurring expenses, itemized receipts (split per item), notifications (observer), activity feed.
+
+<Quiz
+  question="₹100 is split equally among 3 people using doubles: 33.333… each. What's the problem and fix?"
+  options={[
+    "No problem; rounding is fine",
+    "Rounded shares (33.33 × 3 = 99.99) don't sum to the total; use integer minor units and distribute the remainder (33.34, 33.33, 33.33)",
+    "Use float instead of double",
+    "Disallow amounts not divisible by 3",
+  ]}
+  answer={1}
+  explanation="Money must use exact arithmetic (minor units or BigDecimal) and splits must sum exactly to the expense, so the leftover cent(s) are assigned deterministically."
+/>
+
+<LevelTags
+  junior="Models users, groups, expenses; computes equal splits."
+  mid="Uses split strategies, exact money with remainder handling, net balances with a zero-sum invariant."
+  senior="Implements simplification, immutable log + derived balances, concurrency and edit semantics."
+  lead="Relates the design to ledger principles and scaling (sharding by group, event sourcing)."
+/>
+
+<SeniorLens>
+Strong candidates name the **invariant** early ("balances in a group always sum to zero; splits always sum to the expense") and design everything to preserve it. Invariants are what turn an LLD answer from "a bunch of classes" into a **correct system**.
+</SeniorLens>
+
+<KeyTakeaways>
+- Split types as strategies; validate and distribute rounding remainders.
+- Exact money (minor units); net balances with a zero-sum invariant.
+- Greedy max-creditor/max-debtor simplification: ≤ n−1 transfers.
+- Immutable expense log with derived balances makes edits and audits clean.
+</KeyTakeaways>
+
+<GoDeeper>
+- **awesome-low-level-design:** Splitwise problem and variations.
+- **Martin Fowler, *Money* pattern** (Patterns of Enterprise Application Architecture).
+- **Debt simplification discussions:** search "minimum cash flow problem" for the algorithmic angle.
+</GoDeeper>

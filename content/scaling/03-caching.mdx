@@ -1,0 +1,122 @@
+---
+title: Caching
+description: Keeping hot data close. Where caches live, read/write patterns, eviction policies and TTLs.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Your product page runs 6 database queries and takes 80 ms. It's viewed 50,000 times a minute, and the product data changes twice a day. You're doing the same expensive work 50,000 times to produce the same answer. **Caching** stores the result of expensive work so repeated requests are served from fast memory. It's the single most effective scaling tool, and the source of some of the most confusing bugs.
+</Problem>
+
+## Why caching works
+
+Real traffic is **skewed**: a small fraction of keys (popular products, celebrity profiles, the homepage) gets most of the requests. Caching just those gives a high **hit rate** with little memory.
+
+<LruCacheSim />
+
+## Where caches live
+
+```text
+Browser cache → CDN → API gateway cache → App in-process cache → Distributed cache (Redis) → DB buffer cache
+```
+
+| Layer | Latency | Shared? | Typical use |
+|---|---|---|---|
+| **Browser / HTTP cache** | 0 ms | Per user | Static assets, `Cache-Control` on API GETs |
+| **CDN** | ~10–30 ms (edge) | Per region | Images, JS, public pages |
+| **In-process** (Caffeine, Guava) | ~µs | Per instance | Config, reference data, very hot small sets |
+| **Distributed** (Redis, Memcached) | ~0.5–1 ms | All instances | Sessions, computed objects, query results |
+| **DB buffer pool** | automatic | DB | Hot pages (you get this for free) |
+
+## Read patterns
+
+**Cache-aside (lazy loading)**, by far the most common:
+
+```java
+Product getProduct(long id) {
+    Product p = redis.get("product:" + id);
+    if (p != null) return p;                       // hit
+    p = productRepo.findById(id).orElseThrow();    // miss → load
+    redis.set("product:" + id, p, Duration.ofMinutes(10));
+    return p;
+}
+```
+
+Simple, and only caches what's actually requested. The downsides: first request is slow, and data can be stale until TTL or invalidation.
+
+**Read-through**: the cache library itself loads on miss (Caffeine `LoadingCache`, Spring `@Cacheable`). Same idea, less code.
+
+## Write patterns
+
+- **Write-through**: write to cache and DB together. Cache always fresh; writes slower.
+- **Write-behind (write-back)**: write to cache, flush to DB asynchronously. Very fast writes, risk of data loss. Rare in business systems.
+- **Write-around + invalidate**: write to DB, **delete** the cache key. Next read repopulates. The common pairing with cache-aside.
+
+Prefer **deleting** over **updating** cache entries on writes: updating risks racing writers leaving stale data in the cache.
+
+## Eviction and expiry
+
+- **TTL (expiry)**: entries auto-expire after N seconds. Your safety net against stale data.
+- **LRU**: evict the least recently used when full. Good default.
+- **LFU**: evict the least frequently used. Better for stable popularity skew.
+- **Size bounds**: always bound caches, or they become memory leaks.
+
+<MentalModel>
+A cache is the **notepad next to your phone** with numbers you call often. Looking there is much faster than the phone book (database). But numbers change, so you either **cross out a number when you hear it changed** (invalidation) or **rewrite the notepad every month** (TTL). And the notepad only has so many lines, so you drop the ones you haven't called in a while (LRU).
+</MentalModel>
+
+## What to cache (and what not to)
+
+✅ Read-heavy, rarely changing, expensive to compute: product details, user profiles, configuration, rendered fragments, results of slow aggregations.
+
+❌ Rapidly changing data where staleness hurts (account balances, inventory at checkout), highly personalized data with low reuse, anything you need strongly consistent.
+
+<Quiz
+  question="With cache-aside, on product update you choose between (a) updating the cached value and (b) deleting the cache key. Why is (b) usually safer?"
+  options={[
+    "Deleting is faster than writing",
+    "Concurrent writers updating the cache can race and leave an older value cached; deleting forces the next read to load the current DB value",
+    "Redis doesn't support updates",
+    "Deleting increases the hit rate",
+  ]}
+  answer={1}
+  explanation="Two concurrent updates can write the DB in one order and the cache in the other, leaving stale data until TTL. Deletion sidesteps most of that (though not every race; see the next lesson)."
+/>
+
+<Tradeoffs
+  good={[
+    "Huge latency and load reduction for read-heavy workloads",
+    "Absorbs traffic spikes and protects the database",
+    "Cheap: a small amount of RAM covers the hot set",
+  ]}
+  bad={[
+    "Stale data and invalidation complexity",
+    "Another system to run; cache outages can overload the DB",
+    "Cold starts and misses are slower than no cache at all",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses @Cacheable / cache-aside with a TTL for read-heavy data."
+  mid="Picks the cache layer, eviction policy and TTLs deliberately; invalidates on writes."
+  senior="Designs multi-layer caching, measures hit rates, plans for cache failure and stampedes."
+  lead="Sets caching standards (key naming, TTL policy, observability) and shared cache infrastructure."
+/>
+
+<SeniorLens>
+Before adding a cache, seniors ask: **What's the expected hit rate? How stale can this be? What happens when the cache is empty or down?** If the DB can't survive a cold cache, the cache isn't an optimization any more; it's a critical dependency that needs the same care as a database.
+</SeniorLens>
+
+<KeyTakeaways>
+- Skewed access makes small caches very effective.
+- Caches exist at every layer from browser to DB; pick the closest one that fits.
+- Cache-aside + delete-on-write + TTL is the standard pattern.
+- Bound caches; know your hit rate and staleness tolerance.
+</KeyTakeaways>
+
+<GoDeeper>
+- **AWS whitepaper: *Caching Best Practices***.
+- **[Caffeine wiki](https://github.com/ben-manes/caffeine/wiki)**: W-TinyLFU, an excellent eviction policy.
+- **Sriniously:** caching episode.
+</GoDeeper>

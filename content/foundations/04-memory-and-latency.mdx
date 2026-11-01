@@ -1,0 +1,108 @@
+---
+title: Memory, Storage and the Cost of Things
+description: Stack vs heap, garbage collection, and the latency numbers that should shape every design decision.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Someone proposes "let's just call the user service for each item in the cart" or "we'll read the config file on every request." Is that fine? You can't judge without a feel for **how expensive things are**. Senior engineers carry a rough mental table of costs: memory is fast, disk is slower, the network is much slower, another continent is glacial. That table drives where you cache, what you batch, and what you never put in a loop.
+</Problem>
+
+## Where your data lives
+
+| Place | Typical size | Speed | Survives restart? |
+|---|---|---|---|
+| CPU registers / caches (L1–L3) | KB–MB | ~1–40 ns | No |
+| RAM | GB | ~100 ns | No |
+| SSD | TB | ~20–100 µs | Yes |
+| Network (same datacenter) | — | ~0.5 ms | n/a |
+| Network (cross-region) | — | 50–150 ms | n/a |
+
+Two lessons hide in that table. **Durability costs speed**: anything that must survive a crash has to touch disk (or another machine). And **distance dominates**: a single cross-region call costs about as much as a *million* memory reads.
+
+<LatencyScale />
+
+## Stack vs heap (in a JVM)
+
+- The **stack** is per-thread. It holds method call frames and local primitives/references. Allocation is just moving a pointer; it's freed automatically when the method returns.
+- The **heap** is shared by all threads. Every `new Order(...)` lives here. Objects stay until nothing references them, and then the **garbage collector** reclaims them.
+
+```java
+void handle(Request req) {
+    int qty = req.qty();                 // primitive on the stack
+    Order order = new Order(req.items()); // reference on the stack, object on the heap
+    cache.put(order.id(), order);         // now the heap object outlives this method
+}
+```
+
+## Garbage collection, briefly
+
+The GC finds unreachable objects and frees them. Modern collectors (G1, ZGC) do most of the work concurrently, but GC still costs CPU and can cause **pauses**. Patterns that hurt:
+- **Allocating huge numbers of short-lived objects** in hot paths (e.g., building big intermediate lists per request).
+- **Unbounded in-memory caches** (`static Map` that only grows). This is the #1 cause of "memory slowly climbs until OOM".
+- **Heap too small for the workload**: GC runs constantly ("GC thrashing") and the app crawls.
+
+<MentalModel>
+RAM is your **desk**: small, everything within arm's reach. Disk is the **filing cabinet across the room**: much bigger, a walk away. The network is **a colleague in another building**: you send a request and wait. Another region is **mailing a letter overseas**. Good engineers keep what they need on the desk (caching), carry many files per trip (batching), and avoid sending letters inside a loop.
+</MentalModel>
+
+## The N+1 problem: latency math in action
+
+```java
+List<Order> orders = orderRepo.findByUser(userId);       // 1 query
+for (Order o : orders) {
+    o.setItems(itemRepo.findByOrderId(o.getId()));        // N more queries
+}
+```
+
+With 100 orders and 1 ms per DB round trip, that's 101 ms of pure waiting. One query with a `JOIN` or `WHERE order_id IN (...)` takes ~2 ms. Same result, **50× faster**, because you paid the round-trip cost once instead of 101 times.
+
+<Quiz
+  question="A page calls a downstream service once per item, 50 items, at 20 ms per call, sequentially. What's the cheapest big win?"
+  options={[
+    "Upgrade to a faster CPU",
+    "Add a batch endpoint (fetch all 50 in one call) or at least call in parallel",
+    "Increase the JVM heap",
+    "Switch from JSON to XML",
+  ]}
+  answer={1}
+  explanation="1,000 ms of sequential network waiting becomes ~20–30 ms with one batched call. Network round trips dominate; reduce their count before optimizing anything else."
+/>
+
+<Tradeoffs
+  good={[
+    "RAM: ~1000× faster than SSD, perfect for caches and hot data",
+    "Disk: durable and huge",
+    "GC: no manual memory management, so whole classes of bugs disappear",
+  ]}
+  bad={[
+    "RAM: lost on restart, limited, and per-instance (each server has its own)",
+    "Disk and network: orders of magnitude slower; must be minimized in hot paths",
+    "GC: pauses and CPU overhead; unbounded caches still leak",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows memory ≪ disk ≪ network in cost and spots obvious N+1 loops."
+  mid="Reads a heap dump / GC log, sizes caches, and uses batching and joins deliberately."
+  senior="Does quick latency math in design reviews ('3 cross-region calls = 450 ms, that blows our budget') and designs data placement around it."
+  lead="Bakes latency budgets and performance testing into how the team builds features."
+/>
+
+<SeniorLens>
+Memorize orders of magnitude, not exact numbers: **ns for memory, µs for SSD, sub-ms for same-DC network, tens-to-hundreds of ms for cross-region**. In system design interviews, saying "that's a cross-region hop, ~100 ms, so we'll keep this read local" is exactly the kind of grounded reasoning that separates seniors from people reciting patterns.
+</SeniorLens>
+
+<KeyTakeaways>
+- Memory is nanoseconds, SSD microseconds, network milliseconds, cross-region tens to hundreds of milliseconds.
+- Stack is per-thread and auto-freed; heap is shared and garbage collected.
+- Unbounded caches and allocation-heavy hot paths are the classic memory problems.
+- Reduce the *number* of round trips (batching, joins) before micro-optimizing code.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Latency Numbers Every Programmer Should Know](https://gist.github.com/jboner/2841832)** (Jeff Dean via Jonas Bonér).
+- **[Interactive latency chart](https://colin-scott.github.io/personal_website/research/interactive_latency.html)**: see how numbers changed over the years.
+- **Oracle's G1/ZGC tuning guides** when you get to production JVM work.
+</GoDeeper>

@@ -1,0 +1,72 @@
+---
+section: Level 3 · Senior → Tech Lead / Staff
+title: "Senior → Lead: Delegation and Growing People"
+description: Letting go of the work you're best at, delegating well, and building a team that doesn't depend on you.
+minutes: 9
+level: senior
+---
+
+<Problem>
+You became tech lead because you're the strongest engineer. So you take the hardest tickets, review every PR, and answer every question. Six months later you're the bottleneck: the team waits on you, nobody else understands the critical systems, and you're burning out. The hardest shift from senior to lead is realizing **your job is no longer to do the most work, but to make the team able to do great work without you**.
+</Problem>
+
+## Why leads struggle to delegate
+
+- "It's faster if I do it." (True once. False over a quarter.)
+- "They'll do it worse." (At first, maybe. That's how they learn.)
+- "I enjoy the hard problems." (Valid, but hoarding them blocks others' growth.)
+- Identity: being the expert feels safe.
+
+<MentalModel>
+A lead who does all the hard work is like a **parent who always ties their child's shoes** because it's faster. It is faster, every single morning, forever. Teaching takes longer the first few times, then the problem disappears and the child can do things you never imagined.
+</MentalModel>
+
+## Delegating well
+
+1. **Delegate outcomes, not tasks**: "Own reducing checkout p99 below 500 ms" rather than "add an index to orders.created_at".
+2. **Match to growth**: give each person work slightly beyond their current level (stretch with support).
+3. **Provide context**: why it matters, constraints, what good looks like, who to talk to.
+4. **Agree on check-ins**: more support early, less later. Ask "what do you need from me?"
+5. **Let them own decisions**, including some you'd make differently. Intervene only for high-risk mistakes; let low-risk ones become learning.
+6. **Give credit publicly**; take responsibility for failures as the lead.
+
+A useful heuristic: **delegate your second-favorite problems first**, and occasionally your favorite ones too.
+
+## Growing people deliberately
+
+- **Know each person's goals**: what do they want to learn, where do they want to go?
+- **Rotate ownership** so knowledge spreads: on-call, incident command, design docs, release management, interviewing.
+- **Pair on hard problems** rather than taking them over.
+- **Give regular, specific feedback**, positive and constructive ("In the design review, you handled the disagreement well by…"; "Next time, share the doc a day earlier so people can prepare").
+- **Sponsor**: put people forward for visible opportunities and advocate for their promotions with evidence.
+- **Reduce your bus factor**: if you'd be a single point of failure for any system or process, fix it.
+
+## What you keep
+
+Delegation doesn't mean disappearing. Leads typically keep: overall technical direction, the most critical design reviews, cross-team coordination, unblocking, and **some** hands-on coding (often on the critical path *less* than before, but enough to stay credible and close to the code).
+
+<Scenario
+  situation="A critical, interesting migration needs an owner. You could do it in 3 weeks. A mid-level engineer who wants to grow could do it in 5 weeks with your guidance. The deadline allows 6 weeks. What do you do?"
+  choices={[
+    { text: "Do it yourself: faster and lower risk", feedback: "You deliver, but the team's capability doesn't grow and you remain the bottleneck for the next migration too." },
+    { text: "Delegate it to the mid-level engineer with clear context, a design review checkpoint early, weekly check-ins, and you available for pairing on the riskiest parts", feedback: "The deadline has room, risk is managed with checkpoints, and the team gains a second person who can lead migrations. That's leadership.", best: true },
+    { text: "Delegate it with no further involvement", feedback: "Delegation without support sets people up to struggle, especially on critical work." },
+  ]}
+/>
+
+<SeniorLens>
+The measure of a tech lead isn't how much they personally ship. It's **what the team ships and how much the people on it grow**. If your team performs well when you're on vacation, and people from your team get promoted, you're doing it right.
+</SeniorLens>
+
+<KeyTakeaways>
+- Your job shifts from doing the most work to enabling the team.
+- Delegate outcomes with context, appropriate check-ins and real ownership.
+- Grow people via stretch work, rotation, pairing, feedback and sponsorship.
+- Reduce your bus factor; keep direction, unblocking and some hands-on work.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Camille Fournier, *The Manager's Path***: the tech lead chapter.
+- **Pat Kua, *Talking with Tech Leads***.
+- **Michael Bungay Stanier, *The Coaching Habit***: asking better questions.
+</GoDeeper>

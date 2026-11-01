@@ -1,0 +1,99 @@
+---
+title: Why Databases Exist
+description: What a database gives you that a file doesn't, including durability, concurrency, querying and integrity, and how it does it.
+minutes: 9
+level: junior
+---
+
+<Problem>
+Why not just write JSON files to disk? Try it with real requirements: two requests update the same file simultaneously (corruption). The server crashes halfway through a write (half a file). You need "all orders over $100 from last week" across 50 million records (read everything). A bug writes an order for a nonexistent user (nothing stops it). Every one of these problems is something a database solves for you, and knowing *how* it solves them explains most database behavior you'll ever debug.
+</Problem>
+
+## What a database actually gives you
+
+| Need | Naive file approach | What the database does |
+|---|---|---|
+| **Durability**: survive crashes | Hope the write finished | Write-ahead log (WAL) + fsync before confirming commit |
+| **Concurrency**: many writers | Corruption or a global lock | Row-level locks, MVCC, isolation levels |
+| **Atomicity**: all or nothing | Partial writes | Transactions with commit/rollback |
+| **Querying**: find data fast | Read everything | Query planner + indexes |
+| **Integrity**: valid data only | App-level checks only | Constraints: types, NOT NULL, UNIQUE, FOREIGN KEY, CHECK |
+| **Recovery**: point-in-time restore | Copy files and pray | Backups + WAL replay |
+
+## The write-ahead log: how durability works
+
+Databases don't update data files in place on every commit (that'd be slow random I/O). Instead:
+
+1. Append the change to the **write-ahead log** (a sequential file, which is fast).
+2. `fsync` the log to disk. **Now** the commit is acknowledged.
+3. Data pages are updated in memory and flushed to disk lazily later (checkpoints).
+4. After a crash, replay the log to reconstruct anything not yet flushed.
+
+The WAL is also how **replication** works (replicas replay the primary's log) and how **change data capture** tools like Debezium stream changes to Kafka. Remember it; it shows up everywhere.
+
+<MentalModel>
+An accountant's **journal and ledger**. Every transaction is first written in the journal in ink, in order (WAL). The tidy ledger pages (data files) are updated later at a convenient time. If the office floods and the ledger is half-updated, the accountant rebuilds it from the journal. Nothing confirmed is ever lost because it was in the journal first.
+</MentalModel>
+
+## Storage engines in one paragraph
+
+Under the SQL layer sits a **storage engine** that decides how bytes are laid out:
+- **B-tree based** (Postgres, MySQL InnoDB): data and indexes in balanced trees of pages. Great for reads and range queries; updates modify pages in place.
+- **LSM-tree based** (Cassandra, RocksDB, ScyllaDB): writes go to an in-memory table, flushed as sorted immutable files that get merged in the background. Excellent write throughput; reads may check several files (mitigated with Bloom filters).
+
+You don't need to implement either, but "B-tree = read-optimized, LSM = write-optimized" will help you pick databases.
+
+## Relational vs everything else
+
+**Relational databases** (Postgres, MySQL, SQL Server, Oracle) store data in tables with a schema, support joins and offer strong transactional guarantees. They're the right default for most business systems.
+
+**Non-relational** (NoSQL) databases trade some of those features for specific strengths: flexible documents, massive write scale, low-latency key lookups, graph traversal. Lesson 8 covers them. The rule of thumb many experienced engineers follow: **start with Postgres unless you can name the specific requirement it can't meet**.
+
+<Quiz
+  question="When does a Postgres COMMIT return success to your application?"
+  options={[
+    "After the data files on disk are updated",
+    "After the change is durably written (fsync'd) to the write-ahead log",
+    "Immediately, before anything is written",
+    "After all replicas confirm",
+  ]}
+  answer={1}
+  explanation="Durability comes from the WAL. Data files are updated lazily. (Waiting for replicas is optional: synchronous replication.)"
+/>
+
+<Tradeoffs
+  good={[
+    "Durability, atomicity and concurrency control you'd never get right yourself",
+    "Declarative querying with an optimizer",
+    "Constraints enforce integrity even when app code has bugs",
+  ]}
+  bad={[
+    "A stateful, critical dependency to operate, back up and scale",
+    "fsync on commit has a latency cost (~ms)",
+    "Schema changes on big tables need care (migrations)",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what transactions and constraints are and why the DB, not files, holds state."
+  mid="Understands WAL, uses constraints deliberately, knows B-tree vs LSM at a high level."
+  senior="Chooses databases by workload, plans backups/restores and migration strategies."
+  lead="Owns data platform strategy: which databases the org supports, operational standards, data governance."
+/>
+
+<SeniorLens>
+Database constraints are **the last line of defense** against application bugs. A `UNIQUE` index on `(user_id, coupon_id)` prevents double redemption even when two app instances race. A `FOREIGN KEY` prevents orphaned rows after a buggy delete. Seniors push invariants into the database whenever they can, because application-level checks alone can always be raced or bypassed.
+</SeniorLens>
+
+<KeyTakeaways>
+- Databases provide durability, atomicity, concurrency control, fast queries and integrity.
+- Durability = write-ahead log + fsync; data files are updated lazily.
+- B-tree engines favor reads; LSM engines favor writes.
+- Default to a relational DB; choose otherwise for a specific, named reason.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the databases episodes of *Backend from First Principles*.
+- **Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 3** (Storage and Retrieval). The single most recommended book for this whole track.
+- **[Use The Index, Luke](https://use-the-index-luke.com/)**: free, superb.
+</GoDeeper>

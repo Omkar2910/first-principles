@@ -1,0 +1,119 @@
+---
+title: Relational Data Modeling
+description: Tables, keys, relationships, normalization, and when to deliberately denormalize.
+minutes: 11
+level: junior
+---
+
+<Problem>
+A schema is the hardest thing in a backend to change later. Code can be refactored in an afternoon; migrating 500 million rows with live traffic takes weeks. A bad model shows up as duplicated data that drifts out of sync, queries that need seven joins, and features that "can't be built without a big migration". Good modeling up front is one of the highest-leverage skills a backend engineer has.
+</Problem>
+
+## The building blocks
+
+- **Table** = a set of rows of one kind of thing (`users`, `orders`).
+- **Primary key** = what uniquely identifies a row. Prefer a surrogate key (`id BIGINT` / `UUID`) over business data (emails change; people share names).
+- **Foreign key** = a column referencing another table's primary key, enforced by the DB.
+- **Constraints** = rules the DB enforces: `NOT NULL`, `UNIQUE`, `CHECK (qty > 0)`, `FOREIGN KEY`.
+
+## Relationships
+
+```sql
+-- One-to-many: a user has many orders
+CREATE TABLE users  (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE orders (id BIGSERIAL PRIMARY KEY,
+                     user_id BIGINT NOT NULL REFERENCES users(id),
+                     status TEXT NOT NULL CHECK (status IN ('PENDING','PAID','SHIPPED','CANCELLED')),
+                     total_cents BIGINT NOT NULL CHECK (total_cents >= 0),
+                     created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+
+-- Many-to-many: orders contain many products; products appear in many orders → join table
+CREATE TABLE order_items (order_id BIGINT REFERENCES orders(id),
+                          product_id BIGINT REFERENCES products(id),
+                          qty INT NOT NULL CHECK (qty > 0),
+                          unit_price_cents BIGINT NOT NULL,          -- price *at time of purchase*
+                          PRIMARY KEY (order_id, product_id));
+```
+
+Note `unit_price_cents` on `order_items`: product prices change, but what the customer paid must not. Capturing **facts as they were at the time** is a modeling decision, not duplication.
+
+## Normalization: one fact, one place
+
+Normalization means organizing tables so each fact is stored **once**. The practical version of the normal forms:
+
+1. **Atomic columns**: no comma-separated lists in a column (`tags = "red,blue"` → a `product_tags` table).
+2. **Every non-key column depends on the whole key**: in `order_items(order_id, product_id, product_name)`, `product_name` depends only on `product_id`, so it belongs in `products`.
+3. **No column depends on another non-key column**: `orders(user_id, user_email)`: email depends on user, not on the order.
+
+Violations cause **update anomalies**: a user changes their email, and now 300 old order rows have the stale one.
+
+<MentalModel>
+A normalized schema is a **well-run contacts app**: each person's phone number is stored once, and everything else links to the person. Denormalization is **writing the phone number on every sticky note** for speed. Fast to read, but when the number changes you have to find every sticky note.
+</MentalModel>
+
+## When to denormalize
+
+Normalization optimizes for **correct writes**; sometimes reads need help:
+- A feed showing `author_name` on every post might cache it on the post row.
+- An `orders.item_count` column avoids counting `order_items` on every list page.
+- Analytics tables are often heavily denormalized (star schemas).
+
+Denormalize **deliberately**, after measuring, and own the consistency problem: who updates the copy, and what if it drifts?
+
+## Practical modeling tips
+
+- Use `TIMESTAMPTZ` (with time zone) and store in UTC.
+- Money as integer minor units (`BIGINT cents`) or `NUMERIC`, **never** `FLOAT`.
+- Model **state machines** explicitly (`status` + `CHECK`), and consider a history/events table for audit.
+- **Soft delete** (`deleted_at`) when you need recovery or audit, but remember every query and unique index must account for it.
+- Add `created_at` / `updated_at` everywhere; you'll want them during debugging.
+- Think about the **access patterns** (queries you'll run most) early; they decide indexes and sometimes the model.
+
+<Quiz
+  question="An orders table stores user_email for convenience. A user changes their email. What problem appears?"
+  options={[
+    "No problem; emails never change",
+    "Update anomaly: old orders now show a stale email unless every copy is updated",
+    "The foreign key breaks",
+    "The orders table gets deleted",
+  ]}
+  answer={1}
+  explanation="Duplicated facts drift. Either reference users(id) and join, or treat the copy as a deliberate snapshot ('email at time of order') and name it that way."
+/>
+
+<Tradeoffs
+  good={[
+    "Normalized: each fact stored once, so updates are simple and consistent",
+    "Constraints: the DB enforces integrity for every code path",
+    "Clear relationships make new queries possible without new tables",
+  ]}
+  bad={[
+    "Normalized: more joins for reads",
+    "Denormalized: faster reads, but you must keep copies in sync",
+    "Rigid schemas need migrations for changes",
+  ]}
+/>
+
+<LevelTags
+  junior="Designs tables with PKs, FKs, correct types and NOT NULL/UNIQUE constraints."
+  mid="Normalizes sensibly, models many-to-many and state machines, plans for access patterns."
+  senior="Makes deliberate denormalization and history/audit decisions; designs schemas that evolve safely."
+  lead="Reviews data models across teams for ownership boundaries, consistency and long-term evolvability."
+/>
+
+<SeniorLens>
+In a design review, seniors ask "**what are the top five queries this schema must serve, and at what volume?**" and "**what's the source of truth for each fact?**" A schema that answers both clearly is usually a good one. Also: model the domain's **history** early (was it cancelled? when? by whom?), because that requirement always arrives and it's painful to retrofit.
+</SeniorLens>
+
+<KeyTakeaways>
+- Tables, primary keys, foreign keys and constraints are your integrity toolkit.
+- Normalize so each fact lives in one place; denormalize deliberately for reads.
+- Capture facts as-of-time (price paid, address shipped to).
+- Design around access patterns and history.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the database design episode.
+- **DDIA chapter 2** (Data Models and Query Languages).
+- **[Postgres docs: constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)**.
+</GoDeeper>

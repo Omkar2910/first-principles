@@ -1,0 +1,74 @@
+---
+section: Level 3 · Senior → Tech Lead / Staff
+title: "Senior → Lead: Setting Technical Direction"
+description: Technical vision, strategy and roadmaps, including deciding what not to build.
+minutes: 11
+level: senior
+---
+
+<Problem>
+As a senior, you solve the problems in front of you very well. As a tech lead or staff engineer, you're expected to answer a harder question: **which problems should we be solving at all, and where should our system be in a year?** Without technical direction, teams drift: every project is locally sensible, but the architecture becomes incoherent, the same problems get solved three ways, and big risks go unaddressed until they become crises.
+</Problem>
+
+## Vision, strategy, roadmap
+
+- **Technical vision**: where we want to be in 1–3 years and why. "All customer-facing services meet a 99.95% SLO with self-service deploys under 15 minutes."
+- **Strategy**: the diagnosis of our situation plus the guiding choices to get there. "Our biggest reliability risk is the shared monolith database; we'll split payments and orders data first, because they cause 70% of incidents, and freeze new tables in the shared DB."
+- **Roadmap**: sequenced, concrete steps with milestones, owners and checkpoints.
+
+A good strategy says **what we will NOT do** as clearly as what we will. Saying no is how focus happens.
+
+<MentalModel>
+Technical direction is **city planning**. Individual builders (engineers) construct excellent buildings, but without a plan you get roads that don't connect, five water systems and no room for the hospital the city will need in five years. The planner doesn't lay every brick; they decide zoning, main roads and priorities so that everyone's building adds up to a working city.
+</MentalModel>
+
+## How to develop direction
+
+1. **Diagnose**: gather data on pain points: incidents, slow delivery areas, cost, scaling limits, developer surveys, business plans. Talk to engineers, PMs and leadership.
+2. **Identify the few things that matter most**: usually 2–4 themes, not 15.
+3. **Write it down**: a strategy doc with context, diagnosis, guiding principles, choices, and what we're not doing.
+4. **Socialize and iterate**: 1:1 conversations with key engineers and leaders before any big meeting; incorporate feedback; build co-ownership.
+5. **Translate to a roadmap**: incremental milestones that deliver value along the way (not a 12-month rewrite with value at the end).
+6. **Revisit regularly**: quarterly check: is the diagnosis still right? Are we making progress?
+
+## Balancing product and engineering
+
+Direction must serve the business. Effective tech leads **frame engineering investments in business terms** (speed of delivery, reliability customers feel, cost, risk) and integrate them into product planning rather than competing with it. A common pattern: a fixed share of capacity for platform/health work, plus engineering work bundled with the features that need it.
+
+## Writing it: a lightweight strategy doc
+
+```markdown
+# Orders platform: technical strategy 2027
+## Context        Where we are (with data): growth, incidents, delivery speed, costs
+## Diagnosis      The core challenges: 1) shared DB contention 2) manual deploys 3) ...
+## Guiding policy Principles: "new domains get their own datastore", "async by default for cross-domain"
+## Actions        Q1: ... Q2: ... (incremental, each delivering value)
+## Not doing      Rewriting the catalog service; adopting a service mesh this year
+## Measures       p99 checkout latency, deploy lead time, incidents/month
+```
+
+<Scenario
+  situation="Leadership asks your team to support 5× traffic within a year. Several engineers propose a full rewrite into microservices. As tech lead, what's your best approach?"
+  choices={[
+    { text: "Approve the rewrite; it's what the team wants", feedback: "Big-bang rewrites rarely deliver on time, and the diagnosis hasn't been done yet." },
+    { text: "Diagnose first: load test to find the actual bottlenecks at 5×, then write a strategy that addresses the top constraints incrementally (maybe extracting one hot domain), with milestones and what you're not doing", feedback: "Data-driven diagnosis, a focused incremental plan, and explicit non-goals: that's technical direction.", best: true },
+    { text: "Tell leadership it's impossible", feedback: "Leads find a path or explain clearly what it would take. They don't just say no." },
+  ]}
+/>
+
+<SeniorLens>
+At staff level, **your writing is your leverage**. A clear strategy doc read by 40 engineers changes hundreds of decisions you'll never see. The best direction-setters spend a lot of time listening and diagnosing before writing, so that when they do, the strategy feels obvious and people adopt it as their own.
+</SeniorLens>
+
+<KeyTakeaways>
+- Vision (where), strategy (diagnosis + choices), roadmap (sequenced steps).
+- Focus on the few things that matter most; state what you won't do.
+- Diagnose with data; socialize 1:1; deliver incrementally; revisit quarterly.
+- Frame engineering direction in business terms.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Richard Rumelt, *Good Strategy / Bad Strategy***: diagnosis, guiding policy, coherent action.
+- **Will Larson, *Staff Engineer*** and **[lethain.com](https://lethain.com/)** on writing engineering strategy.
+- **Tanya Reilly, *The Staff Engineer's Path***, part 1 (the big picture).
+</GoDeeper>

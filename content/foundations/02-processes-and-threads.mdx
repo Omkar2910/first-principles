@@ -1,0 +1,115 @@
+---
+title: Processes and Threads
+description: What's actually running when your server is "up", and how one machine juggles thousands of requests.
+minutes: 11
+level: junior
+---
+
+<Problem>
+Your Spring Boot service is "one app", yet it handles 500 requests at the same time on a laptop with 8 cores. How? And why does it sometimes freeze completely when one slow request comes in, or run out of memory when traffic spikes? You can't reason about any of this without knowing what a **process** and a **thread** really are.
+</Problem>
+
+## Programs, processes, threads
+
+- A **program** is a file on disk: `app.jar`, `/usr/bin/postgres`. It does nothing on its own.
+- A **process** is a running instance of a program. The OS gives it its own **private memory space**, open files, network sockets and at least one thread. Processes are isolated: one crashing doesn't corrupt another's memory.
+- A **thread** is a single sequence of instructions being executed *inside* a process. All threads in a process **share the same memory** (the heap) but each has its own **stack** (local variables, call chain).
+
+<MentalModel>
+A **process is a restaurant kitchen**: its own room, its own fridge (memory), its own equipment (file handles, sockets). **Threads are the cooks** in that kitchen. Cooks share the fridge and the counter, which is fast and convenient, but two cooks grabbing the same pan at the same moment causes chaos. A second kitchen (process) is safer but you can't just pass ingredients across the hall; you need a delivery (inter-process communication).
+</MentalModel>
+
+## How the CPU runs them
+
+A CPU core executes **one thread at a time**. With 8 cores you get 8 threads truly running in parallel. Everything else is an illusion created by the OS **scheduler**, which rapidly switches between threads, every few milliseconds or whenever a thread waits for something.
+
+That switch is a **context switch**: save the current thread's registers and stack pointer, load another's. It costs microseconds, which is cheap once but expensive when you have 10,000 threads constantly fighting for 8 cores.
+
+Crucially, a thread that is **waiting** (for the disk, the network, a lock) is parked and uses no CPU. This is why a server can have far more threads than cores: most of them are waiting on the database most of the time.
+
+```text
+Core 1: [T1 runs]──[T1 waits on DB]──────────────[T1 resumes]
+                    ↳ scheduler runs T7 here
+Core 1:             [T7 runs]────[T7 waits]
+                                   ↳ runs T3 ...
+```
+
+## Concurrency vs parallelism
+
+These words get mixed up constantly:
+
+- **Concurrency**: *dealing with* many things at once. Several tasks are in progress and their execution interleaves. Possible on one core.
+- **Parallelism**: *doing* many things at once. Tasks literally execute at the same instant on different cores.
+
+A web server is mostly a **concurrency** problem: thousands of requests in flight, most of them waiting on I/O. A video encoder is a **parallelism** problem: crunch numbers on every core.
+
+## How a Java web server uses threads
+
+Classic Spring MVC (Tomcat) uses **thread-per-request**. Tomcat keeps a pool of worker threads (default max: 200). Each incoming request borrows a thread, runs your controller on it start to finish, and returns it.
+
+```java
+// Every request below runs on its own Tomcat worker thread.
+@GetMapping("/orders/{id}")
+OrderDto get(@PathVariable long id) {
+    Order o = orderRepo.findById(id).orElseThrow();   // thread blocks ~5ms waiting for DB
+    Customer c = customerClient.fetch(o.customerId()); // thread blocks ~80ms waiting for HTTP
+    return OrderDto.of(o, c);
+}
+```
+
+This model is simple: code reads top-to-bottom, stack traces make sense, `ThreadLocal` works for request context. The catch: while waiting 85 ms on I/O, that thread is **held hostage**. With 200 threads and 85 ms per request, you max out around 200 / 0.085 ≈ **2,350 requests/second**, even if the CPU is 5% busy. You'll explore this and its alternatives (event loops, virtual threads) in the *Blocking vs Non-Blocking I/O* lesson.
+
+<Quiz
+  question="Your service's CPU sits at 10%, yet requests are timing out under load. All 200 Tomcat threads are busy. What's the most likely cause?"
+  options={[
+    "The CPU is too slow",
+    "Threads are blocked waiting on slow I/O (DB, downstream API) so none are free",
+    "Garbage collection is using all memory",
+    "The network card is saturated",
+  ]}
+  answer={1}
+  explanation="Low CPU + exhausted thread pool is the signature of threads parked on I/O. Fix the slow dependency, add timeouts, or move to a model where waiting doesn't hold a thread."
+/>
+
+## Processes vs threads: when to use which
+
+<Tradeoffs
+  good={[
+    "Threads: share memory, so communication is just a method call or shared object",
+    "Threads: cheaper to create and switch than processes",
+    "Processes: isolation, so a crash or memory leak doesn't take down siblings",
+    "Processes: can be scaled across machines (that's what microservices and containers are)",
+  ]}
+  bad={[
+    "Threads: shared memory means race conditions and locks (next lesson)",
+    "Threads: one thread corrupting state can bring down the whole process",
+    "Processes: communicating needs sockets, pipes or queues, which are slower and more code",
+    "Each platform thread reserves ~1 MB of stack, so 10k threads ≈ 10 GB of address space",
+  ]}
+/>
+
+Real systems use both. Postgres uses **one process per connection** (isolation; this is why Postgres connections are expensive and you need a pool). Java services use **one process, many threads**. Nginx uses **a few processes, each running an event loop**. Kubernetes runs **many processes (containers) across many machines**.
+
+<LevelTags
+  junior="Knows the difference between a process and a thread, and that blocking I/O holds a thread."
+  mid="Sizes thread pools and connection pools sensibly, reads thread dumps to find stuck threads."
+  senior="Chooses the concurrency model (thread-per-request, async, virtual threads) based on the workload's I/O vs CPU profile."
+  lead="Sets standards for timeouts, pool sizes and async usage across services so one team's slow dependency can't exhaust everyone's threads."
+/>
+
+<SeniorLens>
+When a service is "slow under load", seniors look at three numbers first: **CPU utilization, thread/connection pool saturation and downstream latency**. High CPU means a compute problem (optimize code, add instances). Low CPU with a full pool means a waiting problem (fix the dependency, add timeouts, change concurrency model). Adding more instances to a waiting problem often just moves the overload to the database.
+</SeniorLens>
+
+<KeyTakeaways>
+- Process = isolated running program with its own memory. Thread = a line of execution inside it, sharing memory with siblings.
+- A core runs one thread at a time; the scheduler context-switches to create the illusion of more.
+- Waiting threads cost memory but not CPU, which is why servers have many more threads than cores.
+- Thread-per-request is simple but capped by `pool size ÷ request duration`.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously, *Backend from First Principles*:** the concurrency and parallelism episode.
+- **[Operating Systems: Three Easy Pieces](https://pages.cs.wisc.edu/~remzi/OSTEP/)** (free): chapters on processes, threads and scheduling.
+- **Rob Pike, *Concurrency is not Parallelism*** (talk): the clearest explanation of the distinction.
+</GoDeeper>

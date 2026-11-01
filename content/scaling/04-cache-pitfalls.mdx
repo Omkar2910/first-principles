@@ -1,0 +1,113 @@
+---
+title: Cache Invalidation and Failure Modes
+description: Stampedes, hot keys, penetration, stale data, and the techniques that keep caches from causing outages.
+minutes: 11
+level: senior
+---
+
+<Problem>
+"There are only two hard things in computer science: cache invalidation and naming things." The joke is popular because it's true. Caches fail in characteristic ways: a popular key expires and 10,000 requests hit the DB at once; a bot requests nonexistent IDs and every request misses; Redis restarts and the database melts. Each failure mode has a well-known fix. Seniors know them by name.
+</Problem>
+
+## 1. Cache stampede (thundering herd)
+
+A hot key expires. In the next 50 ms, 5,000 requests all miss and **all** run the expensive query simultaneously. The DB falls over, which makes the queries slower, so more requests pile up.
+
+Fixes:
+- **Request coalescing / single-flight**: only one request recomputes; the others wait for its result. (Caffeine's `LoadingCache` does this per instance; a short Redis lock does it across instances.)
+- **Stale-while-revalidate**: serve the slightly stale value while one background refresh updates it.
+- **Probabilistic early expiration**: each reader has a small, increasing chance of refreshing *before* the TTL, spreading the refresh out.
+- **TTL jitter**: `ttl = 600s ± random(60s)` so keys cached together don't expire together.
+
+```java
+// Caffeine: refresh in background after 5 min, hard-expire after 10 min, one load per key
+LoadingCache<Long, Product> cache = Caffeine.newBuilder()
+    .maximumSize(10_000)
+    .refreshAfterWrite(Duration.ofMinutes(5))   // stale-while-revalidate
+    .expireAfterWrite(Duration.ofMinutes(10))
+    .build(productRepo::load);                  // concurrent misses share one load
+```
+
+## 2. Cache penetration
+
+Requests for keys that **don't exist** (e.g. `GET /products/-1`, or a scraper enumerating IDs) always miss and always hit the DB.
+
+Fixes: **cache negative results** briefly (`product:-1 → NOT_FOUND`, TTL 60 s); validate input; for huge key spaces, a **Bloom filter** of existing IDs answers "definitely not present" in memory.
+
+## 3. Hot keys
+
+One key (a viral post, a flash-sale product) gets so much traffic that the single Redis shard holding it saturates.
+
+Fixes: a **local in-process cache** in front of Redis for the hottest keys (even a 1-second TTL absorbs enormous load); **replicate** the key under several names (`post:42#1..#8`) and read a random replica; read from Redis replicas.
+
+## 4. Cache avalanche / cold start
+
+Redis restarts, or a deploy flushes the cache, and *every* request misses at once. If your database was sized assuming a 95% hit rate, it now gets **20× its normal load**.
+
+Fixes: Redis persistence/replication, **warming** critical keys before traffic, gradual traffic ramp-up, rate limiting or load shedding on the DB path, and capacity planning that knows the cold-cache number.
+
+## 5. Stale data and invalidation races
+
+Even delete-on-write has a classic race with cache-aside:
+
+```text
+Reader: cache miss → reads OLD value from DB ... (slow)
+Writer:               updates DB → deletes cache key
+Reader:                                           ... writes OLD value into cache  ← stale until TTL
+```
+
+Mitigations: always have a **TTL** as a backstop; **delayed double delete** (delete again a second later); version numbers in cached values; or drive invalidation from the DB's change stream (**CDC**) so the cache follows committed data in order.
+
+<MentalModel>
+A cache is a **dam** in front of your database. Most of the time it holds back the flood beautifully. The failure modes are all about the dam failing **suddenly**: one gate opening for everyone at once (stampede), water leaking through holes the dam doesn't cover (penetration), one gate taking all the pressure (hot key), or the whole dam disappearing (cold start). The question to ask is never "does the cache work?" but **"what does the database see when the cache doesn't?"**
+</MentalModel>
+
+<Quiz
+  question="Every day at exactly 09:00:00 your DB CPU spikes for a few seconds. You warm 50,000 product keys at 08:00 with a 1-hour TTL. What's happening and what's the simplest fix?"
+  options={[
+    "A cron job; disable it",
+    "All keys expire simultaneously (avalanche/stampede); add random jitter to TTLs and/or refresh-ahead",
+    "Redis is restarting; add replicas",
+    "Morning traffic; add DB replicas",
+  ]}
+  answer={1}
+  explanation="Keys written together with identical TTLs expire together, causing a synchronized wave of misses. Jittered TTLs spread expirations out; refresh-ahead avoids the miss entirely."
+/>
+
+<Tradeoffs
+  good={[
+    "Single-flight + stale-while-revalidate eliminate most stampedes",
+    "Negative caching and Bloom filters stop penetration cheaply",
+    "Local caches absorb hot-key spikes",
+  ]}
+  bad={[
+    "Each mitigation adds staleness or complexity",
+    "Negative caching can hide newly created items briefly",
+    "CDC-driven invalidation is the most correct but most infrastructure",
+  ]}
+/>
+
+<LevelTags
+  junior="Always sets TTLs and bounds caches."
+  mid="Uses single-flight loading, TTL jitter and negative caching."
+  senior="Designs for hot keys, cold starts and invalidation races; knows the DB load at 0% hit rate."
+  lead="Makes cache failure part of capacity planning and game days."
+/>
+
+<SeniorLens>
+A great design-review question: **"What's the database load if the cache hit rate drops to zero for 5 minutes?"** If nobody knows, the cache is a hidden single point of failure. Strong designs either size the DB to survive it briefly or put load shedding in front of it.
+</SeniorLens>
+
+<KeyTakeaways>
+- Stampede → single-flight, stale-while-revalidate, jitter.
+- Penetration → negative caching, Bloom filters, validation.
+- Hot keys → local caching, key replication.
+- Cold start → warming, persistence, load shedding; know your 0%-hit-rate load.
+- Invalidation races → TTL backstop, double delete, CDC.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Facebook, *Scaling Memcache at Facebook*** (NSDI paper): leases, thundering herds, regional invalidation.
+- **Cloudflare blog:** posts on request coalescing.
+- **Optimal probabilistic cache stampede prevention** (Vattani et al.): the XFetch algorithm.
+</GoDeeper>

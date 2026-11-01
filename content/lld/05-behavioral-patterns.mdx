@@ -1,0 +1,157 @@
+---
+section: Principles and patterns
+title: "Design Patterns: Behavioral"
+description: Strategy, Observer, State, Template Method, Chain of Responsibility and Command. Organizing how objects collaborate.
+minutes: 12
+level: mid
+---
+
+<Problem>
+Business logic accumulates conditionals: `if (country == IN) ... else if (country == US) ...`, giant `switch` statements on order status, and "after an order is placed, also do X, Y, Z" lists that grow every sprint. **Behavioral patterns** organize *who does what and when*, turning sprawling conditionals and hard-wired reactions into structures that are easy to extend.
+</Problem>
+
+## Strategy: interchangeable algorithms
+
+Encapsulate a family of algorithms behind an interface and choose one at runtime. Probably the **most useful pattern in backend code**.
+
+```java
+interface TaxStrategy { Money taxFor(Order o); }
+class IndiaGst implements TaxStrategy { ... }
+class UsSalesTax implements TaxStrategy { ... }
+class EuVat implements TaxStrategy { ... }
+
+class TaxCalculator {
+    private final Map<Country, TaxStrategy> strategies;
+    Money tax(Order o) { return strategies.get(o.country()).taxFor(o); }
+}
+```
+
+New country = new class. Each strategy is testable alone. Lambdas make lightweight strategies trivial: `Comparator<Order> byTotal = comparing(Order::total);`.
+
+## Observer: react to events without coupling
+
+Subjects publish events; observers subscribe. The publisher doesn't know who listens.
+
+```java
+// Spring application events
+@Service
+class OrderService {
+    private final ApplicationEventPublisher events;
+    Order place(...) {
+        Order o = ...;
+        events.publishEvent(new OrderPlaced(o.id()));
+        return o;
+    }
+}
+
+@Component class LoyaltyListener  { @EventListener void on(OrderPlaced e) { ... } }
+@Component class AnalyticsListener { @TransactionalEventListener(phase = AFTER_COMMIT) void on(OrderPlaced e) { ... } }
+```
+
+`OrderService` stops growing every time someone wants to react to orders. (`AFTER_COMMIT` avoids reacting to orders that later roll back.) Across services, this becomes pub/sub messaging (Track 3).
+
+## State: behavior that depends on state
+
+When an object's behavior changes with its state, and you see `switch (status)` in many methods, model each state as an object:
+
+```java
+sealed interface OrderState permits Pending, Paid, Shipped, Cancelled {
+    default OrderState pay()    { throw new IllegalTransition(this, "pay"); }
+    default OrderState ship()   { throw new IllegalTransition(this, "ship"); }
+    default OrderState cancel() { throw new IllegalTransition(this, "cancel"); }
+}
+record Pending() implements OrderState {
+    public OrderState pay()    { return new Paid(); }
+    public OrderState cancel() { return new Cancelled(); }
+}
+record Paid() implements OrderState {
+    public OrderState ship()   { return new Shipped(); }
+    public OrderState cancel() { return new Cancelled(); }   // + refund side effect elsewhere
+}
+record Shipped() implements OrderState {}
+record Cancelled() implements OrderState {}
+```
+
+Illegal transitions are impossible by construction, and the state diagram is readable in code.
+
+## Template Method: fixed skeleton, variable steps
+
+A base class defines the algorithm's steps; subclasses fill in specifics.
+
+```java
+abstract class ReportJob {
+    public final void run() {             // the invariant workflow
+        var data = extract();
+        var rows = transform(data);
+        write(rows);
+        notifyOwners();
+    }
+    protected abstract Data extract();
+    protected abstract List<Row> transform(Data d);
+    protected void write(List<Row> rows) { /* default CSV to S3 */ }
+    private void notifyOwners() { ... }
+}
+```
+
+Spring's `JdbcTemplate`, `RestTemplate` and `TransactionTemplate` are the callback flavor of this idea. Today, composition (passing strategies/lambdas) is often preferred over inheritance for this.
+
+## Chain of Responsibility: pass a request along handlers
+
+Each handler processes or passes on. You've met it as **middleware/filter chains** (Track 1). Also useful for validation pipelines and approval workflows:
+
+```java
+interface FraudCheck { Verdict check(Payment p, Chain next); }
+// VelocityCheck → GeoMismatchCheck → BlacklistCheck → ML score; any can short-circuit with DECLINE
+```
+
+## Command: requests as objects
+
+Wrap an action and its parameters in an object, so it can be queued, logged, retried, undone or scheduled. Background jobs (`SendEmailCommand`), CQRS write commands, and undo/redo all use it.
+
+<MentalModel>
+Behavioral patterns are **roles in a kitchen**. **Strategy**: different recipes for the same dish; pick one per customer. **Observer**: the bell that rings when an order's ready; whoever cares responds. **State**: the order ticket that moves along the rail (new → cooking → ready → served), and what you can do with it depends on where it is. **Chain of responsibility**: the tasting line where each chef can approve or send the plate back. **Command**: the written order ticket itself, which can be queued, re-made or voided.
+</MentalModel>
+
+<Quiz
+  question="Your OrderService.place() method keeps growing: send email, update loyalty, notify warehouse, log analytics… each added by a different team. Which pattern best stops this growth?"
+  options={["Singleton", "Observer (publish an OrderPlaced event; each concern subscribes)", "Builder", "Template Method"]}
+  answer={1}
+  explanation="Observer decouples the core action from its reactions. New reactions add listeners without touching OrderService."
+/>
+
+<Tradeoffs
+  good={[
+    "Strategy/State eliminate sprawling conditionals",
+    "Observer decouples core logic from side effects",
+    "Command makes actions queueable, retryable and auditable",
+  ]}
+  bad={[
+    "Indirection: harder to see the full flow in one place",
+    "In-process observers run synchronously by default and can slow or fail the publisher",
+    "Template Method relies on inheritance, so prefer composition when possible",
+  ]}
+/>
+
+<LevelTags
+  junior="Recognizes strategy and observer and uses Spring events."
+  mid="Refactors conditionals into strategies/state objects; uses AFTER_COMMIT listeners correctly."
+  senior="Chooses in-process events vs messaging; models workflows as explicit state machines."
+  lead="Encourages patterns that keep domains extensible as teams grow."
+/>
+
+<SeniorLens>
+In LLD interviews, **Strategy and State are the most valuable patterns to reach for**: pricing rules, payment methods, parking fee calculations, vending machine states, elevator states. Naming them and sketching the interface shows design maturity quickly; then move on to the actual problem.
+</SeniorLens>
+
+<KeyTakeaways>
+- Strategy: swap algorithms behind an interface.
+- Observer: publish events; listeners react independently.
+- State: one class per state; illegal transitions impossible.
+- Template Method, Chain of Responsibility and Command organize workflows and requests.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Refactoring.Guru: Behavioral patterns](https://refactoring.guru/design-patterns/behavioral-patterns)**.
+- **Head First Design Patterns**: approachable intro.
+- **Spring docs:** application events and `@TransactionalEventListener`.
+</GoDeeper>

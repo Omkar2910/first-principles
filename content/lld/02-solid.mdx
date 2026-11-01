@@ -1,0 +1,143 @@
+---
+section: Principles and patterns
+title: SOLID Principles in Practice
+description: The five principles with real Java examples, and the judgment to know when they help and when they're overkill.
+minutes: 12
+level: mid
+---
+
+<Problem>
+SOLID is quoted in every interview and code review, often as dogma: "this violates SRP!" Applied mechanically, it produces dozens of one-method interfaces and factories for things that never change. Applied with judgment, it makes code **easy to extend and safe to change**. The skill is knowing what each principle protects you from.
+</Problem>
+
+## S: Single Responsibility Principle
+
+> A class should have **one reason to change**, meaning one stakeholder or axis of change.
+
+```java
+// ❌ Changes for 3 different reasons: pricing rules, PDF layout, email provider
+class InvoiceService {
+    Money calculateTotal(Order o) { ... }
+    byte[] renderPdf(Invoice i) { ... }
+    void emailInvoice(Invoice i) { ... }
+}
+// ✅ Split by reason to change
+class InvoiceCalculator { Money total(Order o) { ... } }
+class InvoicePdfRenderer { byte[] render(Invoice i) { ... } }
+class InvoiceMailer { void send(Invoice i, byte[] pdf) { ... } }
+```
+
+Not "one method per class". It's **cohesion around a reason to change**.
+
+## O: Open/Closed Principle
+
+> Open for extension, closed for modification. Add behavior by adding code, not editing working code.
+
+```java
+interface DiscountRule { Money apply(Cart c); }
+class PercentageOff implements DiscountRule { ... }
+class BuyOneGetOne implements DiscountRule { ... }
+
+class PricingEngine {
+    private final List<DiscountRule> rules;          // new rule = new class, engine untouched
+    Money price(Cart c) { return rules.stream().map(r -> r.apply(c)).reduce(c.subtotal(), Money::minus); }
+}
+```
+
+Apply where you **expect** variation (discount rules, payment methods, export formats), not everywhere.
+
+## L: Liskov Substitution Principle
+
+> Subtypes must be usable anywhere their base type is expected **without breaking expectations**.
+
+```java
+// ❌ Classic violation
+class Rectangle { void setWidth(int w); void setHeight(int h); int area(); }
+class Square extends Rectangle { /* setWidth also sets height */ }
+// Code that sets width=5, height=4 and expects area 20 breaks with a Square.
+
+// ❌ Real-world version
+class ReadOnlyList<T> extends ArrayList<T> { @Override public boolean add(T t) { throw new UnsupportedOperationException(); } }
+```
+
+If a subclass throws `UnsupportedOperationException`, strengthens preconditions, or weakens guarantees, it's probably not a true subtype. Model it differently.
+
+## I: Interface Segregation Principle
+
+> Clients shouldn't depend on methods they don't use.
+
+```java
+// ❌ Fat interface: a read-only report job must "implement" deletes
+interface UserRepository { User find(Id id); List<User> search(Query q); void save(User u); void delete(Id id); void bulkImport(...); }
+
+// ✅ Role interfaces
+interface UserReader { User find(Id id); List<User> search(Query q); }
+interface UserWriter { void save(User u); void delete(Id id); }
+```
+
+Small, role-based interfaces make dependencies explicit and tests easier.
+
+## D: Dependency Inversion Principle
+
+> High-level policy shouldn't depend on low-level details; both depend on **abstractions**, and the abstraction is owned by the high-level side.
+
+```java
+// Domain owns the port (interface)
+interface PaymentGateway { ChargeResult charge(Money amount, PaymentToken token, IdempotencyKey key); }
+
+class CheckoutService {                       // high-level policy
+    private final PaymentGateway payments;   // depends on abstraction
+    CheckoutService(PaymentGateway payments) { this.payments = payments; }   // injected
+}
+
+class StripePaymentGateway implements PaymentGateway { ... }   // low-level detail plugs in
+```
+
+Spring's dependency injection makes this natural; the principle is about **which direction the dependency arrow points**. That's the foundation of hexagonal architecture (lesson 7).
+
+<MentalModel>
+SOLID is a set of **electrical standards for a house**. Each appliance does one job (SRP); you add appliances by plugging into sockets, not rewiring the house (OCP); any appliance that claims to be a "lamp" must light up when switched on (LSP); sockets don't force you to connect to the gas line too (ISP); and the house defines the socket shape, so any manufacturer can build for it (DIP).
+</MentalModel>
+
+<Quiz
+  question="You add a new export format (Parquet) and must edit a 300-line switch statement in ReportExporter used by 5 features. Which principle is this design missing?"
+  options={["Liskov Substitution", "Open/Closed: new formats should be new implementations of an Exporter interface", "Interface Segregation", "None, switches are fine"]}
+  answer={1}
+  explanation="Export formats are an expected axis of variation. An Exporter interface with one class per format lets you add Parquet without modifying working code."
+/>
+
+<Tradeoffs
+  good={[
+    "Changes localized; extension without modification",
+    "Easier unit testing via small interfaces and injected dependencies",
+    "Clear dependency direction keeps domain logic framework-free",
+  ]}
+  bad={[
+    "Premature abstraction: interfaces with a single implementation forever",
+    "Indirection makes code harder to follow",
+    "Dogmatic application slows teams down",
+  ]}
+/>
+
+<LevelTags
+  junior="Can explain each principle with an example."
+  mid="Applies SRP/OCP/DIP where variation is expected; spots LSP violations."
+  senior="Balances SOLID against simplicity (YAGNI); refactors toward abstractions when the second or third variant appears."
+  lead="Teaches principles as tools with tradeoffs, not rules; keeps codebases pragmatic."
+/>
+
+<SeniorLens>
+A healthy heuristic: **"rule of three"**. The first time, just write it. The second time, notice the duplication. The third time, extract the abstraction. Seniors introduce interfaces when variation is real or clearly coming, and say "YAGNI" just as confidently as "SRP".
+</SeniorLens>
+
+<KeyTakeaways>
+- SRP: one reason to change. OCP: extend by adding code. LSP: subtypes keep promises.
+- ISP: small role interfaces. DIP: depend on abstractions owned by the policy layer.
+- Apply where variation is real; avoid speculative abstraction.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Robert C. Martin, *Clean Architecture***: chapters on SOLID.
+- **Uncle Bob's original SOLID articles** (butunclebob.com archive).
+- **Dan North, *CUPID: for joyful coding***: a thoughtful counterpoint.
+</GoDeeper>

@@ -1,0 +1,124 @@
+---
+title: Indexes
+description: How B-tree indexes turn million-row scans into a handful of page reads, plus composite, covering and partial indexes.
+minutes: 12
+level: mid
+---
+
+<Problem>
+The endpoint was fast in development with 1,000 rows. In production with 40 million rows, it takes 9 seconds and the DB CPU sits at 100%. Nothing in the code changed. The query is doing a **full table scan**. Indexes are the single biggest performance lever in most backends, and misunderstanding them is behind a large share of database incidents.
+</Problem>
+
+## What an index is
+
+An index is a **separate, sorted data structure** that maps column values to row locations. The default in Postgres and MySQL is a **B-tree** (balanced tree): wide, shallow, sorted.
+
+<MentalModel>
+A book's **index at the back**. To find "consistent hashing" you don't read all 600 pages; you look it up alphabetically and jump to page 312. The index costs extra pages at the back of the book, and every time the author adds content, the index must be updated too.
+</MentalModel>
+
+<IndexScanSim />
+
+Because each B-tree page holds hundreds of keys, the tree is extremely shallow: 3–4 levels even for billions of rows. A lookup is a few page reads instead of millions.
+
+## What B-tree indexes are good at
+
+```sql
+CREATE INDEX idx_orders_user ON orders(user_id);
+
+WHERE user_id = 42                    -- ✅ equality
+WHERE created_at > now() - interval '7 days'   -- ✅ range (if indexed on created_at)
+ORDER BY created_at DESC LIMIT 20     -- ✅ already sorted, so no sort step
+WHERE email LIKE 'ada%'               -- ✅ prefix
+WHERE email LIKE '%ada%'              -- ❌ leading wildcard can't use the sort order
+WHERE lower(email) = 'ada@x.com'      -- ❌ unless you index lower(email) (expression index)
+```
+
+## Composite indexes and the leftmost-prefix rule
+
+```sql
+CREATE INDEX idx_orders_user_status_created ON orders(user_id, status, created_at);
+```
+
+Sorted by `user_id`, then `status` within each user, then `created_at`. Like a phone book sorted by (last name, first name), it helps queries that use a **leftmost prefix**:
+
+| Query filter | Uses index? |
+|---|---|
+| `user_id = ?` | ✅ |
+| `user_id = ? AND status = ?` | ✅ |
+| `user_id = ? AND status = ? ORDER BY created_at` | ✅ perfect |
+| `status = ?` | ❌ (not leftmost) |
+| `user_id = ? AND created_at > ?` | ⚠ partially (skips status) |
+
+Column order rule of thumb: **equality columns first, then range/sort columns**.
+
+## Covering, partial and unique indexes
+
+- **Covering index**: includes all columns the query needs, so the DB never touches the table (*index-only scan*). `CREATE INDEX ... ON orders(user_id) INCLUDE (status, total_cents);`
+- **Partial index**: indexes only some rows. `CREATE INDEX ... ON orders(created_at) WHERE status = 'PENDING';` Tiny and fast when you only ever query pending orders.
+- **Unique index**: enforces uniqueness *and* speeds lookups.
+
+## Indexes aren't free
+
+- **Every write updates every index** on the table. 10 indexes ≈ much slower inserts.
+- They use disk and memory (and compete for cache with your data).
+- **Low-selectivity** columns (e.g., `is_active` where 95% are true) rarely help; the planner will scan anyway.
+- Unused indexes are pure cost. Postgres's `pg_stat_user_indexes` shows which are never used.
+
+## Don't guess. EXPLAIN.
+
+```sql
+EXPLAIN ANALYZE SELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC LIMIT 20;
+-- Look for: Seq Scan (bad on big tables) vs Index Scan / Index Only Scan,
+-- estimated vs actual rows, and where the time goes.
+```
+
+<Quiz
+  question="You have an index on (status, created_at). Which query benefits most?"
+  options={[
+    "WHERE created_at > '2026-01-01'",
+    "WHERE status = 'PAID' ORDER BY created_at DESC LIMIT 50",
+    "WHERE total_cents > 1000",
+    "WHERE lower(status) = 'paid'",
+  ]}
+  answer={1}
+  explanation="Equality on the leftmost column, then the second column provides the ordering, so the DB reads the first 50 matching entries straight from the index with no sort. The created_at-only filter skips the leftmost column."
+/>
+
+<Tradeoffs
+  good={[
+    "Logarithmic lookups: milliseconds on billions of rows",
+    "Sorted order eliminates sort steps for ORDER BY / LIMIT",
+    "Unique indexes enforce invariants",
+  ]}
+  bad={[
+    "Slower writes: every index must be maintained",
+    "Storage and cache pressure",
+    "Wrong column order or functions on columns make them useless",
+    "Building indexes on huge tables needs CONCURRENTLY to avoid locking writes",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows indexes speed up WHERE/ORDER BY and that they slow writes."
+  mid="Designs composite indexes with correct column order, reads EXPLAIN ANALYZE, uses CREATE INDEX CONCURRENTLY."
+  senior="Designs indexing strategy around access patterns, uses covering/partial indexes, removes unused ones."
+  lead="Makes query performance reviews and slow-query monitoring part of the team's normal workflow."
+/>
+
+<SeniorLens>
+When a query is slow, seniors go straight to `EXPLAIN ANALYZE` and the slow-query log instead of guessing. And they review **new queries in PRs** with "which index serves this?" in mind. The cheapest time to add an index is before the table has 50 million rows.
+</SeniorLens>
+
+<KeyTakeaways>
+- A B-tree index is a sorted, shallow tree: a few page reads for any lookup.
+- Composite indexes follow the leftmost-prefix rule: equality first, then range/sort.
+- Covering and partial indexes are powerful specialized tools.
+- Indexes cost writes and memory. Measure with EXPLAIN ANALYZE.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Use The Index, Luke](https://use-the-index-luke.com/)** by Markus Winand: the definitive free resource.
+- **Sriniously:** database indexing episode.
+- **Postgres docs:** Indexes chapter and `EXPLAIN`.
+</GoDeeper>

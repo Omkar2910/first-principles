@@ -1,0 +1,94 @@
+---
+section: Across all levels
+title: Interviewing at Each Level
+description: What coding, LLD, HLD and behavioral rounds look for at SDE2, SDE3 and staff, and how to prepare.
+minutes: 12
+level: mid
+---
+
+<Problem>
+The same interview question ("design a URL shortener") is asked to mid-level and staff candidates, with very different expectations. Many strong engineers get **down-leveled** not because they lack skill, but because they answered at the wrong altitude: too shallow for senior, or with no leadership stories for staff. Knowing what each round evaluates **at each level** lets you prepare efficiently and show your real level.
+</Problem>
+
+## The typical loop
+
+1. **Coding / DSA** (1–2 rounds): problem solving, code quality, testing.
+2. **Low-level design** (often for SDE2/SDE3): classes, patterns, extensibility, concurrency.
+3. **High-level system design** (SDE2+, central for SDE3+): architecture, tradeoffs, scale.
+4. **Behavioral / leadership** (all levels, decisive at senior+): past behavior as evidence of level.
+5. Sometimes: **domain/practical** rounds (debugging, code review, AI-assisted coding, take-home).
+
+## Expectations by level
+
+| Round | **SDE2 (Mid)** | **SDE3 (Senior)** | **Staff** |
+|---|---|---|---|
+| **Coding** | Solves medium problems cleanly; tests edge cases | Same, faster and cleaner; discusses complexity and alternatives | Rarely the deciding factor; expected to be solid |
+| **LLD** | Sensible classes, some patterns, working core flow | Clean abstractions at variation points, concurrency, extensibility, crisp scoping | Often skipped or folded into design |
+| **HLD** | Reasonable components; can explain a standard design with guidance | **Drives** the design: requirements, estimates, deep dives, failure modes, tradeoffs | Ambiguous, broad problems; org/operational concerns, evolution over years, cost |
+| **Behavioral** | Owned features end to end; handled feedback and setbacks | Led projects; influenced across teams; mentored; owned production; resolved conflicts | Set direction across teams; changed how the org works; handled high-stakes ambiguity |
+
+## Behavioral: stories are your evidence
+
+Prepare **8–10 stories** from your own experience, each told in **STAR** (Situation, Task, Action, Result) with emphasis on **your** actions and **measurable** results. Cover:
+
+- A project you led end to end (biggest scope you've owned)
+- A hard technical problem/incident you solved
+- A disagreement or conflict (with a peer, manager, PM, other team)
+- A failure or mistake and what you learned/changed
+- Influencing without authority
+- Mentoring / growing others
+- A tradeoff between speed and quality
+- Ambiguity: a problem with no clear owner or solution
+
+```text
+S: Our order service lost ~40 events/week, breaking analytics and loyalty.
+T: No one owned it; I volunteered to fix it properly.
+A: Diagnosed dual-write; wrote a design doc comparing outbox vs retries vs 2PC; got buy-in from
+   3 teams; implemented outbox + Debezium; led consumer migration; added idempotency guide.
+R: Lost events → 0; unblocked 2 teams' roadmaps; pattern adopted by 4 services.
+   Learned: socializing the doc 1:1 before the review saved weeks.
+```
+
+Senior signals in stories: **"I" for your actions** (not just "we"), scope beyond your own tasks, explicit tradeoffs, data, and reflection.
+
+<MentalModel>
+An interview is a **compressed sample of your work** viewed through a keyhole. Interviewers can't watch you for six months, so each round is a structured way to see one dimension. Your job is to make the sample representative: show your normal level of thinking, out loud, at the altitude the role expects.
+</MentalModel>
+
+## Preparation plan (6–10 weeks, adjust to level)
+
+- **Coding** (daily, 45–60 min): patterns over volume (two pointers, sliding window, BFS/DFS, heaps, binary search, DP basics, intervals, graphs). Practice talking while coding and testing your solution. For Java: know collections, streams, and concurrency basics cold.
+- **LLD** (2×/week): practice parking lot, Splitwise, rate limiter, elevator, LRU cache, logger, notification service. Use the Track 6 approach.
+- **HLD** (2–3×/week): work through Track 5 case studies; practice out loud with a timer, following the framework; get mock interviews.
+- **Behavioral** (1×/week): write and rehearse your stories; tailor to the company's values/leadership principles.
+- **Mocks**: with peers or platforms. Feedback on communication matters as much as correctness.
+
+## In the room
+
+- **Clarify** before solving; state assumptions.
+- **Think aloud**; interviewers grade reasoning, not just answers.
+- **Drive** at senior+: propose the structure, manage time, go deep where it matters.
+- **Acknowledge tradeoffs and unknowns** honestly; "I'd validate this with a load test" beats bluffing.
+- **AI-era note**: some companies now allow AI tools in practical rounds; they're evaluating how you specify, verify and review, not whether you can type faster.
+
+<Scenario
+  situation="In a senior-level system design interview, the interviewer says 'Design a notification system' and then stays quiet. What's the strongest opening?"
+  choices={[
+    { text: "Start drawing Kafka, Redis and microservices immediately", feedback: "Jumping to components without requirements signals mid-level (or lower) design maturity." },
+    { text: "Propose a scope (channels, scale, priorities, guarantees), confirm assumptions with the interviewer, outline your plan for the session, then proceed through estimates, API, data, design and deep dives", feedback: "You lead the session with a clear structure and requirements-driven thinking, exactly what senior candidates are expected to do.", best: true },
+    { text: "Wait for the interviewer to provide more details", feedback: "At senior level, interviewers often stay quiet on purpose to see if you'll drive." },
+  ]}
+/>
+
+<KeyTakeaways>
+- Same questions, different expectations by level; answer at the right altitude.
+- Senior: drive designs, discuss tradeoffs and failures, tell stories of leading and influencing.
+- Prepare 8–10 STAR stories with your actions and measurable results.
+- Practice out loud with mocks: coding patterns, LLD, HLD, behavioral.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview* Vol. 1 & 2**; **Hello Interview** guides.
+- **Gayle Laakmann McDowell, *Cracking the Coding Interview*** / NeetCode roadmap for DSA patterns.
+- **Tracks 5 and 6** on this site for HLD and LLD practice.
+</GoDeeper>

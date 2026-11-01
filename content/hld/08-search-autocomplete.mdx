@@ -1,0 +1,114 @@
+---
+section: Case studies
+title: "Case Study: Search Autocomplete"
+description: Typeahead at scale. Tries, precomputed top-K suggestions, aggregation pipelines and edge caching.
+minutes: 12
+level: senior
+---
+
+<Problem>
+As a user types "how to le…", the search box suggests "how to learn python", "how to lose weight", within ~100 ms of each keystroke. With hundreds of millions of users typing, that's an enormous read load where **latency is everything**, and suggestions must reflect what's popular (and trending) without being recomputed on every keystroke.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: return top 5–10 suggestions for a prefix, ranked by popularity (optionally personalized, localized); update with trends.
+**Non-functional**: under 100 ms end to end (so server time is around 20 ms); 10B queries/day; high availability; slight staleness OK (minutes to hours, except trending); filter offensive suggestions.
+
+## 2. Estimates
+
+- 10B searches/day × ~6 keystrokes each (with debouncing) ≈ 60B prefix requests/day ≈ **700K QPS**, peaks over 1M.
+- So we need precomputation, aggressive caching, and many replicas.
+
+## 3. The core data structure: a trie with precomputed top-K
+
+A **trie** (prefix tree) stores strings character by character; all words with prefix "how to l" live under one node. Naively you'd traverse the whole subtree and sort by frequency on each request, which is far too slow.
+
+**Optimization**: store the **top-K suggestions at every node**:
+
+```text
+node "how to l" → ["how to learn python", "how to lose weight", "how to lower blood pressure", ...]
+```
+
+A lookup is then: walk ~10 characters, return the stored list. That's O(prefix length), microseconds.
+
+Cost: memory (each node stores K strings or references), and updates are expensive, so the trie is **rebuilt offline**, not updated per query.
+
+<MentalModel>
+A trie with top-K is like a **library with a "most borrowed" shelf at the start of every aisle and sub-aisle**. Instead of searching the whole aisle every time someone asks "what's popular under 'History → Rome'?", the librarian prepared that shelf overnight. Answers are instant; the shelves are refreshed periodically.
+</MentalModel>
+
+## 4. Two paths: serving and building
+
+```text
+Data collection (async):
+  search logs → Kafka → stream/batch aggregation (Flink/Spark): counts per query per time window
+            → filter (offensive, PII), apply decay (recent queries weigh more)
+            → build tries / top-K per prefix (shard by prefix range)
+            → publish snapshot to object storage
+
+Serving:
+  client (debounce ~100 ms, cache prefixes locally)
+     → CDN/edge cache (popular prefixes!)
+     → autocomplete service (in-memory trie snapshot, sharded by prefix, many replicas)
+```
+
+- **Serving nodes** load an immutable snapshot into memory and swap atomically when a new one arrives. No locks, no writes on the hot path.
+- **Sharding**: by prefix (e.g. `a–c`, `d–f`...), rebalanced by traffic since some letters are far more common. Each shard replicated many times for read throughput.
+- **Alternative storage**: a KV store mapping `prefix → top-K list` (Redis) instead of an in-memory trie. Same idea, and simpler to distribute.
+
+## 5. Making it fast and fresh
+
+- **Client side**: debounce keystrokes, cancel in-flight requests, cache results for prefixes already seen, prefetch.
+- **Edge caching**: short prefixes ("a", "ho", "how") are requested by millions; cache them at the CDN with a TTL.
+- **Trending**: a separate fast pipeline (minutes) over recent windows feeds a small "trending" overlay that's merged with the main (hourly/daily) suggestions.
+- **Personalization**: merge in the user's own recent searches client-side or via a small per-user store; keep the global index shared.
+
+<Quiz
+  question="Why store the top-K completions at every trie node instead of computing them at query time?"
+  options={[
+    "It uses less memory",
+    "Query-time computation would traverse large subtrees and sort on every keystroke; precomputing makes each lookup O(prefix length) at the cost of memory and offline rebuilds",
+    "Tries can't be traversed",
+    "It allows real-time updates on every search",
+  ]}
+  answer={1}
+  explanation="It's a classic read-optimization trade: move expensive work to an offline build so the ultra-hot read path is trivial."
+/>
+
+<Tradeoffs
+  good={[
+    "Microsecond lookups from precomputed top-K",
+    "Immutable snapshots: simple, lock-free serving and easy rollback",
+    "Edge and client caching absorb most traffic",
+  ]}
+  bad={[
+    "Staleness between rebuilds (mitigated by a trending overlay)",
+    "Memory-heavy indexes; uneven prefix traffic needs smart sharding",
+    "Content moderation required: autocomplete suggestions are high-visibility",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what a trie is and how prefix lookup works."
+  mid="Designs top-K at nodes, caching and debouncing."
+  senior="Separates the offline build pipeline from serving, shards by prefix traffic, adds trending and edge caching."
+  lead="Balances freshness, personalization, moderation and cost; aligns with search relevance teams."
+/>
+
+<SeniorLens>
+The senior pattern here generalizes: **when reads vastly outnumber writes and slight staleness is fine, precompute offline and serve immutable snapshots**. The same shape appears in recommendation systems, feature stores, leaderboards and config distribution.
+</SeniorLens>
+
+<KeyTakeaways>
+- Trie with precomputed top-K per node: O(prefix) lookups.
+- Offline aggregation pipeline builds snapshots; serving nodes load them immutably.
+- Shard by prefix with replicas; cache popular prefixes at the edge; debounce on the client.
+- Trending overlay for freshness; filter offensive suggestions.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview Vol. 1***: search autocomplete chapter.
+- **LinkedIn engineering:** *Cleo: the open source technology behind LinkedIn's typeahead search*.
+- **Elasticsearch completion suggester** docs (an off-the-shelf alternative).
+</GoDeeper>

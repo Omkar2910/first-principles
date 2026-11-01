@@ -1,0 +1,123 @@
+---
+title: Middleware and Request Context
+description: The pipeline every request passes through before and after your handler, and how data travels along it.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Every endpoint needs logging, authentication, CORS, rate limiting, request IDs, timing metrics and error formatting. If each controller method did that itself, you'd copy-paste the same 40 lines into hundreds of handlers and forget them in a few. **Middleware** pulls these *cross-cutting concerns* into a reusable pipeline that wraps every request.
+</Problem>
+
+## The pipeline
+
+Middleware (called **filters** and **interceptors** in Spring, **middleware** in Express/Go) are functions that wrap the handler. Each one can:
+- inspect or modify the request,
+- **short-circuit** (respond immediately, e.g. `401`) without calling the rest,
+- call the next stage,
+- inspect or modify the response on the way back out.
+
+```text
+request → [requestId] → [logging] → [CORS] → [rate limit] → [auth] → handler
+response ← [requestId] ← [logging] ← [CORS] ← [rate limit] ← [auth] ← handler
+```
+
+<MentalModel>
+**Russian nesting dolls**, or an onion. The handler is the innermost doll. Each middleware wraps everything inside it, so it sees the request on the way in and the response on the way out. That's why a logging middleware can measure total duration: it starts a timer before calling "next" and stops it after.
+</MentalModel>
+
+## Try it
+
+<MiddlewarePipeline />
+
+**Order matters.** Request IDs and logging go first so even rejected requests get logged. Rate limiting goes before expensive work like auth lookups. Authentication must precede authorization. Body parsing usually comes late so you don't parse bodies you'll reject anyway.
+
+## A filter in Spring
+
+```java
+@Component
+@Order(1)
+class RequestIdFilter extends OncePerRequestFilter {
+    @Override
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+        String id = Optional.ofNullable(req.getHeader("X-Request-Id")).orElse(UUID.randomUUID().toString());
+        MDC.put("requestId", id);              // every log line in this request now includes it
+        res.setHeader("X-Request-Id", id);
+        long start = System.nanoTime();
+        try {
+            chain.doFilter(req, res);          // ← call the next stage
+        } finally {
+            log.info("{} {} → {} in {} ms", req.getMethod(), req.getRequestURI(),
+                     res.getStatus(), (System.nanoTime() - start) / 1_000_000);
+            MDC.clear();
+        }
+    }
+}
+```
+
+Spring layers: **Servlet filters** (outermost, raw HTTP, where Spring Security lives) → **HandlerInterceptors** (know which controller will run) → **AOP aspects** (around specific methods) → **`@ControllerAdvice`** (exception → response mapping).
+
+## Request context
+
+Middleware often discovers something later stages need: the authenticated user, the tenant, the request ID, a trace ID, the client's locale. That data goes into a **request-scoped context**:
+
+- Java (thread-per-request): `ThreadLocal`-based holders such as `SecurityContextHolder` and SLF4J's `MDC`. (With virtual threads and async code, prefer **`ScopedValue`** or explicit propagation, since ThreadLocals don't automatically follow work onto other threads.)
+- Go: `context.Context` passed explicitly as the first argument.
+- Node: `AsyncLocalStorage`.
+
+Context should carry **request metadata**, not business data. If your service methods silently depend on 10 things from a hidden context, they become hard to test and reason about.
+
+## Propagating context across services
+
+When service A calls service B, forward the **trace ID / request ID** (`traceparent` header from W3C Trace Context). That's what lets you follow one user action through 12 services in your logs and traces (Track 8). OpenTelemetry instrumentation does this automatically for common HTTP clients.
+
+<Quiz
+  question="Your rate limiter runs after authentication, and auth requires a DB lookup. Under an abusive traffic spike, what happens?"
+  options={[
+    "Nothing; order doesn't matter",
+    "Every abusive request still costs a DB lookup before being rate-limited, so the DB suffers",
+    "The rate limiter becomes faster",
+    "Requests skip authentication",
+  ]}
+  answer={1}
+  explanation="Cheap rejections should happen before expensive work. Rate limit (by IP or API key) early, so abusive traffic is dropped before it reaches the database."
+/>
+
+<Tradeoffs
+  good={[
+    "Cross-cutting concerns written once and applied everywhere",
+    "Handlers stay focused on business logic",
+    "Consistent behavior: every request is logged, traced and authenticated the same way",
+  ]}
+  bad={[
+    "Hidden control flow: behavior isn't visible in the handler",
+    "Ordering bugs are subtle",
+    "Heavy middleware adds latency to every single request",
+    "ThreadLocal context breaks across async boundaries if not propagated",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows what middleware/filters are and that they run before and after handlers."
+  mid="Writes filters/interceptors, orders them correctly, uses MDC and request IDs."
+  senior="Designs context propagation across async code and services; keeps middleware cheap."
+  lead="Packages standard middleware (auth, tracing, logging, error format) into a shared platform library."
+/>
+
+<SeniorLens>
+In mature orgs, most middleware isn't written by product teams at all. It comes from a **shared service framework or a service mesh / API gateway**. That's a deliberate leadership choice: auth, tracing and rate limiting done once, correctly, for 100 services. Knowing what belongs in the gateway vs the service is a senior architectural judgment.
+</SeniorLens>
+
+<KeyTakeaways>
+- Middleware wraps handlers, sees request and response, and can short-circuit.
+- Order matters: cheap rejections first, logging outermost.
+- Request context carries metadata (user, request ID, trace ID) through the pipeline.
+- Propagate trace IDs across service calls.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the middleware and request-context episodes.
+- **Spring Security architecture docs:** a great real-world filter chain to study.
+- **[W3C Trace Context](https://www.w3.org/TR/trace-context/)** spec.
+</GoDeeper>

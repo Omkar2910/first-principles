@@ -1,0 +1,127 @@
+---
+title: Controllers, Services and Repositories
+description: Why backends split code into layers, what belongs in each, and the mistakes that blur them.
+minutes: 10
+level: junior
+---
+
+<Problem>
+Six months in, your `OrderController` is 1,800 lines. It parses HTTP, runs SQL, calculates discounts, sends emails and formats JSON. Changing the discount rule means touching HTTP code. Testing it means spinning up a web server and a database. Reusing the "place order" logic from a Kafka consumer means copy-pasting. **Layers** exist so each kind of change touches one place.
+</Problem>
+
+## The classic three layers
+
+| Layer | Responsibility | Knows about | Must NOT know about |
+|---|---|---|---|
+| **Controller** (presentation / API) | HTTP: routes, DTOs, status codes, auth annotations | Services, DTOs | SQL, business rules |
+| **Service** (business / domain logic) | Rules, workflows, transactions, orchestration | Repositories, domain models, other services | HTTP, JSON, request objects |
+| **Repository** (data access) | Reading/writing persistent data | DB, ORM, SQL | HTTP, business rules |
+
+```text
+HTTP ─▶ Controller ─▶ Service ─▶ Repository ─▶ DB
+          (DTOs)      (domain)     (entities)
+```
+
+Dependencies point **one way**: inward/downward. A repository never calls a controller.
+
+<MentalModel>
+A restaurant. The **waiter** (controller) talks to customers, takes orders in the customer's language and presents dishes nicely. The **chef** (service) knows the recipes and rules ("no shellfish in this dish"). The **pantry manager** (repository) knows where ingredients are stored and fetches them. The chef doesn't care whether the order came from a waiter, a phone call or a delivery app. That's why the same service can serve HTTP, Kafka consumers and cron jobs.
+</MentalModel>
+
+## What it looks like
+
+```java
+@RestController
+class OrderController {
+    private final OrderService orders;
+    @PostMapping("/orders")
+    ResponseEntity<OrderDto> create(@AuthenticationPrincipal User u, @Valid @RequestBody CreateOrderRequest req) {
+        Order order = orders.place(u.id(), req.productId(), req.qty());   // HTTP → domain
+        return ResponseEntity.status(201).body(OrderDto.from(order));     // domain → HTTP
+    }
+}
+
+@Service
+class OrderService {
+    private final OrderRepository orderRepo;
+    private final ProductRepository productRepo;
+    private final PaymentGateway payments;
+
+    @Transactional
+    Order place(UserId user, ProductId pid, int qty) {
+        Product p = productRepo.findById(pid).orElseThrow(() -> new NotFound("product", pid));
+        if (!p.hasStock(qty)) throw new OutOfStock(pid);
+        Order order = Order.create(user, p, qty);         // business rules live in the domain
+        p.reserve(qty);
+        return orderRepo.save(order);
+    }
+}
+
+interface OrderRepository extends JpaRepository<Order, Long> {
+    List<Order> findByUserIdAndStatus(UserId userId, Status status);
+}
+```
+
+Notice the service takes **domain types** (`UserId`, `ProductId`), not `CreateOrderRequest`. That keeps it reusable from non-HTTP entry points.
+
+## Common mistakes
+
+- **Fat controllers**: business logic in the controller. Move it into the service.
+- **Anemic services**: services that just forward to repositories while logic hides elsewhere. Fine for trivial CRUD, but don't add a layer for its own sake.
+- **Leaking HTTP downward**: services that accept `HttpServletRequest` or return `ResponseEntity`.
+- **Leaking persistence upward**: controllers returning JPA entities, triggering lazy-loading exceptions or exposing internal fields.
+- **Transactions in the wrong place**: `@Transactional` belongs on service methods (the unit of business work), not controllers or repositories.
+- **Service-to-service spaghetti**: `OrderService` → `UserService` → `OrderService` cycles. Usually means a missing concept or misplaced responsibility.
+
+## Beyond three layers
+
+As complexity grows, teams move toward **hexagonal / clean architecture** (Track 6): the domain sits at the center with no framework dependencies, and "adapters" (HTTP, DB, Kafka) plug in at the edges via interfaces. The three-layer model is the practical starting point of that idea.
+
+<Quiz
+  question="You need to place orders both from a REST endpoint and from a Kafka 'cart-checked-out' event. Where should the order placement logic live?"
+  options={[
+    "In the REST controller; the Kafka consumer calls the controller over HTTP",
+    "Duplicated in both the controller and the consumer",
+    "In OrderService; both the controller and the Kafka consumer are thin adapters calling it",
+    "In the repository",
+  ]}
+  answer={2}
+  explanation="That's exactly what the service layer is for: business logic independent of how it's triggered. Controllers and consumers just translate their input into a service call."
+/>
+
+<Tradeoffs
+  good={[
+    "Each kind of change touches one layer",
+    "Services are testable without HTTP or a real DB",
+    "Business logic reusable across entry points (REST, events, jobs)",
+  ]}
+  bad={[
+    "Boilerplate: DTO ↔ domain ↔ entity mapping",
+    "Over-layering simple CRUD apps adds ceremony without value",
+    "Layers alone don't prevent a tangled domain model",
+  ]}
+/>
+
+<LevelTags
+  junior="Puts HTTP code in controllers, logic in services, queries in repositories."
+  mid="Keeps services framework-agnostic, places transactions correctly, avoids entity leakage."
+  senior="Decides when to evolve toward hexagonal/DDD and how to split modules as the domain grows."
+  lead="Sets architectural conventions and enforces them with tooling (ArchUnit tests, module boundaries)."
+/>
+
+<SeniorLens>
+Layering is about **managing change**. A senior asks "what changes together?" Business rules change with product requirements; API shapes change with clients; persistence changes with scale. Keeping those apart is what lets a team move fast in year three, not just in month one. Tools like **ArchUnit** can turn these rules into failing tests.
+</SeniorLens>
+
+<KeyTakeaways>
+- Controller = HTTP translation, Service = business rules and transactions, Repository = data access.
+- Dependencies point one way; services don't know about HTTP.
+- Use DTOs at the edge and domain types inside.
+- Don't add layers for ceremony; add them to isolate change.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the episode on controllers, services and repositories.
+- **Martin Fowler, *Patterns of Enterprise Application Architecture*:** Service Layer, Repository.
+- **[ArchUnit](https://www.archunit.org/)**: enforce layering with unit tests.
+</GoDeeper>

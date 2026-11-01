@@ -1,0 +1,116 @@
+---
+title: What Is a Backend, Really?
+description: The jobs every backend does regardless of language or framework, and the map for this track.
+minutes: 8
+level: junior
+---
+
+<Problem>
+You can write Spring Boot controllers, but if someone asked you to build a backend in Go or Node tomorrow, would you know what pieces you need? Frameworks hide the fundamentals behind annotations. Engineers who learn the **framework** struggle when it changes; engineers who learn the **jobs a backend performs** can pick up any stack in a week. This track is about the jobs.
+</Problem>
+
+## The one-sentence definition
+
+A backend is **a long-running program that accepts requests over a network, applies rules to data it is trusted to guard, and returns responses**.
+
+Unpack that and you get every topic in this track:
+
+| Phrase | What it implies |
+|---|---|
+| *long-running program* | Lifecycle, config, graceful shutdown, health checks |
+| *accepts requests over a network* | HTTP, routing, serialization, API styles |
+| *applies rules* | Validation, business logic, layered architecture, error handling |
+| *data it is trusted to guard* | Authentication, authorization, databases, transactions |
+| *returns responses* | Status codes, error formats, performance |
+| …and it must keep running | Logging, background jobs, testing |
+
+## Why not just let the frontend talk to the database?
+
+Because **the client is untrusted**. Anything running in a browser or mobile app can be inspected and modified by the user. The backend is the **trust boundary**: the place where rules are enforced no matter what the client sends.
+
+<MentalModel>
+A backend is a **bank teller**. Customers (clients) can ask for anything, but only the teller has access to the vault (database), checks ID (authentication), checks whether you're allowed to withdraw from that account (authorization), verifies the slip is filled correctly (validation), performs the transaction by the bank's rules (business logic), and writes it in the ledger (persistence). The customer never walks into the vault.
+</MentalModel>
+
+## The anatomy of one request through a backend
+
+<Flow
+  nodes={["Network / HTTP", "Routing", "Middleware (auth, logging…)", "Deserialize + validate", "Controller", "Service (business rules)", "Repository → DB"]}
+  caption="Then everything flows back: result → serialize → status code → response."
+/>
+
+Every framework, whether Spring Boot, Express, FastAPI, Gin or Rails, implements this same pipeline. They differ only in syntax and defaults.
+
+```java
+@RestController                       // HTTP + routing
+@RequestMapping("/orders")
+class OrderController {
+    private final OrderService service;
+
+    @PostMapping                       // route: POST /orders
+    ResponseEntity<OrderDto> create(
+            @AuthenticationPrincipal User user,           // auth middleware populated this
+            @Valid @RequestBody CreateOrderRequest req) {  // deserialize + validate
+        Order order = service.place(user.id(), req);       // business logic
+        return ResponseEntity.status(201).body(OrderDto.from(order)); // serialize
+    }
+}
+```
+
+## What a backend is *not* responsible for
+
+Knowing the boundaries is just as important:
+- **Presentation**: how data looks is the client's job. Return data, not HTML fragments (unless you're doing server rendering on purpose).
+- **Trusting client-side validation**: the frontend validates for UX; the backend validates for correctness and security. Both, always.
+- **Long blocking computations inside requests**: push those to background jobs (lesson 12).
+
+<Quiz
+  question="The mobile app already checks that a discount code is valid before submitting an order. Should the backend check it again?"
+  options={[
+    "No, it's duplicate work",
+    "Yes, because the client can be modified or bypassed; the backend is the trust boundary",
+    "Only for web clients",
+    "Only if the code is longer than 10 characters",
+  ]}
+  answer={1}
+  explanation="Anyone can call your API directly with curl or a modified app. Client-side checks are for user experience. Server-side checks are for correctness and security."
+/>
+
+## The map of this track
+
+1. What is a backend (you are here)
+2. Routing
+3. Serialization
+4. Validation
+5. Middleware and request context
+6. Layered architecture
+7. Authentication
+8. Authorization
+9. API styles: REST, gRPC, GraphQL, real-time
+10. Error handling
+11. Configuration and logging
+12. Background jobs
+13. Testing backends
+14. Production readiness: health checks and lifecycle
+
+<LevelTags
+  junior="Can describe each stage of the request pipeline and where their code fits in."
+  mid="Can build the same service in a different framework because they understand the underlying jobs."
+  senior="Designs trust boundaries and responsibilities between services, clients and gateways."
+  lead="Defines the standard service template so every team's backend handles cross-cutting concerns the same way."
+/>
+
+<SeniorLens>
+When you join a new codebase, map it onto this pipeline: *Where is routing defined? Where does auth happen? Where is validation? Where are business rules? Where are DB calls?* If business rules are leaking into controllers or SQL is in the controller, you've just found your first refactoring candidates.
+</SeniorLens>
+
+<KeyTakeaways>
+- A backend accepts requests, enforces rules on data it guards, and returns responses.
+- The backend is the trust boundary. Never rely on the client.
+- Every framework implements the same pipeline: route → middleware → parse/validate → logic → persist → respond.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously, *Backend from First Principles*:** the opening episodes on what a backend is; this whole track follows that playlist's spirit.
+- **[roadmap.sh/backend](https://roadmap.sh/backend)**: a community map of backend topics.
+</GoDeeper>

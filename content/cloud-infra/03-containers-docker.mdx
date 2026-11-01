@@ -1,0 +1,122 @@
+---
+title: Containers and Docker
+description: What containers really are, writing good Dockerfiles for Java services, and image best practices.
+minutes: 11
+level: junior
+---
+
+<Problem>
+"Works on my machine" happens because environments differ: Java versions, OS libraries, config, file paths. VMs fix it but are heavy (a full OS each, minutes to boot). **Containers** package your app with exactly what it needs, start in a second, and run identically from laptop to production. They're the unit of deployment for almost everything in modern infrastructure.
+</Problem>
+
+## What a container is
+
+A container is **a regular Linux process** with:
+- **Namespaces**: an isolated view of the system (its own PID tree, network stack, filesystem mounts, hostname).
+- **cgroups**: limits on CPU, memory, I/O.
+- A **filesystem from an image**: layered, read-only layers plus a thin writable layer.
+
+Unlike VMs, containers **share the host kernel**. That's why they're light and fast, and why their isolation is weaker than VMs'.
+
+<MentalModel>
+VMs are **separate houses**, each with its own foundation and utilities (a full OS). Containers are **apartments in one building**: shared foundation and plumbing (the kernel), but each apartment has its own locked door, furniture and utility meters (namespaces, filesystem, cgroups). Much cheaper to build and move into, though the walls are thinner.
+</MentalModel>
+
+## Images and layers
+
+An **image** is a stack of read-only layers, each produced by a Dockerfile instruction. Layers are cached and shared: if only your app JAR changes, only that layer is rebuilt and pushed. **Order instructions from least to most frequently changing.**
+
+## A good Dockerfile for a Spring Boot app
+
+```dockerfile
+# ---- build stage ----
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /src
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+RUN ./mvnw -q dependency:go-offline          # cached unless pom.xml changes
+COPY src src
+RUN ./mvnw -q package -DskipTests && \
+    java -Djarmode=tools -jar target/app.jar extract --layers --destination extracted
+
+# ---- runtime stage ----
+FROM eclipse-temurin:21-jre                  # JRE only: smaller, fewer CVEs (or distroless)
+RUN useradd --system --uid 10001 app
+USER app                                      # never run as root
+WORKDIR /app
+COPY --from=build /src/extracted/dependencies/ ./
+COPY --from=build /src/extracted/spring-boot-loader/ ./
+COPY --from=build /src/extracted/snapshot-dependencies/ ./
+COPY --from=build /src/extracted/application/ ./   # only this layer changes on most commits
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]       # exec form → Java is PID 1 and receives SIGTERM
+```
+
+(Spring Boot can also build images without a Dockerfile: `./mvnw spring-boot:build-image` via Buildpacks.)
+
+## Best practices checklist
+
+- **Multi-stage builds**: build tools stay out of the runtime image.
+- **Small base images** (JRE, distroless, Alpine with care): faster pulls, smaller attack surface.
+- **Non-root user**; read-only filesystem where possible.
+- **Pin versions** (base image tags or digests) for reproducibility.
+- **No secrets in images** (they live forever in layers); inject at runtime.
+- **One process per container**; log to stdout/stderr.
+- **Exec-form ENTRYPOINT** so signals reach your app (graceful shutdown).
+- **Scan images** for vulnerabilities in CI (Trivy, Grype); rebuild regularly to pick up base-image patches.
+- **`.dockerignore`** to keep `target/`, `.git`, local configs out of the build context.
+- **Immutable tags per build** (`app:git-sha`), not just `latest`.
+
+## Local development
+
+`docker compose` runs your app plus dependencies (Postgres, Redis, Kafka) with one command, and Spring Boot's Docker Compose support and Testcontainers reuse the same idea for dev and tests.
+
+<Quiz
+  question="Your app image is 1.2 GB and rebuilds every layer on each commit. What two changes help most?"
+  options={[
+    "Use the latest tag and run as root",
+    "Multi-stage build with a slim runtime base, and order layers so dependencies are copied/installed before the frequently changing app code",
+    "Add more RUN commands",
+    "Store the JDK in a volume",
+  ]}
+  answer={1}
+  explanation="Multi-stage builds drop build tooling; layer ordering lets Docker reuse cached dependency layers so only the small app layer changes."
+/>
+
+<Tradeoffs
+  good={[
+    "Same artifact everywhere: dev, CI, prod",
+    "Fast startup and dense packing compared to VMs",
+    "Layer caching makes builds and deploys efficient",
+  ]}
+  bad={[
+    "Shared kernel means weaker isolation than VMs",
+    "Image sprawl and vulnerable base images need continuous patching",
+    "Debugging minimal images requires extra tooling",
+  ]}
+/>
+
+<LevelTags
+  junior="Writes a working Dockerfile and runs apps with docker compose."
+  mid="Uses multi-stage builds, layered JARs, non-root users, proper signal handling."
+  senior="Optimizes images for size/security, sets up scanning and base-image update pipelines."
+  lead="Standardizes base images and supply-chain policies (signing, SBOMs) across the org."
+/>
+
+<SeniorLens>
+Your container image is part of your **security perimeter**. Seniors care about what's in it: every extra package is a potential CVE. A golden, regularly rebuilt base image shared across services is one of the cheapest ways to keep hundreds of services patched.
+</SeniorLens>
+
+<KeyTakeaways>
+- Containers = processes + namespaces + cgroups + layered images; they share the host kernel.
+- Multi-stage builds, slim bases, non-root, exec-form entrypoint, no secrets.
+- Order layers by change frequency to maximize caching.
+- Scan and rebuild images regularly.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Docker docs:** Dockerfile best practices and multi-stage builds.
+- **Spring Boot docs:** container images (layering, Buildpacks).
+- **Julia Evans, *How Containers Work*** zine.
+</GoDeeper>

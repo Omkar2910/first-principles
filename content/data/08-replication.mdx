@@ -1,0 +1,111 @@
+---
+title: Replication
+description: Keeping copies of data on multiple machines for availability and read scale, and the consistency problems that creates.
+minutes: 12
+level: senior
+---
+
+<Problem>
+Your single database server is a **single point of failure**: if its disk dies, you're down (and maybe lose data). It's also a **throughput ceiling**: every read and write hits one machine. Replication copies data to multiple machines to fix both. But the moment there are copies, a new question appears: **what happens when the copies disagree?**
+</Problem>
+
+## Leader–follower (primary–replica)
+
+The most common setup (Postgres, MySQL, MongoDB replica sets):
+
+```text
+            writes
+App ───────────────▶ Leader ──WAL stream──▶ Follower 1
+ │                          └─WAL stream──▶ Follower 2
+ └── reads ──▶ followers (read scaling)
+```
+
+- All **writes go to the leader**, which streams its log to followers.
+- **Reads** can go to followers to scale read traffic.
+- If the leader dies, a follower is **promoted** (failover).
+
+## Synchronous vs asynchronous
+
+| | Synchronous | Asynchronous |
+|---|---|---|
+| Commit returns after… | at least one follower confirms | leader writes locally |
+| Write latency | Higher | Lower |
+| Data loss on leader failure | None (for confirmed writes) | Recent writes may be lost |
+| If a follower is down | Writes may block | No impact |
+
+Common compromise: **semi-synchronous**, where one follower is synchronous and the rest async.
+
+## Replication lag and its anomalies
+
+Async followers are typically milliseconds behind, but under load it can be seconds or minutes. That causes user-visible weirdness:
+
+- **Read-your-writes violation**: a user updates their profile, refreshes, and sees the old version (read hit a lagging replica). *Fix*: read from the leader for a short time after a user writes, or for that user's own data.
+- **Monotonic reads violation**: two refreshes hit different replicas; the newer data appears then disappears. *Fix*: stick each user to one replica.
+- **Consistent prefix violation**: you see an answer before the question it replies to.
+
+<MentalModel>
+A leader with followers is a **teacher dictating to note-takers**. Everyone eventually has the same notes, but slower writers lag a few sentences behind. If you ask a lagging note-taker "what did the teacher just say?", you'll get an older answer. If the teacher leaves suddenly, the most up-to-date note-taker takes over, and anything said after their last note is lost.
+</MentalModel>
+
+## Failover is the dangerous part
+
+Automatic failover sounds simple and isn't:
+- **How do you know the leader is dead** and not just slow or partitioned? Timeouts are guesses.
+- **Split brain**: the old leader comes back still thinking it's the leader, and two nodes accept writes. Systems use **fencing** (revoking the old leader's ability to write) and consensus (Track 4) to prevent this.
+- **Lost writes**: with async replication, the promoted follower may be missing the last writes.
+
+Managed databases (RDS, Cloud SQL, Aurora) handle much of this, but you still need to know the semantics: what's the RPO (data you can lose) and RTO (time to recover)?
+
+## Multi-leader and leaderless
+
+- **Multi-leader**: multiple nodes accept writes (often one per region). Low-latency local writes, but **write conflicts** must be resolved (last-write-wins, merge functions, CRDTs).
+- **Leaderless** (Dynamo-style: Cassandra, DynamoDB internals): write to N replicas, read from several, use **quorums** (`W + R > N`) so reads overlap with the latest write. Highly available; consistency is tunable per query.
+
+<Quiz
+  question="Users complain that after changing their username, the page still shows the old one for a few seconds. Reads go to async replicas. What's a targeted fix?"
+  options={[
+    "Make all replication synchronous",
+    "Read-your-writes: route that user's reads of their own profile to the leader for a short window after they write",
+    "Remove all replicas",
+    "Add a CDN",
+  ]}
+  answer={1}
+  explanation="The issue is replication lag on reads that follow the user's own write. Routing just those reads to the leader fixes the experience without sacrificing read scaling or write latency for everyone."
+/>
+
+<Tradeoffs
+  good={[
+    "High availability: survive machine and AZ failures",
+    "Read scaling across followers",
+    "Geographic replicas reduce read latency for distant users",
+  ]}
+  bad={[
+    "Replication lag creates stale-read anomalies",
+    "Failover risks split brain and lost writes",
+    "Does NOT scale writes (single leader); that needs sharding",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows replicas exist for availability and read scaling and that they may lag."
+  mid="Routes reads appropriately, handles read-your-writes, monitors replication lag."
+  senior="Designs failover, RPO/RTO, multi-region replication and the consistency guarantees exposed to users."
+  lead="Owns disaster-recovery strategy and regularly tested failover drills across the organization."
+/>
+
+<SeniorLens>
+Two numbers every senior should know for each critical datastore: **RPO** (how much data can we lose?) and **RTO** (how long to recover?). And they should have **tested** failover, not just configured it. An untested failover is a hypothesis, and incidents are a bad time to find out it's wrong.
+</SeniorLens>
+
+<KeyTakeaways>
+- Leader–follower: writes to the leader, log shipped to followers, reads can scale out.
+- Sync replication avoids data loss but costs latency; async is fast but can lose recent writes.
+- Replication lag breaks read-your-writes and monotonic reads; design around it.
+- Failover is hard: split brain, fencing, lost writes. Test it.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 5** (Replication): the definitive treatment.
+- **AWS Aurora / RDS docs** on Multi-AZ and read replicas.
+- **GitHub's 2018 incident postmortem** (a real-world failover and split-brain story).
+</GoDeeper>

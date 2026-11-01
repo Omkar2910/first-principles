@@ -1,0 +1,135 @@
+---
+title: Authentication
+description: Proving who someone is. Sessions vs tokens, JWTs, cookies, refresh tokens, and the tradeoffs between them.
+minutes: 13
+level: mid
+---
+
+<Problem>
+HTTP is stateless. Every request arrives as a stranger. After a user logs in once, how does request #2 prove it came from the same person, without sending the password every time, without being forgeable, and without being stealable by malicious JavaScript? Getting this wrong is how accounts get hijacked. Getting it right means understanding **sessions, tokens, cookies, and their tradeoffs**.
+</Problem>
+
+## Authentication vs authorization
+
+- **Authentication (authN)**: *who are you?* → verify identity. Failure = `401`.
+- **Authorization (authZ)**: *what may you do?* → check permissions. Failure = `403`. (Next lesson.)
+
+## Step 1: Verifying the first login
+
+The user proves identity with something they **know** (password), **have** (phone, hardware key) or **are** (biometric). Passwords must be stored with a slow, salted hash (**bcrypt, scrypt, Argon2**), never encrypted and never plain. Track 9 covers this in depth. After this step, the server issues a **credential** for future requests.
+
+## Option A: Server-side sessions
+
+```text
+1. POST /login (email + password) → server verifies
+2. Server creates session {id: "s_8f2…", userId: 42, expires: …} in a store (Redis/DB)
+3. Response: Set-Cookie: SESSION=s_8f2…; HttpOnly; Secure; SameSite=Lax
+4. Every request: browser automatically sends Cookie: SESSION=s_8f2…
+5. Server looks up the session → userId 42
+```
+
+The cookie is just a random, unguessable **reference**. All the state lives on the server.
+
+## Option B: Stateless tokens (JWT)
+
+A **JSON Web Token** carries the claims *inside* the token, signed by the server:
+
+```text
+header.payload.signature
+{"alg":"HS256"}.{"sub":"42","role":"customer","exp":1760000000}.<HMAC of the first two parts>
+```
+
+The server verifies the **signature** with its key; if it's valid and not expired, it trusts the claims **without any DB lookup**. Any service with the key (or the public key, for RS256/ES256) can verify independently.
+
+Important: the payload is **encoded, not encrypted**. Anyone can read it. Never put secrets in a JWT.
+
+<JwtPlayground />
+
+<MentalModel>
+A **session** is a **coat check ticket**: the ticket itself is meaningless; the cloakroom (server) holds your coat (state) and can refuse to return it any time (revocation). A **JWT** is a **festival wristband**: everything security needs to know is printed on it, and it's tamper-evident, so any gate can check it without calling HQ. But once issued, you can't easily take it back until it expires.
+</MentalModel>
+
+## The real tradeoff
+
+| | Sessions | JWT |
+|---|---|---|
+| State | Server store (Redis) | In the token |
+| Per-request cost | Store lookup | Signature check (CPU only) |
+| **Revocation** (logout, ban, password change) | Instant: delete the session | Hard: valid until `exp` unless you add a denylist |
+| Cross-service verification | Every service needs the store | Any service with the key |
+| Size | Tiny cookie | Can grow to KBs in headers |
+
+The common production pattern combines them: **short-lived access tokens** (JWT, 5–15 min) plus a **long-lived refresh token** (opaque, stored server-side, revocable). When the access token expires, the client trades the refresh token for a new one. Revoke the refresh token and the user is out within minutes.
+
+## Where to store tokens in browsers
+
+- **`HttpOnly; Secure; SameSite` cookies**: JavaScript can't read them, so an XSS bug can't steal the token. Need CSRF consideration (SameSite helps a lot).
+- **`localStorage`**: convenient for SPAs, but **any XSS can steal it**. Generally discouraged for sensitive tokens.
+
+Mobile apps store tokens in the platform's secure storage (Keychain / Keystore).
+
+## In Spring
+
+Spring Security handles both: form login + `HttpSession` (optionally backed by Spring Session + Redis), or OAuth2 Resource Server for JWT validation:
+
+```java
+@Bean
+SecurityFilterChain api(HttpSecurity http) throws Exception {
+    return http
+        .authorizeHttpRequests(a -> a.requestMatchers("/public/**").permitAll().anyRequest().authenticated())
+        .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))   // validates Bearer JWTs
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
+        .build();
+}
+```
+
+In most companies you won't hand-roll login at all. You'll integrate an **identity provider** (Okta, Auth0, Cognito, Keycloak) via **OAuth 2.0 / OpenID Connect** (Track 9).
+
+<Quiz
+  question="A user reports their laptop was stolen. You 'log them out everywhere'. With 24-hour JWT access tokens and no denylist, what happens?"
+  options={[
+    "They're logged out immediately",
+    "The thief can keep using the stolen token until it expires, up to 24 hours",
+    "JWTs can't be stolen",
+    "The JWT signature becomes invalid",
+  ]}
+  answer={1}
+  explanation="Stateless tokens are valid until expiry by design. That's why access tokens should be short-lived, with revocable refresh tokens, or verified against a denylist for high-risk operations."
+/>
+
+<Tradeoffs
+  good={[
+    "Sessions: simple, instantly revocable, tiny cookies",
+    "JWT: no lookup per request, verifiable by any service, good for distributed systems",
+    "Access + refresh token combo: scalable and revocable within minutes",
+  ]}
+  bad={[
+    "Sessions: shared store becomes a dependency for every request",
+    "JWT: revocation is hard; payload is readable; easy to misconfigure (alg=none, weak keys)",
+    "Tokens in localStorage are exposed to XSS",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows authN vs authZ, 401 vs 403, and never stores plaintext passwords."
+  mid="Implements session or JWT auth correctly: expiry, HttpOnly cookies, refresh flow, signature validation."
+  senior="Chooses the model per system, designs revocation, integrates an IdP via OIDC, threat-models token theft."
+  lead="Centralizes identity (one IdP, SSO), sets token lifetimes and security policy org-wide."
+/>
+
+<SeniorLens>
+"JWT vs sessions" is rarely a religious choice for seniors. It's a question of **revocation requirements and topology**. A monolith with a Redis already in place? Sessions are simpler and safer. Dozens of services and third-party clients? Short-lived JWTs issued by a central IdP. The anti-pattern is long-lived JWTs chosen because "stateless is modern", followed by a homegrown denylist that reinvents sessions badly.
+</SeniorLens>
+
+<KeyTakeaways>
+- AuthN proves identity (401); authZ checks permissions (403).
+- Sessions: opaque ID + server state, easy revocation. JWT: signed self-contained claims, no lookup, hard revocation.
+- Use short-lived access tokens + revocable refresh tokens.
+- Prefer HttpOnly, Secure, SameSite cookies in browsers.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sriniously:** the authentication episode of *Backend from First Principles*.
+- **[jwt.io](https://jwt.io/)**: decode real tokens.
+- **OWASP Authentication and Session Management Cheat Sheets.**
+</GoDeeper>

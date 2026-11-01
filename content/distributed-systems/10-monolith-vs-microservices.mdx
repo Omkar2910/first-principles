@@ -1,0 +1,97 @@
+---
+title: Monoliths, Modular Monoliths and Microservices
+description: When to split a system, how to draw service boundaries, and the real costs of distribution.
+minutes: 12
+level: senior
+---
+
+<Problem>
+"We should move to microservices" is one of the most consequential and most frequently regretted architecture decisions. Done for the right reasons, it lets dozens of teams ship independently. Done for the wrong ones, it turns function calls into network calls, transactions into sagas, and one deploy into forty, slowing everyone down. Everything in this track is the cost side of that equation.
+</Problem>
+
+## The options
+
+**Monolith**: one deployable unit, one codebase, usually one database. Simple to develop, test, deploy and debug, and ideal for small teams and new products. Pain grows with team size: merge conflicts, slow builds, coupled releases, one bug can take everything down.
+
+**Modular monolith**: one deployable, but internally split into **well-defined modules** with explicit interfaces and owned data (enforced by tooling like Spring Modulith or ArchUnit). You get most of the design benefits of services without the distribution costs. It's often the best next step, and it makes a later split easy.
+
+**Microservices**: many small, independently deployable services, each owning its data, communicating over the network. They enable **team autonomy at scale** and independent scaling and deployment, at the price of every distributed-systems problem in this track.
+
+<MentalModel>
+A **monolith** is a single big house where the whole family lives: easy to talk to each other, but renovations disturb everyone. A **modular monolith** is the same house with **clearly separated apartments** and front doors: privacy and order, still one roof. **Microservices** are **separate houses on a street**: total independence, but every conversation is a walk outside, and you need roads, mail and utilities between them.
+</MentalModel>
+
+## Good reasons to split out a service
+
+- **Team scaling**: multiple teams blocked on each other in one codebase (Conway's law: architecture mirrors org structure).
+- **Different scaling or resource needs**: a CPU-heavy image processor vs a CRUD API.
+- **Different reliability or security requirements**: isolate payments (PCI scope) from the rest.
+- **Different tech needs**: an ML model server in Python next to a Java core.
+- **Independent release cadence** genuinely needed.
+
+Bad reasons: "it's modern", "resume-driven development", "the code is messy" (a distributed mess is worse), or "to scale" when one instance type would do.
+
+## Drawing boundaries
+
+Use **Domain-Driven Design** ideas (Track 6): split by **business capability / bounded context** (Ordering, Payments, Catalog, Shipping), not by technical layer ("the database service", "the validation service").
+
+Good boundaries have:
+- **High cohesion inside**: things that change together live together.
+- **Low coupling outside**: few, stable, coarse-grained interactions.
+- **Data ownership**: each service owns its tables; others access via APIs/events, **never by reading another service's database**.
+- **Transactional consistency inside**: if two things must be atomic, keep them in one service.
+
+Warning sign: a **distributed monolith**, where services must be deployed together, share a database, or chain 8 synchronous calls per request. You pay all the costs and get none of the benefits.
+
+## The real costs checklist
+
+Before splitting, make sure you can afford: service discovery, API contracts and versioning, distributed tracing, centralized logging, per-service CI/CD, on-call per service, sagas/outbox for consistency, network security (mTLS), local dev environments with many services, and end-to-end testing strategy.
+
+<Quiz
+  question="A 6-engineer startup with one product wants to split its 30k-line monolith into 12 microservices to 'prepare for scale'. Best advice?"
+  options={[
+    "Do it now; it only gets harder later",
+    "Keep a monolith but make it modular with clear boundaries and owned data; extract services later when a concrete need (team scaling, isolation, distinct load) appears",
+    "Rewrite in a faster language instead",
+    "Split by technical layer: UI service, logic service, DB service",
+  ]}
+  answer={1}
+  explanation="With one small team, microservices add distributed-systems overhead without the autonomy benefits. A modular monolith keeps the option open cheaply."
+/>
+
+<Tradeoffs
+  good={[
+    "Microservices: team autonomy, independent deploys and scaling, fault isolation",
+    "Modular monolith: clean boundaries with in-process speed and simple transactions",
+    "Monolith: maximum simplicity for small teams",
+  ]}
+  bad={[
+    "Microservices: network failures, eventual consistency, ops and observability overhead",
+    "Modular monolith: shared deploy and runtime; discipline needed to keep modules clean",
+    "Monolith: coupling and coordination costs grow with team size",
+  ]}
+/>
+
+<LevelTags
+  junior="Understands the difference and the costs that network boundaries add."
+  mid="Keeps module/service boundaries clean; never shares databases across services."
+  senior="Draws boundaries by bounded context and consistency needs; plans incremental extractions (strangler fig)."
+  lead="Aligns architecture with team topology; decides when the org is ready for (or should retreat from) microservices."
+/>
+
+<SeniorLens>
+Seniors frame this as an **organizational** decision as much as a technical one: "We have 6 teams stepping on each other in the checkout code; extracting Payments behind an API lets that team ship daily." Incremental extraction (the **strangler fig** pattern: route one capability at a time to a new service) beats big-bang rewrites, every time.
+</SeniorLens>
+
+<KeyTakeaways>
+- Start with a (modular) monolith; split for concrete needs, especially team scaling.
+- Draw boundaries by business capability and transactional consistency.
+- Services own their data; no shared databases.
+- Beware the distributed monolith; extract incrementally.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Sam Newman, *Building Microservices*** and *Monolith to Microservices*.
+- **Martin Fowler, *MonolithFirst*** and *Microservice Prerequisites* (articles).
+- **Team Topologies** (Skelton & Pais): aligning architecture with teams.
+</GoDeeper>

@@ -1,0 +1,105 @@
+---
+title: SLIs, SLOs and Error Budgets
+description: Defining reliability in measurable terms, alerting on what users feel, and balancing velocity with stability.
+minutes: 11
+level: senior
+---
+
+<Problem>
+Product wants features faster. Ops wants fewer changes because changes cause outages. Alerts fire constantly for CPU at 85% while real user-facing problems go unnoticed. Everyone argues about whether the service is "reliable enough". **SLOs** turn this into a shared, measurable agreement, and **error budgets** turn the velocity-vs-stability argument into arithmetic.
+</Problem>
+
+## Definitions
+
+- **SLI (Service Level Indicator)**: a measurement of user-visible behavior, usually a ratio of good events to total events.
+  - *Availability SLI*: successful requests / valid requests
+  - *Latency SLI*: requests faster than 300 ms / valid requests
+  - *Freshness SLI* (data pipelines): records processed within 5 min / total
+- **SLO (Service Level Objective)**: a target for an SLI over a window. "99.9% of checkout requests succeed over 28 days." "95% complete under 300 ms."
+- **SLA (Service Level Agreement)**: a **contract** with customers, with penalties (credits). SLAs should be looser than internal SLOs.
+
+## Error budgets
+
+If the SLO is 99.9%, the **error budget** is the 0.1% you're allowed to fail: about 43 minutes of full downtime per 30 days, or 1 in 1,000 requests.
+
+```text
+SLO 99.9% over 28 days, 100M requests → budget = 100,000 failed requests
+Bad deploy burned 40,000 → 60% of budget remaining
+```
+
+The policy that makes this useful:
+- **Budget remaining** → ship features, take risks, experiment.
+- **Budget exhausted** → freeze risky changes, prioritize reliability work until it recovers.
+
+Agreed in advance by product and engineering, it ends the argument: data decides.
+
+<MentalModel>
+An error budget is like a **monthly data plan**. 100% reliability would be an infinite plan nobody can afford. You agree on a budget; while you have data left, use it freely (ship, experiment). If you burn it all by the 10th, you go easy for the rest of the month and figure out what's eating it.
+</MentalModel>
+
+## Alert on SLOs, not causes
+
+Traditional alerts ("CPU > 80%", "one pod restarted") fire on **causes** that may not hurt users, and miss failures that don't trip them. SLO-based alerting fires on **symptoms users feel**.
+
+**Burn-rate alerts**: how fast you're consuming the budget.
+- Burn rate 1 = you'll use exactly the budget over the window.
+- **Page** when burning fast: e.g. 14.4× over 1 hour (2% of the monthly budget gone in an hour).
+- **Ticket** when burning slowly: e.g. 3× over 6 hours.
+- Multi-window checks (long + short window) avoid flapping and catch both sudden and slow burns.
+
+## Choosing good SLOs
+
+- Start from **user journeys**: login, search, checkout. Not per microservice internals.
+- Base targets on **current performance and user expectations**, not aspiration. Too strict = constant freezes; too loose = users suffer first.
+- Measure **as close to the user** as possible (load balancer or client), not only inside the service.
+- Fewer, meaningful SLOs beat dozens nobody looks at.
+- Revisit quarterly.
+
+<Quiz
+  question="Your SLO is 99.9% monthly. Halfway through the month, a series of incidents has consumed the entire error budget. Under a typical error-budget policy, what happens?"
+  options={[
+    "Nothing; SLOs are informational",
+    "Risky feature launches pause and the team prioritizes reliability fixes until the budget recovers",
+    "The SLO is lowered to 99%",
+    "All deployments are permanently stopped",
+  ]}
+  answer={1}
+  explanation="The budget policy, agreed in advance, shifts focus to reliability when users have absorbed as much unreliability as agreed. Not a permanent freeze; a rebalancing."
+/>
+
+<Tradeoffs
+  good={[
+    "Shared, measurable definition of 'reliable enough'",
+    "Alerts on user pain instead of noisy internal causes",
+    "Data-driven balance between shipping and stability",
+  ]}
+  bad={[
+    "Requires good SLI instrumentation at the right vantage point",
+    "Picking targets takes negotiation and iteration",
+    "Budget policies only work with leadership buy-in",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows the difference between SLI, SLO and SLA."
+  mid="Defines availability and latency SLIs for their service and builds SLO dashboards."
+  senior="Designs journey-based SLOs, burn-rate alerting and error-budget policies."
+  lead="Establishes SLO culture org-wide and uses error budgets in planning and prioritization."
+/>
+
+<SeniorLens>
+The biggest SLO win is often **deleting alerts**. Teams adopting burn-rate alerting typically remove most of their cause-based pages, cut on-call noise dramatically, and catch real incidents faster. Seniors champion this because alert fatigue is itself a reliability risk: tired people miss the real page.
+</SeniorLens>
+
+<KeyTakeaways>
+- SLI = good/total ratio of a user-visible behavior; SLO = target; SLA = contract.
+- Error budget = 1 − SLO; spend it on velocity, protect it with reliability work.
+- Alert on burn rate (symptoms), not on causes.
+- Journey-based, realistic, few SLOs; revisit regularly.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Workbook**, chapters *Implementing SLOs* and *Alerting on SLOs*. Free online.
+- **Alex Hidalgo, *Implementing Service Level Objectives***.
+- **Sloth / OpenSLO** projects for SLO-as-code.
+</GoDeeper>

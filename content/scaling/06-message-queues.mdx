@@ -1,0 +1,110 @@
+---
+title: Message Queues and Asynchronous Communication
+description: Decoupling services in time, absorbing spikes, and the delivery guarantees that shape your code.
+minutes: 11
+level: mid
+---
+
+<Problem>
+The order service calls inventory, payment, email, analytics and loyalty services **synchronously**. If loyalty is slow, checkout is slow. If analytics is down, checkout fails. On Black Friday, traffic spikes 20× and every downstream service gets hit at once. **Asynchronous messaging** breaks these chains: the producer drops a message and moves on; consumers process it at their own pace.
+</Problem>
+
+## Sync vs async
+
+```text
+Synchronous:  Order ──call──▶ Email ──▶ (wait) ──▶ response
+Asynchronous: Order ──publish "OrderPlaced"──▶ [queue] ──▶ Email (whenever it's ready)
+```
+
+Async gives you:
+- **Temporal decoupling**: the consumer can be down; messages wait.
+- **Load leveling**: the queue absorbs spikes; consumers process at a sustainable rate.
+- **Fan-out**: many consumers react to one event without the producer knowing them.
+- **Independent scaling** of producers and consumers.
+
+You pay with **eventual consistency**, harder debugging and new failure modes.
+
+<MentalModel>
+Synchronous calls are **phone calls**: both people must be available, and you wait on the line. Async messaging is **email**: you send it and continue your day; the recipient reads it when they're free; and you can CC ten people without calling each one.
+</MentalModel>
+
+## Queues vs pub/sub vs logs
+
+| Model | Semantics | Examples |
+|---|---|---|
+| **Work queue** (point-to-point) | Each message processed by **one** consumer; deleted after ack | SQS, RabbitMQ queues, Celery/Sidekiq |
+| **Pub/sub** | Each message delivered to **every** subscriber | SNS, RabbitMQ fanout exchanges, Google Pub/Sub, Redis pub/sub |
+| **Log / stream** | Ordered, retained log; consumers track their own position and can **replay** | Kafka, Kinesis, Pulsar, Redis Streams |
+
+Common combo: SNS topic → multiple SQS queues (one per consuming service), giving pub/sub fan-out with per-service buffering and retries.
+
+## Delivery guarantees
+
+| Guarantee | Meaning | Reality |
+|---|---|---|
+| **At most once** | May be lost, never duplicated | Fire-and-forget; fine for metrics |
+| **At least once** | Never lost, may be duplicated | **The practical default everywhere** |
+| **Exactly once** | Neither | Only within specific boundaries (e.g. Kafka transactions inside Kafka); end-to-end requires idempotency |
+
+Since duplicates happen, **consumers must be idempotent** (Track 4): dedupe by message ID, or make the operation naturally repeatable (`SET status = 'SHIPPED'` rather than `balance = balance + 10`).
+
+## Ordering
+
+Most queues don't guarantee global order. If order matters (events for the same order: created → paid → shipped), you need ordering **per key**: Kafka partitions by key, SQS FIFO with message group IDs. Global ordering across all messages kills parallelism; you almost never need it.
+
+## Operational essentials
+
+- **Ack after processing**, not before (or you lose messages on crash).
+- **Retries with backoff**, then a **dead-letter queue** for poison messages.
+- **Monitor consumer lag / oldest message age**, not just queue depth.
+- **Backpressure**: if consumers can't keep up, the queue grows. Scale consumers or slow producers.
+- **Schema**: messages are an API contract between teams; version them (Avro/Protobuf + schema registry, or JSON with careful evolution).
+
+<Quiz
+  question="Your consumer receives the same 'OrderPaid' message twice and awards loyalty points twice. What's the right fix?"
+  options={[
+    "Switch to a queue with exactly-once delivery",
+    "Make the consumer idempotent: record processed message/order IDs (e.g. unique constraint) and skip duplicates",
+    "Ack the message before processing",
+    "Use a bigger queue",
+  ]}
+  answer={1}
+  explanation="At-least-once delivery is the norm, so duplicates are expected. Idempotent consumers turn duplicates into no-ops. Acking before processing would trade duplicates for lost messages."
+/>
+
+<Tradeoffs
+  good={[
+    "Decouples availability: consumers can be down without failing producers",
+    "Absorbs spikes; smooths load on downstream systems",
+    "Easy fan-out to new consumers",
+  ]}
+  bad={[
+    "Eventual consistency: results aren't immediate",
+    "Duplicates and ordering must be handled explicitly",
+    "Harder to trace and debug; new infrastructure to operate",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows when to use a queue (slow/unreliable/fan-out work) and that messages can be duplicated."
+  mid="Builds idempotent consumers with retries, DLQs and lag monitoring."
+  senior="Chooses queue vs pub/sub vs log; designs ordering, schemas and backpressure for event-driven systems."
+  lead="Sets event-driven architecture standards: event ownership, schema governance, platform choice."
+/>
+
+<SeniorLens>
+The most common async mistake is using messaging where the caller actually **needs the answer now** (e.g. "is this payment approved?"), then building request/response over queues with timeouts, which is worse than a plain HTTP call. Seniors use async for **things that can happen later** and sync for **things the user is waiting on**.
+</SeniorLens>
+
+<KeyTakeaways>
+- Async messaging decouples services in time, levels load and enables fan-out.
+- Work queues (one consumer per message), pub/sub (every subscriber), logs (replayable streams).
+- At-least-once is the reality, so consumers must be idempotent.
+- Order per key, not globally. Monitor lag; use DLQs.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Gregor Hohpe, *Enterprise Integration Patterns***: the classic vocabulary.
+- **AWS docs:** SQS and SNS fan-out patterns.
+- **Sriniously:** message queues episode.
+</GoDeeper>

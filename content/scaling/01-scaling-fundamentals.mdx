@@ -1,0 +1,112 @@
+---
+title: Scaling Fundamentals
+description: Vertical vs horizontal scaling, stateless services, and finding the real bottleneck before you scale anything.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Traffic doubled after a marketing campaign and the site is crawling. Someone says "add more servers". Someone else says "get a bigger database". A third says "we need microservices". All three might be wrong. **Scaling is the art of finding the current bottleneck and relieving it**, and then finding the next one. Throwing resources at the wrong layer wastes money and sometimes makes things worse.
+</Problem>
+
+## Two ways to grow
+
+| | **Vertical (scale up)** | **Horizontal (scale out)** |
+|---|---|---|
+| How | Bigger machine: more CPU, RAM, faster disk | More machines sharing the load |
+| Code changes | None | Must be stateless / partitionable |
+| Limit | Biggest machine available (very large today!) | Practically unlimited, but coordination costs |
+| Failure | Single point of failure | Redundancy built in |
+| Cost curve | Gets expensive at the top end | Linear-ish, commodity hardware |
+
+The practical pattern: scale **app servers horizontally** (easy if stateless), scale **databases vertically for as long as possible** (hard to scale out), and then use replicas, caches and eventually sharding.
+
+<MentalModel>
+A busy coffee shop. **Vertical** = hire a faster barista with a bigger espresso machine. Simple, but there's a limit and if they're sick you're closed. **Horizontal** = open more counters with more baristas. Scales further, but now you need a queue manager (load balancer), and everyone must share the same recipe book and inventory (shared state). If each barista keeps their own secret notes about customers (local state), customers must always return to the same counter.
+</MentalModel>
+
+## Statelessness: the key to horizontal scaling
+
+A service is **stateless** when any instance can handle any request because no request depends on data held in a specific instance's memory. Move state out:
+
+| State | Where it should live |
+|---|---|
+| User sessions | Redis / DB, or a signed token |
+| Uploaded files | Object storage (S3), not local disk |
+| Caches | Shared cache (Redis) or accept per-instance caches being cold |
+| Scheduled job locks | DB / distributed lock |
+| In-progress workflows | DB / queue |
+
+Once stateless, instances become **cattle, not pets**: autoscalers add and remove them freely, and deploys replace them without anyone noticing.
+
+## Find the bottleneck first
+
+Every system has one constraint that limits throughput right now. Typical suspects, in rough order of frequency:
+
+1. **The database**: slow queries, missing indexes, connection limits, lock contention.
+2. **A downstream dependency**: a slow API holding threads.
+3. **Application CPU**: serialization, inefficient algorithms, logging.
+4. **Memory/GC** pressure.
+5. **Network**: payload sizes, chatty calls, cross-region hops.
+
+Measure with metrics and profiling (Track 8): CPU, memory, pool saturation, query latency, downstream latency. Scaling app servers when the database is the bottleneck just sends **more** load to the database, so the outage gets faster.
+
+## Back-of-envelope sanity check
+
+```text
+1M daily active users × 20 requests/day = 20M requests/day
+20M / 86,400 s ≈ 230 req/s average; peak ≈ 3–5× → ~1,000 req/s
+One well-written service instance handles ~500–2,000 simple req/s
+→ a handful of instances. Not a Kubernetes federation.
+```
+
+Most systems are smaller than their architecture diagrams suggest. The HLD track has an interactive estimator.
+
+<Quiz
+  question="Your API servers run at 20% CPU but latency spikes under load; DB CPU is at 95%. What's the most effective first move?"
+  options={[
+    "Double the number of API servers",
+    "Investigate and relieve the database: slow queries, indexes, caching hot reads, read replicas",
+    "Rewrite the API in Go",
+    "Add a CDN",
+  ]}
+  answer={1}
+  explanation="The bottleneck is the database. More API servers would send even more concurrent queries to it. Fix queries, add indexes, cache, or add replicas."
+/>
+
+<Tradeoffs
+  good={[
+    "Vertical: zero code changes, strong consistency stays simple",
+    "Horizontal: redundancy, elastic capacity, cheaper commodity machines",
+    "Stateless services: trivial autoscaling and deploys",
+  ]}
+  bad={[
+    "Vertical: hard ceiling, single point of failure, pricey at the top",
+    "Horizontal: needs load balancing, shared state stores, more moving parts",
+    "Scaling the wrong layer wastes money and can amplify the real bottleneck",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows vertical vs horizontal and why statelessness matters."
+  mid="Makes services stateless (sessions, files, locks externalized); reads metrics to find bottlenecks."
+  senior="Does capacity estimates, identifies the binding constraint, and plans the scaling path for each tier."
+  lead="Balances scaling investment against business growth and cost; avoids premature complexity org-wide."
+/>
+
+<SeniorLens>
+The senior instinct is to ask **"what breaks first, and at what load?"** before proposing architecture. Knowing that the system will hit the DB connection limit at ~3x current traffic, and that the fix is PgBouncer plus two read replicas, is worth more than a beautiful diagram of 40 microservices.
+</SeniorLens>
+
+<KeyTakeaways>
+- Scale up for simplicity, scale out for redundancy and headroom.
+- Stateless app servers are the foundation of horizontal scaling.
+- Find and relieve the actual bottleneck. It's usually the database.
+- Do back-of-envelope math before designing for scale.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Alex Xu, *System Design Interview Vol. 1*, chapter 1** (Scale from zero to millions of users).
+- **[The System Design Primer](https://github.com/donnemartin/system-design-primer)**: the classic free resource.
+- **Sriniously:** scaling and performance episodes.
+</GoDeeper>

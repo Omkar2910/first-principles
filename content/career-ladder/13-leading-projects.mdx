@@ -1,0 +1,81 @@
+---
+section: Level 3 · Senior → Tech Lead / Staff
+title: "Senior → Lead: Leading Projects to Delivery"
+description: Planning multi-person projects, milestones, risk management, and keeping execution on track.
+minutes: 11
+level: senior
+---
+
+<Problem>
+A six-person, three-month project. Halfway through, it's "80% done" (it's been 80% done for three weeks), two engineers built incompatible pieces, a dependency on another team was never confirmed, and the launch date is in jeopardy. Leading a project isn't doing all the hard technical work yourself. It's **making sure the whole effort converges** on the right outcome, on a predictable timeline.
+</Problem>
+
+## The tech lead's job on a project
+
+- **Clarity**: everyone knows the goal, scope, non-goals and how success is measured.
+- **Design**: the technical approach is sound and agreed (design doc).
+- **Plan**: work broken into milestones; owners clear; dependencies identified.
+- **Risk management**: unknowns surfaced and tackled early.
+- **Execution rhythm**: progress visible; blockers removed quickly; decisions made.
+- **Communication**: stakeholders informed; no surprises.
+- **Quality**: the result is reliable, tested, observable and launch-ready.
+
+<MentalModel>
+Leading a project is like being the **navigator on a long expedition**. You don't carry every pack, but you plan the route with checkpoints, scout the dangerous passes first, check the team's position daily, reroute when a bridge is out, and send regular messages back to base so nobody's surprised. An expedition without a navigator can be full of strong hikers and still get lost.
+</MentalModel>
+
+## Planning that works
+
+1. **Define done**: success metrics and launch criteria. "Checkout v2 live for 100% of users; p99 under 500 ms; zero P1 bugs open."
+2. **Milestones that deliver something real**: each 1–3 weeks, demoable or deployable (often behind a flag). "M1: create order via new API in staging. M2: payments integrated. M3: 5% production canary."
+3. **De-risk first**: put the biggest unknowns (new tech, unclear requirements, external dependencies) in the first milestone. Spikes and prototypes early.
+4. **Map dependencies**: other teams, approvals (security, legal), infrastructure. Confirm them **in writing** with dates.
+5. **Assign ownership**: each workstream has a clear owner. Give people meaningful chunks, not scraps.
+6. **Buffer**: plans without slack fail. Leave room for the unknown unknowns (often 20–30%).
+
+## Running execution
+
+- **Short regular check-ins** focused on blockers and risks, not status theater.
+- **Visible tracking**: a simple board or doc showing milestones, status (on track / at risk / blocked) and owners.
+- **Integrate early and often**: avoid big-bang integration at the end. End-to-end "walking skeleton" first.
+- **Make decisions quickly**; record them (lightweight ADRs). An undecided question blocks everyone.
+- **Watch for "80% done" syndrome**: ask for demos and merged work, not percentages.
+- **Protect the team**: absorb noise, push back on scope creep with tradeoffs.
+
+## When things slip (they will)
+
+Use the **scope / time / resources** triangle explicitly:
+
+> "We're 2 weeks behind due to the payment provider's sandbox issues. Options: (1) launch on time without Apple Pay (add in a follow-up), (2) slip launch by 2 weeks, (3) add one engineer from team X for the integration (1 week slip, they'd need ramp-up). I recommend (1)."
+
+Communicate early, with options and a recommendation.
+
+## Launch and after
+
+Readiness review, rollout plan with canaries and rollback, monitoring, on-call briefing, comms. After launch: verify metrics, run a retro, hand over cleanly, **celebrate and credit** the team.
+
+<Scenario
+  situation="Three weeks before launch, you learn that a security review (required for launch) takes 4 weeks and nobody requested it. What do you do?"
+  choices={[
+    { text: "Launch anyway and do the review afterwards", feedback: "Skipping required security review creates real risk and erodes trust with security and leadership." },
+    { text: "Immediately contact the security team to explain the situation and ask what's possible (scoped review of the riskiest parts, expedited slot), update stakeholders with revised options, and add 'compliance dependencies' to your project kickoff checklist", feedback: "You act fast, look for creative paths, keep stakeholders informed with options, and fix the process gap for next time.", best: true },
+    { text: "Quietly push the launch date by a month", feedback: "Changing dates without communication surprises stakeholders, and you may have missed faster options." },
+  ]}
+/>
+
+<SeniorLens>
+The best project leads are **boringly predictable**: projects land close to when they said, and when they don't, everyone knew weeks in advance why and what the options were. That predictability, more than heroics, is what earns leads bigger scope and trust.
+</SeniorLens>
+
+<KeyTakeaways>
+- Define done; milestones that deliver real increments; de-risk first; confirm dependencies.
+- Run a light execution rhythm: blockers, risks, decisions, integration early.
+- When slipping: scope/time/resources options, communicated early with a recommendation.
+- Launch with readiness, monitoring and rollback; retro and credit the team.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Gergely Orosz, *The Software Engineer's Guidebook***: leading projects section.
+- **Shape Up** (Basecamp): appetite, scope hammering, hill charts.
+- **Tanya Reilly, *The Staff Engineer's Path***: leading big projects.
+</GoDeeper>

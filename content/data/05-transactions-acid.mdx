@@ -1,0 +1,110 @@
+---
+title: "Transactions and ACID"
+description: All-or-nothing changes, what each ACID letter really guarantees, and how to use transactions well in Spring.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Transferring $100: debit Alice, credit Bob. The server crashes between the two statements. Alice lost $100; Bob got nothing; the money vanished. Or two transfers run concurrently and read the same balance. **Transactions** are the database's answer: a group of operations that either all happen or none do, isolated from other concurrent work.
+</Problem>
+
+## ACID, decoded
+
+| Letter | Means | Guarantee | Mechanism |
+|---|---|---|---|
+| **A**tomicity | All or nothing | If anything fails, all changes in the transaction are rolled back | Undo logs / MVCC + WAL |
+| **C**onsistency | Valid → valid | Constraints hold before and after (FKs, UNIQUE, CHECK) | Constraints + *your* app logic |
+| **I**solation | Concurrent ≈ sequential | Transactions don't see each other's in-progress work (to a degree; see next lesson) | Locks, MVCC |
+| **D**urability | Committed = permanent | Survives crashes once COMMIT returns | WAL + fsync |
+
+Note that "C" is partly **your** responsibility: the DB enforces declared constraints, but business invariants ("total of debits = total of credits") hold only if your transactions are correct.
+
+<MentalModel>
+A transaction is a **shopping cart at checkout**. You can add and remove items as you go (statements), but nothing is actually bought until you pay (COMMIT). If your card is declined (error), the whole cart is abandoned (ROLLBACK): you don't end up buying half the items.
+</MentalModel>
+
+## In SQL
+
+```sql
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 'alice' AND balance >= 100;  -- check rows affected!
+UPDATE accounts SET balance = balance + 100 WHERE id = 'bob';
+INSERT INTO ledger(from_id, to_id, amount) VALUES ('alice', 'bob', 100);
+COMMIT;
+```
+
+## In Spring: `@Transactional`
+
+```java
+@Service
+class TransferService {
+    @Transactional
+    public void transfer(AccountId from, AccountId to, Money amount) {
+        Account a = accounts.findForUpdate(from);     // SELECT ... FOR UPDATE
+        Account b = accounts.findForUpdate(to);
+        a.debit(amount);                              // throws InsufficientFunds → rollback
+        b.credit(amount);
+        ledger.record(from, to, amount);
+    }   // commit happens here if no exception
+}
+```
+
+The `@Transactional` gotchas every Spring developer hits:
+- **Self-invocation**: calling a `@Transactional` method from *another method of the same class* bypasses the proxy, so no transaction starts.
+- **Checked exceptions don't roll back by default**. Only `RuntimeException`/`Error` do, unless you set `rollbackFor`.
+- **Only public methods** on Spring beans are proxied (by default).
+- **Long transactions** hold locks: don't call HTTP services or send emails inside them.
+- **Propagation**: `REQUIRED` (default) joins an existing transaction; `REQUIRES_NEW` suspends it and starts a separate one (useful for audit logs that must persist even if the main work rolls back).
+
+## Transactions don't span systems
+
+A DB transaction covers **one database**. If your method writes to Postgres *and* publishes to Kafka *and* calls Stripe, the transaction does not make those atomic. If the commit fails after the Kafka publish, the event is already out. That gap is handled with patterns like the **outbox**, **idempotency** and **sagas** (Track 4).
+
+<Quiz
+  question="A @Transactional method in OrderService saves an order, then calls an email API that times out, throwing a RuntimeException. What happens to the saved order?"
+  options={[
+    "It's committed; the email failure doesn't matter",
+    "It's rolled back, so the user's order is lost because email was slow",
+    "Half of it is saved",
+    "Spring retries automatically",
+  ]}
+  answer={1}
+  explanation="The exception propagates out of the transactional method → rollback. This is exactly why side effects like email belong outside the transaction (after commit, or via a background job / outbox)."
+/>
+
+<Tradeoffs
+  good={[
+    "Atomicity removes whole classes of partial-failure bugs",
+    "Declarative @Transactional keeps business code clean",
+    "Combined with constraints, protects invariants under concurrency",
+  ]}
+  bad={[
+    "Long transactions hold locks and hurt throughput",
+    "Proxy-based @Transactional has non-obvious pitfalls",
+    "Only covers a single database, not your whole distributed workflow",
+  ]}
+/>
+
+<LevelTags
+  junior="Wraps multi-step writes in a transaction and knows commit/rollback."
+  mid="Avoids @Transactional pitfalls, keeps transactions short, uses SELECT FOR UPDATE where needed."
+  senior="Designs consistency across DB + external systems (outbox, idempotency, sagas)."
+  lead="Sets patterns for cross-service consistency and reviews designs for hidden dual-writes."
+/>
+
+<SeniorLens>
+A senior reading `@Transactional` code checks three things: **Is anything inside it a network call? Could two of these run concurrently on the same rows, and what happens? What's outside the transaction that assumes it committed?** Those questions find most real-world transaction bugs.
+</SeniorLens>
+
+<KeyTakeaways>
+- Atomicity, consistency, isolation, durability: all-or-nothing, valid states, concurrency control, crash safety.
+- Know the @Transactional pitfalls: self-invocation, checked exceptions, long transactions.
+- A DB transaction never covers Kafka, email or other services.
+</KeyTakeaways>
+
+<GoDeeper>
+- **DDIA chapter 7** (Transactions): the best explanation of what ACID really means.
+- **Spring docs:** declarative transaction management.
+- **Sriniously:** database transactions episode.
+</GoDeeper>

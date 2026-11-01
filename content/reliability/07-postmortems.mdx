@@ -1,0 +1,108 @@
+---
+title: Blameless Postmortems
+description: Learning from incidents. Writing postmortems that find systemic causes and produce actions that actually prevent recurrence.
+minutes: 9
+level: mid
+---
+
+<Problem>
+After an outage, the "postmortem" concludes: *"Root cause: engineer ran the wrong command. Action: be more careful."* Three months later, a different engineer runs a similar command. Blaming individuals hides the real causes (the system that **allowed** a single command to take down production) and teaches people to hide mistakes. **Blameless postmortems** turn incidents into the most valuable learning an organization gets.
+</Problem>
+
+## Why blameless
+
+People make reasonable decisions given the information, tools and pressures they had. If a person could break production with one command, the **system** allowed it: missing guardrails, confusing tooling, absent review, unclear runbooks. Blamelessness isn't about avoiding accountability; it's about getting the **honest details** needed to fix the system. Punish mistakes, and you stop hearing about them until they're catastrophes.
+
+<MentalModel>
+Aviation's safety culture. When a plane has a near-miss, investigators don't stop at "pilot error". They ask why the cockpit design, checklist, training or schedule made that error likely, and change those for every airline. That's why flying became extraordinarily safe. Postmortems apply the same thinking to software.
+</MentalModel>
+
+## Structure of a good postmortem
+
+```markdown
+# Checkout outage: 2026-10-03
+
+## Summary
+45 min of elevated checkout failures (peak 40%) after a payment-service config change.
+~12,000 failed checkouts; est. $180k delayed revenue; no data loss.
+
+## Impact
+Who/what was affected, how much, how long. Customer-facing + internal.
+
+## Timeline (UTC)
+02:58 Config change deployed (connection pool max 50 → 5, typo intended 500)
+03:05 Error rate rises; 03:09 SLO burn-rate page fires
+03:14 IC declared; 03:30 deploy identified as suspect
+03:41 Rolled back; 03:50 metrics normal
+
+## Root cause and contributing factors
+- Pool size typo reduced capacity 10×
+- Config changes skipped the canary stage (only code went through canaries)
+- No validation of config value ranges
+- Alert fired 11 min after impact began (burn-rate window too long)
+
+## What went well / what went poorly / where we got lucky
+
+## Action items
+| Action | Type | Owner | Due |
+| Route config changes through canary pipeline | prevent | @alex | 10-20 |
+| Add range validation for pool settings at startup | prevent | @sam | 10-15 |
+| Add 5-min burn-rate window to checkout alert | detect | @lee | 10-10 |
+| Runbook: "how to roll back config" | mitigate | @kim | 10-12 |
+```
+
+## Finding real causes
+
+- Ask **"how did this make sense at the time?"** and **"what made this possible?"** rather than "who did it?".
+- There's rarely a single root cause; list **contributing factors** (technical, process, organizational).
+- "5 whys" helps but can tunnel into a single chain; look for multiple branches.
+- Include **what went well**. Resilience you didn't know you had is worth knowing.
+
+## Action items that matter
+
+Good actions are **specific, owned, dated and tracked**, and they change the system:
+- **Prevent**: guardrails, validation, safer defaults, automation.
+- **Detect**: faster or more accurate alerts.
+- **Mitigate**: faster rollback, better runbooks, kill switches.
+
+Bad actions: "be more careful", "improve monitoring" (vague), 25 items nobody will do. Prioritize a few that reduce the most risk.
+
+## Sharing
+
+Publish postmortems widely (internal), review them in a regular forum, and look for **patterns across incidents**: the same class of failure appearing three times is a strategic investment signal.
+
+<Quiz
+  question="Which action item is most likely to prevent recurrence of 'an engineer deleted a production table by running a script against the wrong environment'?"
+  options={[
+    "Remind engineers to double-check the environment",
+    "Require production access via a separate, approved workflow with distinct credentials and confirmation, and make destructive scripts environment-aware with safeguards",
+    "Disable the engineer's access",
+    "Add a warning to the wiki",
+  ]}
+  answer={1}
+  explanation="Systemic guardrails make the mistake hard to make for anyone. Reminders and blame don't change the system, so the next person repeats it."
+/>
+
+<LevelTags
+  junior="Contributes timeline details honestly; completes assigned action items."
+  mid="Writes clear postmortems with contributing factors and concrete actions."
+  senior="Facilitates blameless reviews, identifies systemic causes, prioritizes high-leverage actions."
+  lead="Builds the learning culture: postmortem reviews, cross-incident trend analysis, follow-through accountability."
+/>
+
+<SeniorLens>
+The quality of a team's postmortems predicts its future reliability. Seniors watch for the follow-through: **what percentage of postmortem action items actually get done?** If it's low, the process is theater. Tracking and prioritizing those items alongside features is where reliability is really won.
+</SeniorLens>
+
+<KeyTakeaways>
+- Blameless = focus on systems and conditions, to get honest details.
+- Summary, impact, timeline, contributing factors, what went well, actions.
+- Actions must be specific, owned, dated: prevent, detect, mitigate.
+- Share widely; look for patterns across incidents; track follow-through.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Google SRE Book:** *Postmortem Culture: Learning from Failure*.
+- **John Allspaw, *Blameless PostMortems and a Just Culture*** (Etsy).
+- **[danluu/post-mortems](https://github.com/danluu/post-mortems)**: a huge collection of public postmortems to learn from.
+</GoDeeper>

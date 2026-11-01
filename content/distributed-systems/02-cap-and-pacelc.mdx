@@ -1,0 +1,105 @@
+---
+title: CAP and PACELC
+description: What the CAP theorem actually says, why "pick 2 of 3" is misleading, and the latency tradeoff PACELC adds.
+minutes: 9
+level: mid
+---
+
+<Problem>
+"MongoDB is CP, Cassandra is AP" gets repeated in every system design interview, often without understanding. CAP is a precise statement about what's possible **during a network partition**, and it's frequently misused to justify designs. Understanding it properly (and its more practical sibling PACELC) lets you reason clearly about what a replicated system can promise.
+</Problem>
+
+## The three properties
+
+- **Consistency (C)**: here meaning *linearizability*: every read sees the most recent write, as if there were one copy of the data.
+- **Availability (A)**: every request to a non-failed node gets a (non-error) response.
+- **Partition tolerance (P)**: the system keeps working when the network drops messages between nodes.
+
+## What CAP actually says
+
+**When a network partition happens, you must choose between consistency and availability.**
+
+You can't "choose CA" in a distributed system, because partitions aren't optional; they happen. So the real choice is what to do **during** a partition:
+
+```text
+   Node A (has latest write)  ✕ network partition ✕  Node B (stale)
+   A client asks Node B for the value. Node B can:
+     • Refuse / wait until it can confirm with A   → consistent, NOT available  (CP)
+     • Answer with what it has (possibly stale)    → available, NOT consistent   (AP)
+```
+
+<MentalModel>
+Two bank branches whose phone line goes down. A customer asks Branch B for their balance. **CP**: "Sorry, we can't confirm your latest balance right now, come back later." **AP**: "Here's the balance we have on record. It might not include this morning's deposit." Neither is wrong; it depends on whether a stale answer or no answer is worse for that operation.
+</MentalModel>
+
+## Choosing per operation, not per database
+
+Real systems mix both, per feature:
+- **Bank transfer, inventory decrement, unique username claim** → prefer **CP**: an error is better than a wrong answer.
+- **Social feed, product reviews, like counts, shopping cart adds** → prefer **AP**: showing slightly stale data beats showing an error.
+
+Many databases are **tunable**: Cassandra and DynamoDB let you choose consistency levels per query (`QUORUM` vs `ONE`; strongly consistent vs eventually consistent reads).
+
+## PACELC: the everyday tradeoff
+
+Partitions are rare. CAP says nothing about normal operation, and that's where you live most of the time. **PACELC** extends it:
+
+> If there's a **P**artition, choose **A** or **C**; **E**lse (normal operation), choose **L**atency or **C**onsistency.
+
+Even with a healthy network, strong consistency requires coordination between replicas (waiting for acknowledgements, possibly across regions), and that costs **latency**. Weaker consistency lets you answer from the nearest replica immediately.
+
+| System | Partition → | Else → |
+|---|---|---|
+| DynamoDB / Cassandra (default) | A | L |
+| Spanner, CockroachDB | C | C (pays latency) |
+| MongoDB (majority writes/reads) | C | C (tunable toward L) |
+| Postgres + async replicas (reads from replicas) | (leader) C | L for replica reads |
+
+<Quiz
+  question="During a network partition, a ticketing system must never sell the same seat twice. Which behavior is correct for the partitioned minority side?"
+  options={[
+    "Keep selling seats from its local copy (AP)",
+    "Reject or delay seat purchases until it can coordinate (CP)",
+    "Sell seats and email apologies later",
+    "Switch to a CA database",
+  ]}
+  answer={1}
+  explanation="Double-selling violates a hard invariant, so the system must favor consistency: refuse writes on the side that can't confirm. Browsing seat maps could still be served AP with a 'may be outdated' hint."
+/>
+
+<Tradeoffs
+  good={[
+    "CP: correctness for invariants (money, inventory, uniqueness)",
+    "AP: stays up and responsive through network trouble",
+    "PACELC framing: makes the daily latency-vs-consistency choice explicit",
+  ]}
+  bad={[
+    "CP: errors/timeouts during partitions, higher latency always",
+    "AP: stale reads, conflicting writes that need resolution",
+    "Labels like 'X is AP' oversimplify tunable, per-operation behavior",
+  ]}
+/>
+
+<LevelTags
+  junior="Can state CAP correctly: during a partition, choose C or A."
+  mid="Picks consistency requirements per feature and uses tunable consistency settings."
+  senior="Uses PACELC to reason about latency costs of consistency, especially multi-region."
+  lead="Aligns product expectations (what can be stale, for how long) with architecture choices."
+/>
+
+<SeniorLens>
+In interviews, avoid "we'll use Cassandra because it's AP". Instead: "**Seat reservations need linearizable writes, so that path goes to a strongly consistent store and fails closed during partitions. Seat-map browsing tolerates seconds of staleness, so it's served from replicas/cache for latency.**" Consistency is a per-operation product decision.
+</SeniorLens>
+
+<KeyTakeaways>
+- CAP: during a partition, choose consistency or availability. P isn't optional.
+- Choose per operation based on whether stale or no answer is worse.
+- PACELC: without partitions, you still trade latency for consistency.
+- Many stores are tunable; labels oversimplify.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Martin Kleppmann, *Please stop calling databases CP or AP*** (blog post).
+- **Daniel Abadi, *Consistency Tradeoffs in Modern Distributed Database System Design*** (the PACELC paper).
+- **DDIA chapter 9.**
+</GoDeeper>

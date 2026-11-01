@@ -1,0 +1,134 @@
+---
+section: Case studies
+title: "Case Study: Ride-Hailing (Uber/Lyft)"
+description: Real-time location ingestion, geospatial indexing, matching drivers to riders, and trip state.
+minutes: 14
+level: senior
+---
+
+<Problem>
+Design the core of a ride-hailing app: millions of drivers send their location every few seconds; a rider requests a ride and must be matched with a nearby available driver within seconds; both see each other moving on a map during the trip. The hard parts are **high-frequency location writes**, **"who's nearby?" geospatial queries**, and **matching without double-booking a driver**.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: drivers publish location + availability; riders request a ride and get a nearby driver; driver accepts/declines; live tracking during trips; trip lifecycle and fare.
+**Non-functional**: 5M active drivers at peak; match within ~10 s; location freshness ~5 s; a driver must never be assigned two trips; high availability per city/region.
+
+## 2. Estimates
+
+- 5M drivers × 1 update / 4 s = **~1.25M location writes/s**. That's the dominant load, and it's ephemeral data.
+- Ride requests: maybe 20M/day ≈ 230/s average, peaks of a few thousand/s.
+- Location data is tiny (driver_id, lat, lng, ts, status), so memory-resident storage is realistic.
+
+## 3. Geospatial indexing: answering "who's near me?"
+
+Scanning 5M drivers per request is impossible. Divide the map into **cells**:
+
+- **Geohash**: encodes lat/lng into a string; longer prefixes = smaller cells (`9q8yy` ≈ a few km²). Nearby points usually share prefixes; query the cell and its 8 neighbors.
+- **Quadtree**: recursively split regions with many points into four; dense downtowns get small cells, rural areas big ones.
+- **H3** (Uber's hexagonal grid): hexagons have uniform neighbor distances, which is great for "within k rings" searches, demand heatmaps and surge pricing.
+
+```text
+Driver location update:
+  cell = h3(lat, lng, res=8)
+  Redis: GEOADD drivers:{city} lng lat driver_id     (or SADD cell:{id} driver_id + driver:{id} hash)
+  TTL / heartbeat: drivers that stop reporting expire automatically
+
+Rider request:
+  candidate cells = rider_cell + k rings → available drivers in those cells → sort by ETA (not straight-line distance)
+```
+
+Redis has built-in geo commands (`GEOSEARCH`), which work well per city shard.
+
+<MentalModel>
+Instead of asking every taxi in the country "where are you?", you divide the city into **numbered neighborhoods** (cells) and keep a whiteboard per neighborhood listing which taxis are currently in it. To find nearby taxis, you only look at your neighborhood's board and the ones next to it. Taxis update their board entry every few seconds as they drive.
+</MentalModel>
+
+## 4. High-level design
+
+```text
+Driver app ──location (every 4s, over persistent connection)──▶ Location gateway ──▶ Location service
+                                                                                      ├─ Redis geo index (per city, in-memory, TTL)
+                                                                                      └─ Kafka "locations" (analytics, ETA models, trip tracking)
+Rider app ──request ride──▶ Ride service ──▶ Matching service ──query nearby──▶ geo index
+                                                 │ offer to best driver (push) → accept/decline/timeout → next
+                                                 ▼
+                                       Trip service (state machine, DB) ── live updates ──▶ rider app (WebSocket)
+```
+
+## 5. Matching without double-booking
+
+Two riders' matching processes might pick the same driver. Make the assignment **atomic**:
+
+```sql
+UPDATE drivers SET status = 'OFFERED', offer_trip_id = :trip, offer_expires = now() + interval '15 seconds'
+WHERE driver_id = :d AND status = 'AVAILABLE';     -- rows affected 0 → someone else got them; try next candidate
+```
+
+(Or a Redis `SET driver:lock:{id} trip NX PX 15000`.) The driver gets a time-limited offer; on decline or timeout, the lock is released and the next candidate is offered. Matching can be **batched** per area every second or two to optimize globally (minimizing total ETA) instead of greedily.
+
+## 6. Trip lifecycle
+
+```text
+REQUESTED → MATCHING → DRIVER_ASSIGNED → DRIVER_ARRIVING → IN_PROGRESS → COMPLETED → PAID
+                    ↘ NO_DRIVERS                       ↘ CANCELLED (fees rules)
+```
+
+Trip state lives in a durable, strongly consistent DB (it's money and legal record). Location *during* a trip is also appended to a trip-route store for fare calculation and disputes.
+
+## 7. Scaling and resilience
+
+- **Shard by geography (city/region)**: matching is local, so cities are natural partitions with independent failure domains.
+- Location writes are **ephemeral**: losing a few seconds of positions is fine (the next update fixes it), so in-memory stores with replication suffice. No need to write 1.25M/s into a relational DB.
+- **Surge pricing**: aggregate supply and demand per H3 cell over short windows (stream processing) → price multipliers.
+- **ETA**: road-network routing service (graph + live traffic), not straight-line distance.
+
+<Quiz
+  question="Why is a relational database a poor primary store for the live driver-location stream?"
+  options={[
+    "Relational databases can't store coordinates",
+    "~1M+ tiny, ephemeral updates per second with only 'latest position' mattering is better served by an in-memory geo index with TTLs; durability for every point isn't needed",
+    "SQL can't do math",
+    "Drivers don't have IDs",
+  ]}
+  answer={1}
+  explanation="Match the store to the data's value and access pattern: latest-position, high-churn, loss-tolerant data belongs in memory (Redis geo / custom grid), with Kafka for downstream consumers that need history."
+/>
+
+<Tradeoffs
+  good={[
+    "Cell-based indexes make nearby queries cheap",
+    "City sharding localizes load and failures",
+    "Atomic conditional assignment prevents double-booking",
+  ]}
+  bad={[
+    "Cell boundaries require neighbor searches; dense areas need finer cells",
+    "In-memory location state can be lost (acceptable but must be designed for)",
+    "Greedy matching is suboptimal; batch optimization adds latency",
+  ]}
+/>
+
+<LevelTags
+  junior="Stores locations and queries nearby drivers with a geo index."
+  mid="Uses geohash/H3 cells, Redis GEO, TTL-based availability and a trip state machine."
+  senior="Designs ingestion at 1M+/s, atomic matching with offers/timeouts, city sharding and ETA-based ranking."
+  lead="Considers marketplace dynamics (surge, fairness to drivers), regional regulation and multi-region resilience."
+/>
+
+<SeniorLens>
+The senior insight is **classifying data by value**: driver positions are high-volume and disposable; trip records and payments are low-volume and sacred. They deserve completely different storage, consistency and durability choices. Mixing them up leads either to an overloaded database or to lost trips.
+</SeniorLens>
+
+<KeyTakeaways>
+- Location ingestion dominates load; keep latest positions in memory with TTLs.
+- Geohash/quadtree/H3 cells turn "nearby" into cheap lookups.
+- Atomic, time-limited offers prevent double-booking drivers.
+- Shard by city; trips in a durable, consistent store.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Uber engineering:** H3 hexagonal grid, *How Uber Computes ETA*, and DISCO dispatch talks.
+- **Redis GEO commands** documentation.
+- **Alex Xu, *System Design Interview Vol. 2***: proximity service and nearby friends chapters.
+</GoDeeper>

@@ -1,0 +1,136 @@
+---
+title: Idempotency
+description: Making operations safe to repeat. Idempotency keys, deduplication, and why it underpins every reliable system.
+minutes: 11
+level: mid
+---
+
+<Problem>
+A customer taps "Pay" on a flaky mobile connection. The request reaches your server, the charge succeeds, but the response is lost. The app retries. Without protection, the customer is charged twice. Every retry mechanism we've discussed (client retries, queue redelivery, job retries, mesh retries) **will** send duplicates. The only robust answer is making operations **idempotent**.
+</Problem>
+
+## Definition
+
+An operation is **idempotent** if performing it multiple times has the same effect as performing it once.
+
+| Idempotent | Not idempotent |
+|---|---|
+| `SET status = 'SHIPPED'` | `balance = balance - 100` |
+| `PUT /users/42 {...full object}` | `POST /payments` |
+| `DELETE /carts/7` | "Send email" |
+| "Upsert row with id X" | `INSERT` with auto-generated ID |
+
+You can't make the network deliver exactly once. But **at-least-once delivery + idempotent processing = effectively exactly-once results**.
+
+<MentalModel>
+An **elevator call button**. Press it once or ten times: one elevator comes. That's idempotent. A **vending machine coin slot** isn't: insert twice, pay twice. Idempotency engineering is about turning coin slots into elevator buttons.
+</MentalModel>
+
+## Idempotency keys (the standard technique for APIs)
+
+The client generates a unique key per **logical operation** and sends it with every attempt:
+
+```http
+POST /payments
+Idempotency-Key: 6f1c9a2e-3b7d-4c55-9a51-0d2f8e4c1b77
+{"orderId": 9001, "amountCents": 5998}
+```
+
+Server logic:
+
+```java
+@Transactional
+PaymentResult pay(String idemKey, PaymentRequest req) {
+    // 1. Try to claim the key atomically (unique constraint does the work)
+    Optional<IdempotencyRecord> existing = idemRepo.findByKey(idemKey);
+    if (existing.isPresent()) {
+        IdempotencyRecord r = existing.get();
+        if (!r.requestHash().equals(hash(req))) throw new Conflict("key reused with different payload");
+        if (r.isComplete()) return r.storedResponse();     // replay the original result
+        throw new Conflict("request in progress");          // concurrent duplicate
+    }
+    idemRepo.insert(new IdempotencyRecord(idemKey, hash(req), IN_PROGRESS)); // UNIQUE(key)
+
+    // 2. Do the work, passing the key downstream too (e.g. to Stripe)
+    PaymentResult result = gateway.charge(req, idemKey);
+
+    // 3. Store the response for future replays
+    idemRepo.complete(idemKey, result);
+    return result;
+}
+```
+
+Key details:
+- **Scope** keys per client/user so keys from different clients can't collide.
+- **Store the response** so retries get the same answer (same status code, same payment ID).
+- **Check the payload hash** so a reused key with a different body is rejected.
+- **Expire** records after a reasonable window (e.g. 24 h–7 days).
+- **Propagate** idempotency downstream: pass a derived key to payment providers and other services.
+
+## Idempotent consumers (messaging)
+
+For queue/Kafka consumers, deduplicate by **message ID** or a natural business key:
+
+```sql
+-- Process "award points for order 9001" once, no matter how many times the event arrives
+INSERT INTO loyalty_awards(order_id, user_id, points) VALUES (9001, 42, 60)
+ON CONFLICT (order_id) DO NOTHING;
+```
+
+Doing the dedupe insert **in the same DB transaction** as the business effect makes it airtight.
+
+## Designing naturally idempotent operations
+
+Often you can avoid key bookkeeping by designing the operation itself to be idempotent:
+- Use **absolute values** instead of deltas where possible (`set quantity = 3` vs `add 1`).
+- Use **client-generated IDs** for creation (`PUT /orders/{clientGeneratedUuid}`), so retries create the same resource.
+- Use **state-machine transitions with guards**: `UPDATE orders SET status='PAID' WHERE id=? AND status='PENDING'`. A second attempt affects 0 rows.
+
+<Quiz
+  question="A Kafka consumer handles 'OrderPaid' by incrementing a user's lifetime-spend counter. Duplicates cause inflated totals. What's the most robust fix?"
+  options={[
+    "Enable Kafka exactly-once and hope",
+    "In one DB transaction: insert the event ID into a processed_events table (unique) and update the counter; skip if the insert conflicts",
+    "Commit the offset before processing",
+    "Process each message twice and divide by two",
+  ]}
+  answer={1}
+  explanation="Recording the event ID and applying the effect atomically means a duplicate's insert fails and its effect is skipped. Kafka's exactly-once doesn't extend to your database."
+/>
+
+<Tradeoffs
+  good={[
+    "Makes retries, redelivery and recovery safe everywhere",
+    "Turns at-least-once infrastructure into exactly-once outcomes",
+    "Clients can retry aggressively without fear",
+  ]}
+  bad={[
+    "Storage for keys/processed IDs and expiry management",
+    "Careful handling of concurrent duplicates and partial completion",
+    "Every team and boundary must participate, or there's a gap",
+  ]}
+/>
+
+<LevelTags
+  junior="Knows which HTTP methods are idempotent and why retries need it."
+  mid="Implements idempotency keys and idempotent consumers with unique constraints."
+  senior="Designs end-to-end idempotency across services and third parties, including in-progress and partial states."
+  lead="Makes idempotency a required property for all mutating APIs and event handlers org-wide."
+/>
+
+<SeniorLens>
+Seniors treat "**what happens if this runs twice?**" as a mandatory question for every write path, API, job and consumer. For anything involving money, it's non-negotiable: Stripe, Adyen and every serious payments API require idempotency keys for exactly this reason.
+</SeniorLens>
+
+<KeyTakeaways>
+- Idempotent = repeating has the same effect as doing once.
+- At-least-once delivery + idempotent processing = exactly-once outcomes.
+- Idempotency keys: claim atomically, store response, verify payload, expire.
+- Prefer naturally idempotent designs: absolute values, client IDs, guarded transitions.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Stripe engineering:** *Designing robust and predictable APIs with idempotency*.
+- **Brandur Leach, *Implementing Stripe-like Idempotency Keys in Postgres***: deep and practical.
+- **AWS Builders' Library:** *Making retries safe with idempotent APIs*.
+</GoDeeper>

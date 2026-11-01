@@ -1,0 +1,87 @@
+---
+section: Level 3 · Senior → Tech Lead / Staff
+title: "Senior → Lead: Communicating with Product and Leadership"
+description: Translating technical work into business impact, pushing back constructively, and managing up.
+minutes: 10
+level: senior
+---
+
+<Problem>
+You explain to your VP that "we need to migrate off the shared Postgres cluster because of lock contention and connection limits." Their eyes glaze over; the request is deprioritized. Six months later, a major outage happens for exactly that reason. The problem wasn't the technical judgment; it was the **translation**. Tech leads must communicate in the language of **outcomes, risk and tradeoffs**.
+</Problem>
+
+## Translate to impact
+
+Leaders care about: **customers, revenue, cost, risk, speed of delivery, people**. Connect technical work to those.
+
+| Engineer-speak | Leadership-speak |
+|---|---|
+| "Shared DB has lock contention and connection limits" | "Checkout can't handle the holiday traffic forecast; we estimate a 30–40% chance of a multi-hour checkout outage in peak week, costing ~$X per hour" |
+| "We need to refactor the billing module" | "Billing features take 3× longer than others; fixing this lets us deliver the Q1 pricing roadmap ~6 weeks sooner" |
+| "We should adopt OpenTelemetry" | "Incidents take ~2 hours to diagnose; better tracing could cut that to ~20 minutes, reducing customer impact and on-call load" |
+
+<MentalModel>
+Talking to leadership is like **a doctor explaining a diagnosis to a patient**. The patient doesn't need the biochemistry. They need: what's wrong, how serious it is, what the options are, what each costs, and what you recommend. The doctor's expertise shows in how clearly they translate, not in how much jargon they use.
+</MentalModel>
+
+## Structure: bottom line up front
+
+```text
+Recommendation: Delay the loyalty launch by 2 weeks to complete load testing.
+Why: Load tests show checkout latency triples at forecast holiday traffic; launching without
+     fixes risks checkout failures during peak (est. revenue at risk: $X/hour).
+Options: (1) Delay 2 weeks [recommended] (2) Launch to 20% of users only (3) Launch as planned, accept risk
+Ask: Decision by Thursday so we can inform marketing.
+```
+
+Lead with the conclusion and the ask; supporting detail after. Executives often read only the first three lines.
+
+## Working with product managers
+
+- **Be a partner, not an order-taker**: understand the user problem and business goal; propose technical options that achieve the goal more cheaply or quickly.
+- **Make costs visible early**: rough sizing, risks and tradeoffs while the plan is still flexible.
+- **Offer alternatives**: "The full version is 8 weeks; a version without real-time sync is 3 weeks and covers 80% of the use cases."
+- **Co-own outcomes**: shared metrics, shared wins.
+
+## Pushing back constructively
+
+You'll often be asked for things that are unrealistic or risky. Push back with:
+1. **Acknowledge the goal**: "I understand we need this before the conference."
+2. **Explain the constraint with data**: "The payments integration alone took 4 weeks last time."
+3. **Offer options**: reduced scope, phased delivery, more people (with ramp-up cost), accepted risks.
+4. **Recommend** one, and let the right person decide.
+
+"No" alone ends the conversation; "yes, if…" or "here are the options" starts a useful one.
+
+## Managing up
+
+- Give your manager **no surprises**: early warnings of risks, slips and conflicts.
+- Share **wins and impact** regularly (they need material to advocate for you and the team).
+- Ask what **they** are worried about; help solve it.
+- Bring **proposals**, not just problems.
+
+<Scenario
+  situation="A director asks your team to add a major feature in 4 weeks for a sales deal. Your estimate is 10 weeks for the full scope. What's the best response?"
+  choices={[
+    { text: "Agree to 4 weeks and hope for the best", feedback: "Overcommitting erodes trust and likely leads to a missed deadline, cut corners, or both." },
+    { text: "Say it's impossible", feedback: "Accurate, perhaps, but unhelpful. It doesn't help the director solve their real problem." },
+    { text: "Ask what the customer truly needs for the deal, propose a scoped version deliverable in 4 weeks plus a phased plan for the rest, with the risks and tradeoffs of each option", feedback: "You engage with the business goal, offer realistic paths, and make the tradeoffs explicit, turning a conflict into a plan.", best: true },
+  ]}
+/>
+
+<SeniorLens>
+The engineers who reach staff+ are usually not the ones with the deepest technical knowledge alone. They're the ones whose **technical judgment reaches decision-makers in a form they can act on**. Practice writing one-page, bottom-line-up-front memos. It's a superpower.
+</SeniorLens>
+
+<KeyTakeaways>
+- Translate technical issues into customer, revenue, cost, risk and speed impact.
+- Bottom line up front: recommendation, why, options, ask.
+- Partner with product: early costs, alternatives, shared outcomes.
+- Push back with data and options; manage up with no surprises.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Barbara Minto, *The Pyramid Principle***: structuring communication top-down.
+- **Will Larson, *The Engineering Executive's Primer*** (understanding the leadership side).
+- **Lara Hogan:** blog posts on managing up and building relationships with product.
+</GoDeeper>

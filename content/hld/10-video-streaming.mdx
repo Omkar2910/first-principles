@@ -1,0 +1,115 @@
+---
+section: Case studies
+title: "Case Study: Video Streaming (YouTube/Netflix)"
+description: Upload pipelines, transcoding, adaptive bitrate streaming, CDNs and the economics of bandwidth.
+minutes: 13
+level: senior
+---
+
+<Problem>
+Design a video platform: creators upload videos; viewers watch them smoothly on phones, laptops and TVs over networks ranging from fiber to spotty 3G. The challenges are a heavy **asynchronous processing pipeline** (transcoding), **adaptive streaming**, and **delivering petabytes per day** without going bankrupt on bandwidth.
+</Problem>
+
+## 1. Requirements
+
+**Functional**: upload video; process into streamable formats; watch with seeking; metadata (title, thumbnails); view counts.
+**Non-functional**: smooth playback (fast start, minimal rebuffering); global audience; uploads may take minutes to process; massive read:write ratio; cost efficiency.
+
+## 2. Estimates
+
+- 5M uploads/day × 300 MB avg ≈ **1.5 PB/day of raw uploads**, multiplied by several renditions.
+- 1B views/day × ~100 MB average streamed ≈ **100 PB/day egress**. Bandwidth is the dominant cost, so CDNs are mandatory and caching efficiency is money.
+
+## 3. Upload path
+
+```text
+Client ──(1) request upload──▶ Upload API → returns pre-signed URL (+ creates video record: UPLOADING)
+Client ──(2) upload directly (multipart, resumable)──▶ Object storage (raw bucket)
+Storage event ──▶ queue ──▶ Processing pipeline (DAG):
+     validate → split into chunks → transcode chunks in parallel (H.264/H.265/AV1 × 240p…4K)
+     → package (HLS/DASH segments + manifests) → thumbnails → content moderation / copyright check
+     ──▶ processed bucket ──▶ mark video READY → notify creator
+```
+
+Key points:
+- **Pre-signed URLs**: clients upload straight to object storage; your API servers never proxy gigabytes.
+- **Resumable, chunked uploads** for flaky networks.
+- **Parallel chunked transcoding**: split a 2-hour video into segments and transcode across hundreds of workers; time drops from hours to minutes. It's a workflow (DAG) with retries per task (use a workflow engine or queue-based workers).
+
+## 4. Adaptive bitrate streaming (ABR)
+
+Videos are cut into **segments** (2–10 s) encoded at multiple **bitrates/resolutions** (the "bitrate ladder"). A **manifest** (HLS `.m3u8` / DASH `.mpd`) lists them. The player measures bandwidth and buffer level and picks the best rendition **segment by segment**: it drops to 480p in a tunnel, back to 1080p on Wi-Fi.
+
+```text
+master.m3u8
+  ├─ 1080p.m3u8 → seg_0001.ts, seg_0002.ts, ...
+  ├─ 720p.m3u8  → ...
+  └─ 360p.m3u8  → ...
+```
+
+Segments are just static files over HTTP, which makes them **perfectly cacheable on CDNs**.
+
+<MentalModel>
+ABR is like a **water supply that automatically switches pipe width**: when pressure drops (bad network), it switches to a thinner pipe so water keeps flowing (lower quality, no stalling); when pressure returns, it widens again. And because the water comes in **small bottles** (segments), it can change pipe width between bottles without interrupting the flow.
+</MentalModel>
+
+## 5. Delivery
+
+- **CDN** for segments: popular videos are served almost entirely from edge caches.
+- Long-tail content (rarely watched) is often a CDN miss; fetch from origin storage, possibly via a mid-tier/regional cache.
+- **Netflix Open Connect**: Netflix places its own cache appliances inside ISPs and **pre-positions** popular content overnight based on predicted demand, cutting transit costs enormously.
+- **Fast start**: small first segments, preloading the first segments of likely-next videos, CDN warm-up for new popular uploads.
+
+## 6. Metadata and views
+
+- Video metadata (title, owner, status, renditions) in a regular DB with caching; search via a search index.
+- **View counts**: never `UPDATE views = views + 1` per view at this scale. Emit view events to Kafka, aggregate in a stream processor, and periodically write totals (approximate real-time counters in Redis for display).
+
+<Quiz
+  question="Why do clients upload directly to object storage with a pre-signed URL rather than through the API servers?"
+  options={[
+    "API servers can't handle HTTP",
+    "Large file transfers would tie up API server bandwidth, memory and connections; object storage is built for it, and the API only issues a short-lived, scoped permission",
+    "Object storage is cheaper than DNS",
+    "It encrypts the video automatically",
+  ]}
+  answer={1}
+  explanation="Pre-signed URLs offload heavy transfer to infrastructure designed for it, keep API servers lightweight, and limit what the client can do (one object, short expiry)."
+/>
+
+<Tradeoffs
+  good={[
+    "Async processing pipeline: uploads decoupled from playback readiness",
+    "ABR: smooth playback across wildly varying networks",
+    "Static segments on CDNs: huge scale at manageable cost",
+  ]}
+  bad={[
+    "Storage multiplies with every rendition and codec",
+    "Transcoding is compute-expensive (codec choice trades CPU for bandwidth)",
+    "Long-tail content gets poor CDN hit rates",
+  ]}
+/>
+
+<LevelTags
+  junior="Separates upload, processing and playback; stores videos in object storage."
+  mid="Uses pre-signed uploads, queue-driven transcoding workers and a CDN."
+  senior="Designs chunked parallel transcoding DAGs, ABR packaging, CDN tiering and event-based view counting."
+  lead="Optimizes the cost model (codecs, storage tiers, CDN contracts, ISP caches) against quality and growth."
+/>
+
+<SeniorLens>
+At video scale, **architecture is economics**. A new codec that saves 30% bandwidth (AV1 vs H.264) is worth millions per year but costs much more CPU to encode, so it's applied to popular videos where the savings dominate. Seniors connect technical choices to cost curves like this.
+</SeniorLens>
+
+<KeyTakeaways>
+- Upload via pre-signed URLs to object storage; process asynchronously in a DAG.
+- Transcode chunks in parallel into a bitrate ladder; package as HLS/DASH segments.
+- ABR players switch quality per segment; CDNs serve segments as static files.
+- Count views via events and aggregation, not per-view DB updates.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Netflix Tech Blog:** encoding, Open Connect and per-title encoding posts.
+- **Apple HLS** and **MPEG-DASH** overviews.
+- **Alex Xu, *System Design Interview Vol. 1***: YouTube chapter.
+</GoDeeper>

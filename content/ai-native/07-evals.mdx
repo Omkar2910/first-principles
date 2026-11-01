@@ -1,0 +1,115 @@
+---
+title: Evaluating LLM Systems (Evals)
+description: The testing discipline for non-deterministic systems. Datasets, graders, LLM-as-judge and evals in CI.
+minutes: 11
+level: mid
+---
+
+<Problem>
+You tweak a prompt; three examples look better. You ship. A week later, support reports the bot now refuses legitimate refund questions. Or a model upgrade quietly changes output formats. LLM outputs are non-deterministic and the input space is infinite, so "try a few examples" is not testing. **Evals** are how you know whether a change made your AI feature better or worse, and they're the single biggest difference between AI demos and AI products.
+</Problem>
+
+## What an eval is
+
+An eval = **a dataset of inputs** + **a way to grade outputs** + **a score you track over time**.
+
+```text
+dataset:   300 real support questions (anonymized), each with expected category / key facts / reference answer
+run:       current prompt + model → outputs
+grade:     exact match (category), contains required facts, LLM-judge for helpfulness & faithfulness
+score:     category accuracy 94% · faithfulness 0.91 · refusal rate 2% · p95 latency 2.1s · cost $0.004/q
+compare:   vs previous version → ship / don't ship
+```
+
+<MentalModel>
+Evals are the **unit and regression test suite for behavior you can't specify exactly**. You can't assert one exact string, but you can assert "picked the right category", "mentioned the refund window", "didn't invent an order ID", "cited a real document". Across hundreds of cases, those assertions give you a reliable signal, like a medical trial instead of an anecdote.
+</MentalModel>
+
+## Building the dataset
+
+- Start with **real inputs**: production logs (privacy-safe), support tickets, user queries. Synthetic data supplements but doesn't replace them.
+- Cover the **distribution**: common cases, edge cases, adversarial inputs (prompt injection attempts), out-of-scope requests, multilingual input.
+- Add every **production failure** you find as a new case (just like regression tests).
+- 50–100 good cases beat 10,000 sloppy ones to start. Grow it over time.
+
+## Graders, from most to least reliable
+
+1. **Code-based checks**: exact match, regex, JSON schema validity, "contains required fields", tool called with correct arguments, SQL executes and returns the expected rows, code passes unit tests. Cheap, deterministic, use them wherever possible.
+2. **LLM-as-judge**: another model grades outputs against a **specific rubric** ("Is every claim in the answer supported by the provided documents? Answer yes/no with reasoning."). Scales well; must itself be validated against human labels, and kept specific (binary or small scales beat vague 1–10 scores).
+3. **Human review**: highest fidelity, slowest. Use for calibration, ambiguous cases and periodic audits.
+
+## What to measure
+
+- **Task quality**: accuracy, correctness, faithfulness/groundedness (RAG), helpfulness.
+- **Safety and policy**: refusals (both over- and under-refusal), PII leakage, injection resistance.
+- **Format**: schema validity rate.
+- **Operational**: latency percentiles, token cost per task, tool-call counts/steps (agents).
+- For agents: **task success rate** end to end, not just per-step quality.
+
+## Evals in the development loop
+
+- Run the eval suite **on every prompt/model/retrieval change**, like CI. Block merges on regressions beyond a threshold.
+- **Model upgrades** are just changes: run the suite before switching.
+- Track scores over time on a dashboard.
+- **Online monitoring** complements offline evals: sample production traffic for judge scoring, track user feedback (thumbs, escalations), and alert on drift.
+
+```java
+// JUnit-style eval sketch
+@ParameterizedTest
+@MethodSource("goldenTickets")
+void triageMatchesLabel(GoldenTicket t) {
+    Triage out = triageService.triage(t.text());
+    assertThat(out.category()).isEqualTo(t.expectedCategory());
+    assertThat(out.orderId()).isEqualTo(t.expectedOrderId());     // catches hallucinated IDs
+}
+// Aggregate: report accuracy across the set; fail the build if accuracy drops > 2 points vs baseline.
+```
+
+<Quiz
+  question="You want to check that a RAG assistant doesn't make claims unsupported by the retrieved documents, across 500 test questions. Which grader is most practical?"
+  options={[
+    "Manually read all 500 answers every change",
+    "An LLM-as-judge with a specific faithfulness rubric, validated against a sample of human labels",
+    "Exact string match against reference answers",
+    "Count the number of words in the answer",
+  ]}
+  answer={1}
+  explanation="Faithfulness is semantic, so exact match fails, and manual review doesn't scale per change. A rubric-based LLM judge, calibrated against human judgments, gives a scalable signal."
+/>
+
+<Tradeoffs
+  good={[
+    "Turns prompt and model changes into measurable experiments",
+    "Catches regressions before users do",
+    "Makes model upgrades and cost optimizations safe",
+  ]}
+  bad={[
+    "Building good datasets takes real effort",
+    "LLM judges have biases and need calibration",
+    "Evals can be overfit; keep refreshing with real data",
+  ]}
+/>
+
+<LevelTags
+  junior="Adds test cases for AI features and checks outputs systematically, not by eyeballing."
+  mid="Builds eval datasets and graders (code + LLM judge), runs them on every change."
+  senior="Designs evaluation strategy: offline + online, calibrated judges, task-level agent evals, release gates."
+  lead="Makes evals a required part of shipping AI features; invests in shared eval tooling."
+/>
+
+<SeniorLens>
+In AI engineering, **the eval set is the product spec**. When stakeholders disagree about whether the assistant is "good", seniors turn the disagreement into labeled examples. Teams with strong evals move faster, because they can change prompts, models and retrieval with confidence instead of fear.
+</SeniorLens>
+
+<KeyTakeaways>
+- Eval = dataset + grader + tracked score.
+- Real inputs, edge cases, adversarial cases, and every production failure.
+- Prefer code-based graders; use calibrated LLM judges for semantic qualities; humans for calibration.
+- Run evals on every change; monitor online quality too.
+</KeyTakeaways>
+
+<GoDeeper>
+- **Anthropic docs:** *Create strong empirical evaluations* / define success criteria.
+- **Hamel Husain:** *Your AI Product Needs Evals* (blog post) and follow-ups.
+- **OpenAI Evals** and open-source frameworks (promptfoo, Ragas, DeepEval).
+</GoDeeper>

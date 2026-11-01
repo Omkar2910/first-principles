@@ -1,0 +1,142 @@
+---
+section: Principles and patterns
+title: "Design Patterns: Creational"
+description: Factory, Builder, Singleton and dependency injection. Controlling how objects get created.
+minutes: 10
+level: mid
+---
+
+<Problem>
+Object creation gets messy: constructors with 12 parameters (which `true` was which?), `new StripeClient()` hardcoded in business logic so you can't test it, global singletons everyone mutates. **Creational patterns** separate *what* gets created from *how*, making code flexible and testable. In modern Java with Spring, some of them are built in; knowing the underlying patterns helps you recognize and use them well.
+</Problem>
+
+## Factory (Factory Method / Simple Factory)
+
+Encapsulate the decision of **which concrete class** to create.
+
+```java
+interface PaymentProcessor { Result pay(Payment p); }
+
+class PaymentProcessorFactory {
+    private final Map<PaymentMethod, PaymentProcessor> processors;   // injected: card, upi, wallet...
+    PaymentProcessor forMethod(PaymentMethod m) {
+        return Optional.ofNullable(processors.get(m))
+            .orElseThrow(() -> new UnsupportedPaymentMethod(m));
+    }
+}
+```
+
+Callers ask for "a processor for UPI" and don't know (or care) which class implements it. In Spring, you can inject `Map<String, PaymentProcessor>` or `List<PaymentProcessor>` and build the lookup automatically. That's a factory provided by the container.
+
+**Abstract Factory**: creates *families* of related objects (e.g. `UiFactory` producing matching `Button` + `Dialog` for a theme). Less common in backend code.
+
+## Builder
+
+Construct complex objects step by step, readably, with validation at the end.
+
+```java
+HttpRequest req = HttpRequest.newBuilder()
+    .uri(URI.create("https://api.shop.com/orders"))
+    .timeout(Duration.ofSeconds(2))
+    .header("Content-Type", "application/json")
+    .POST(BodyPublishers.ofString(json))
+    .build();
+
+// Your own (or Lombok @Builder):
+Order order = Order.builder()
+    .customerId(id)
+    .item(sku, 2)
+    .shippingAddress(addr)
+    .build();          // validates required fields + invariants here
+```
+
+Use when: many optional parameters, telescoping constructors, or you want immutable objects built incrementally. For small value objects, a record's canonical constructor is enough.
+
+## Singleton
+
+Exactly one instance shared across the app.
+
+```java
+// Classic Java singleton (lazy, thread-safe via class loading)
+public enum MetricsRegistry {
+    INSTANCE;
+    public void increment(String name) { ... }
+}
+```
+
+**Use sparingly.** Hand-rolled singletons are global state: hidden dependencies, hard to test, hard to reset. In Spring, beans are **singleton-scoped by default** but *injected*, which gives you the benefit (one instance) without the cost (global access). Prefer that.
+
+## Dependency Injection (the pattern behind it all)
+
+Objects receive their dependencies instead of creating them:
+
+```java
+@Service
+class OrderService {
+    private final PaymentGateway payments;
+    private final Clock clock;                              // even time is injected → testable
+    OrderService(PaymentGateway payments, Clock clock) {    // constructor injection: explicit, immutable
+        this.payments = payments; this.clock = clock;
+    }
+}
+```
+
+Constructor injection makes dependencies obvious, enables `final` fields, and lets tests pass fakes without any framework.
+
+## Prototype and Object Pool (briefly)
+
+- **Prototype**: create new objects by copying a configured template (`copy()` / copy constructors). Useful when setup is expensive.
+- **Object pool**: reuse expensive objects (DB connections: HikariCP; threads: executors). You use pools daily; you rarely write one.
+
+<MentalModel>
+Creational patterns are different ways of **getting furniture**. A **factory** is a store where you say "I need a chair for the office" and they pick the right model. A **builder** is a custom furniture workshop where you specify options step by step and they check it all fits before assembly. A **singleton** is the one shared conference table in the building. **Dependency injection** is a facilities team that delivers whatever each room needs, so rooms never go shopping themselves.
+</MentalModel>
+
+<Quiz
+  question="A class does `this.client = new StripeClient(apiKey)` in its constructor. What's the main problem and fix?"
+  options={[
+    "Performance; cache the client",
+    "Hard-coded dependency: can't swap or fake it in tests. Inject a PaymentGateway interface via the constructor instead",
+    "Stripe clients must be singletons",
+    "Nothing is wrong",
+  ]}
+  answer={1}
+  explanation="Creating dependencies internally couples business logic to a concrete vendor and makes testing require network calls. Dependency injection inverts that."
+/>
+
+<Tradeoffs
+  good={[
+    "Factories centralize creation decisions and support extension",
+    "Builders make complex construction readable and validated",
+    "DI makes dependencies explicit and code testable",
+  ]}
+  bad={[
+    "Factories for single implementations add indirection",
+    "Hand-rolled singletons create hidden global state",
+    "DI containers can make wiring 'magic' and hard to trace",
+  ]}
+/>
+
+<LevelTags
+  junior="Uses builders and constructor injection; avoids `new` for services in business logic."
+  mid="Implements factories/strategy maps with Spring collections injection; avoids global singletons."
+  senior="Designs object creation for testability and extension; knows when patterns are overkill."
+  lead="Sets conventions (constructor injection, no static state) across the codebase."
+/>
+
+<SeniorLens>
+Patterns are a **shared vocabulary** more than a recipe book. Saying "let's put a factory in front of the payment processors" communicates a whole design in five words. Seniors use pattern names to speed up design discussions, and refuse patterns that don't earn their indirection.
+</SeniorLens>
+
+<KeyTakeaways>
+- Factory: decide which implementation to create; Spring can build the lookup for you.
+- Builder: readable, validated construction of complex/immutable objects.
+- Singleton: prefer container-managed injected singletons over global ones.
+- Dependency injection underlies testable, flexible design.
+</KeyTakeaways>
+
+<GoDeeper>
+- **[Refactoring.Guru: Creational patterns](https://refactoring.guru/design-patterns/creational-patterns)**: excellent visuals.
+- **Gang of Four, *Design Patterns***: the original catalog.
+- **Effective Java**, items 1–5 (static factories, builders, singletons, DI).
+</GoDeeper>
