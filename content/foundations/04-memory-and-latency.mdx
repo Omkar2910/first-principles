@@ -3,6 +3,7 @@ title: Memory, Storage and the Cost of Things
 description: Stack vs heap, garbage collection, and the latency numbers that should shape every design decision.
 minutes: 10
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -40,7 +41,7 @@ void handle(Request req) {
 
 The GC finds unreachable objects and frees them. Modern collectors (G1, ZGC) do most of the work concurrently, but GC still costs CPU and can cause **pauses**. Patterns that hurt:
 - **Allocating huge numbers of short-lived objects** in hot paths (e.g., building big intermediate lists per request).
-- **Unbounded in-memory caches** (`static Map` that only grows). This is the #1 cause of "memory slowly climbs until OOM".
+- **Unbounded in-memory caches** (`static Map` that only grows). A classic cause of "memory slowly climbs until OOM".
 - **Heap too small for the workload**: GC runs constantly ("GC thrashing") and the app crawls.
 
 <MentalModel>
@@ -104,5 +105,5 @@ Memorize orders of magnitude, not exact numbers: **ns for memory, µs for SSD, s
 <GoDeeper>
 - **[Latency Numbers Every Programmer Should Know](https://gist.github.com/jboner/2841832)** (Jeff Dean via Jonas Bonér).
 - **[Interactive latency chart](https://colin-scott.github.io/personal_website/research/interactive_latency.html)**: see how numbers changed over the years.
-- **Oracle's G1/ZGC tuning guides** when you get to production JVM work.
+- **[Oracle: HotSpot garbage collection tuning guide](https://docs.oracle.com/en/java/javase/21/gctuning/)** (G1, ZGC) when you get to production JVM work.
 </GoDeeper>

@@ -3,6 +3,7 @@ title: "HTTP: The Language of the Web"
 description: Methods, status codes, headers, statelessness, and how HTTP/1.1, HTTP/2 and HTTP/3 differ.
 minutes: 13
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -61,7 +62,7 @@ The first digit is the category. Use them honestly. Clients, monitoring and retr
 
 - **2xx success**: `200 OK`, `201 Created` (+ `Location`), `202 Accepted` (async, will process later), `204 No Content`.
 - **3xx redirect**: `301 Moved Permanently`, `302/307 Temporary`, `304 Not Modified` (cache is still valid).
-- **4xx client error**, *don't retry without changing the request*: `400 Bad Request`, `401 Unauthorized` (not authenticated), `403 Forbidden` (authenticated but not allowed), `404 Not Found`, `409 Conflict`, `422 Unprocessable`, `429 Too Many Requests`.
+- **4xx client error**, *don't retry without changing the request*: `400 Bad Request`, `401 Unauthorized` (not authenticated), `403 Forbidden` (authenticated but not allowed), `404 Not Found`, `409 Conflict`, `422 Unprocessable Content`, `429 Too Many Requests`.
 - **5xx server error**, *might succeed on retry*: `500 Internal Server Error`, `502 Bad Gateway` (upstream gave garbage), `503 Service Unavailable` (overloaded / down), `504 Gateway Timeout` (upstream too slow).
 
 <Quiz
@@ -124,7 +125,7 @@ A senior's API review checklist starts with HTTP semantics: *Is this method idem
 </KeyTakeaways>
 
 <GoDeeper>
-- **Sriniously, *Backend from First Principles*:** the HTTP deep-dive episodes.
+- **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*Understanding HTTP for backend engineers, where it all starts*](https://www.youtube.com/watch?v=a3C1DMswClQ).
 - **[MDN HTTP docs](https://developer.mozilla.org/en-US/docs/Web/HTTP)**: the best reference for headers and status codes.
 - **[HTTP/3 explained](https://http3-explained.haxx.se/)** by Daniel Stenberg (author of curl).
 </GoDeeper>

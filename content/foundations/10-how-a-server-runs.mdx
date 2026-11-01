@@ -3,6 +3,7 @@ title: How a Server Process Actually Runs
 description: Ports, file descriptors, environment variables, signals and exit codes, the OS contract every service lives by.
 minutes: 9
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -63,8 +64,8 @@ The **Twelve-Factor App** principle: store config that varies between environmen
 Kubernetes sends `SIGTERM`, waits `terminationGracePeriodSeconds` (default 30s), then sends `SIGKILL`. If your app doesn't handle `SIGTERM` gracefully, every deploy drops in-flight requests.
 
 ```properties
-# Spring Boot: finish in-flight requests before exiting
-server.shutdown=graceful
+# Spring Boot 3.4+ shuts down gracefully by default (earlier versions: server.shutdown=graceful).
+# Keep the drain window shorter than Kubernetes' terminationGracePeriodSeconds:
 spring.lifecycle.timeout-per-shutdown-phase=20s
 ```
 
@@ -123,6 +124,6 @@ Zero-downtime deploys are a great litmus test of a team's maturity. They require
 
 <GoDeeper>
 - **[The Twelve-Factor App](https://12factor.net/)**: short, foundational, still relevant.
-- **Kubernetes docs: Pod lifecycle and termination.**
-- **Julia Evans' zines** on Linux processes, signals and file descriptors.
+- **[Kubernetes docs: Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/)** (see "Termination of Pods") and **[Spring Boot: graceful shutdown](https://docs.spring.io/spring-boot/reference/web/graceful-shutdown.html)**.
+- **Julia Evans: [*Bite Size Linux*](https://wizardzines.com/zines/bite-size-linux/)** on processes, signals and file descriptors.
 </GoDeeper>

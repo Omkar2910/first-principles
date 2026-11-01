@@ -3,6 +3,7 @@ title: Blocking vs Non-Blocking I/O
 description: Thread-per-request, event loops and virtual threads, and how each one handles thousands of waiting requests.
 minutes: 13
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -51,8 +52,8 @@ Massively scalable for I/O-heavy work, but harder to read, debug (stack traces a
 
 Virtual threads are lightweight threads managed by the JVM, not the OS. When a virtual thread hits blocking I/O, the JVM **unmounts** it from its carrier OS thread and runs another virtual thread there. You write plain blocking code and get event-loop-like scalability.
 
-```java
-// Spring Boot 3.2+: one line in application.properties
+```properties
+# Spring Boot 3.2+: one line in application.properties
 spring.threads.virtual.enabled=true
 ```
 
@@ -64,7 +65,7 @@ try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 }
 ```
 
-Caveats: you can still overwhelm *downstream* systems (100k virtual threads can open 100k DB requests, but your DB pool has 20 connections, so they just queue). `synchronized` blocks with I/O inside can pin carrier threads in some JDK versions. CPU-bound work gains nothing.
+Caveats: you can still overwhelm *downstream* systems (100k virtual threads can open 100k DB requests, but your DB pool has 20 connections, so they just queue). `synchronized` blocks with I/O inside pin carrier threads on JDK 21–23 (fixed in JDK 24 by JEP 491). CPU-bound work gains nothing.
 
 Go's goroutines and Kotlin coroutines are similar ideas.
 
@@ -116,6 +117,7 @@ A lot of teams adopted reactive programming purely for scalability and paid a bi
 
 <GoDeeper>
 - **[JEP 444: Virtual Threads](https://openjdk.org/jeps/444)**: the design rationale, very readable.
-- **Sriniously:** the episodes on concurrency and the Node.js event loop.
-- **Dan Kegel, *The C10K problem***: the classic essay that started it all.
+- **[JEP 491: Synchronize Virtual Threads without Pinning](https://openjdk.org/jeps/491)** (JDK 24).
+- **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*Concurrency & Parallelism: IO Bound vs CPU Bound*](https://www.youtube.com/watch?v=bs9MEYRTA30).
+- **Dan Kegel, [*The C10K problem*](http://www.kegel.com/c10k.html)**: the classic essay that started it all.
 </GoDeeper>
