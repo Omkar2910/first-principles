@@ -3,6 +3,7 @@ title: What Reliability Means
 description: Availability, the nines, how dependencies compound, and designing for failure instead of hoping against it.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -41,7 +42,7 @@ A chain is only as strong as its weakest link, and a **longer chain has more lin
 
 ## Blast radius and cells
 
-Large systems use **cell-based architecture**: split users/tenants into independent cells (complete stacks), each serving a subset. A bad deploy or overload affects one cell's users, not everyone. Deploy changes cell by cell. AWS uses this extensively, and so does Slack.
+Large systems use **cell-based architecture**: split users/tenants into independent cells (complete stacks), each serving a subset. A bad deploy or overload affects one cell's users, not everyone. Deploy changes cell by cell. AWS uses this extensively, and Slack has written about migrating to it.
 
 <Quiz
   question="Your service depends synchronously on 5 internal services, each at 99.9% availability. What's your best possible availability (assuming independent failures)?"
@@ -82,7 +83,7 @@ Large systems use **cell-based architecture**: split users/tenants into independ
 </KeyTakeaways>
 
 <GoDeeper>
-- **Google SRE Book**, chapters 3–4 (Embracing Risk, SLOs). Free online.
-- **AWS Builders' Library:** *Workload isolation using shuffle-sharding* and cell-based architecture.
-- **Ben Treynor Sloss, *The Calculus of Service Availability*** (ACM Queue).
+- **Google SRE Book: [Embracing Risk](https://sre.google/sre-book/embracing-risk/)** and **[Service Level Objectives](https://sre.google/sre-book/service-level-objectives/)**. Free online.
+- **AWS Builders' Library: [Workload isolation using shuffle-sharding](https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/)**, and **Slack: [Slack's migration to a cellular architecture](https://slack.engineering/slacks-migration-to-a-cellular-architecture/)**.
+- **Ben Treynor Sloss et al., *The Calculus of Service Availability*** (ACM Queue, 2017): why you can't be more available than your critical dependencies.
 </GoDeeper>

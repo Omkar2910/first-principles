@@ -3,6 +3,7 @@ title: Overload, Backpressure and Graceful Degradation
 description: What to do when demand exceeds capacity. Load shedding, backpressure, queues with limits and degraded modes.
 minutes: 11
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -30,7 +31,7 @@ A restaurant on its busiest night. If the host seats everyone who walks in, the 
 **2. Bounded queues and deadlines**
 - Never use unbounded queues in request paths. A full queue rejects instead of growing.
 - **Drop work whose deadline has passed**: if the client's deadline is gone, don't process it. Propagate deadlines (gRPC does this).
-- Prefer **LIFO or adaptive LIFO** under overload for interactive traffic: the newest requests still have clients waiting (Facebook's CoDel-inspired approach).
+- Prefer **LIFO or adaptive LIFO** under overload for interactive traffic: the newest requests still have clients waiting (Facebook's CoDel-plus-adaptive-LIFO approach, described in Ben Maurer's *Fail at Scale*).
 
 **3. Backpressure**: signal upstream to slow down instead of buffering infinitely: bounded channels, reactive streams' demand signaling, Kafka consumer lag driving producer throttling, `429` + `Retry-After`.
 
@@ -99,7 +100,7 @@ Seniors load-test **past** capacity, not just up to it. The interesting question
 </KeyTakeaways>
 
 <GoDeeper>
-- **Google SRE Book:** *Handling Overload* and *Addressing Cascading Failures*.
-- **AWS Builders' Library:** *Using load shedding to avoid overload*.
-- **Netflix:** *Performance Under Load* (adaptive concurrency limits) blog post.
+- **Google SRE Book: [Handling Overload](https://sre.google/sre-book/handling-overload/)** and **[Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/)**.
+- **AWS Builders' Library: [Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/)**.
+- **Ben Maurer, [*Fail at Scale*](https://doi.org/10.1145/2814330)** (ACM Queue, 2015) and **[Netflix concurrency-limits](https://github.com/Netflix/concurrency-limits)** (adaptive concurrency limits).
 </GoDeeper>

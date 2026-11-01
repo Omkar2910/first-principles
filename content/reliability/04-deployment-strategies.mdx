@@ -3,6 +3,7 @@ title: Deployment Strategies
 description: Rolling, blue-green, canary and feature flags. Releasing changes while limiting blast radius.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -43,7 +44,7 @@ return legacyPricing.price(cart);
 
 Uses: progressive rollout (1% of users, internal staff first, one region), kill switches for risky features, A/B experiments, trunk-based development (merge unfinished work, hidden).
 
-Hygiene: every flag has an **owner and an expiry**; remove flags after full rollout. Old flags are hidden complexity and combinatorial test explosions (Knight Capital's 2012 $440M loss involved a repurposed old flag).
+Hygiene: every flag has an **owner and an expiry**; remove flags after full rollout. Old flags are hidden complexity and combinatorial test explosions (Knight Capital lost over $460 million in 45 minutes in 2012 after a deploy reused a flag that once activated long-dead "Power Peg" code, per the SEC).
 
 ## Making rollbacks safe
 
@@ -96,7 +97,7 @@ When reviewing a risky change, seniors ask: **"How will we know it's broken, and
 </KeyTakeaways>
 
 <GoDeeper>
-- **Google SRE Workbook:** *Canarying Releases*.
-- **Pete Hodgson, *Feature Toggles*** (martinfowler.com).
-- **Argo Rollouts / Flagger** docs for automated canary analysis.
+- **Google SRE Workbook: [Canarying Releases](https://sre.google/workbook/canarying-releases/)**.
+- **Pete Hodgson, [*Feature Toggles (aka Feature Flags)*](https://martinfowler.com/articles/feature-toggles.html)** (martinfowler.com).
+- **[Argo Rollouts](https://argoproj.github.io/rollouts/)** / **[Flagger](https://flagger.app/)** for automated canary analysis, and the **[SEC's Knight Capital order summary](https://www.sec.gov/newsroom/press-releases/2013-222)**.
 </GoDeeper>

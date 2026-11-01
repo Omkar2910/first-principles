@@ -3,6 +3,7 @@ title: SLIs, SLOs and Error Budgets
 description: Defining reliability in measurable terms, alerting on what users feel, and balancing velocity with stability.
 minutes: 11
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -44,7 +45,7 @@ Traditional alerts ("CPU > 80%", "one pod restarted") fire on **causes** that ma
 **Burn-rate alerts**: how fast you're consuming the budget.
 - Burn rate 1 = you'll use exactly the budget over the window.
 - **Page** when burning fast: e.g. 14.4× over 1 hour (2% of the monthly budget gone in an hour).
-- **Ticket** when burning slowly: e.g. 3× over 6 hours.
+- Also **page** at 6× over 6 hours (5% of the budget), and **ticket** for slow burns: 1× over 3 days (10%). These are the Google SRE Workbook's recommended starting points.
 - Multi-window checks (long + short window) avoid flapping and catch both sudden and slow burns.
 
 ## Choosing good SLOs
@@ -99,7 +100,7 @@ The biggest SLO win is often **deleting alerts**. Teams adopting burn-rate alert
 </KeyTakeaways>
 
 <GoDeeper>
-- **Google SRE Workbook**, chapters *Implementing SLOs* and *Alerting on SLOs*. Free online.
-- **Alex Hidalgo, *Implementing Service Level Objectives***.
-- **Sloth / OpenSLO** projects for SLO-as-code.
+- **Google SRE Workbook: [Implementing SLOs](https://sre.google/workbook/implementing-slos/)** and **[Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)** (the burn-rate table above). Free online.
+- **Alex Hidalgo, [*Implementing Service Level Objectives*](https://www.oreilly.com/library/view/implementing-service-level/9781492076803/)**.
+- **[Sloth](https://sloth.dev/)** / **[OpenSLO](https://openslo.com/)** for SLO-as-code.
 </GoDeeper>
