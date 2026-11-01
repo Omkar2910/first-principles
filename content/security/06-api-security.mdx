@@ -3,6 +3,7 @@ title: API Security
 description: The OWASP API Top 10 in practice. Object-level authorization, mass assignment, resource limits and abuse.
 minutes: 11
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -20,7 +21,7 @@ GET /api/v1/accounts/1001/statements    ← my account
 GET /api/v1/accounts/1002/statements    ← someone else's: must return 404/403
 ```
 
-Fix: authorization check **on every object access**, ideally by scoping queries (`findByIdAndOwnerId`). Track 1's authorization lesson covers this. Random UUIDs make guessing harder but are **not** a substitute for checks.
+Fix: authorization check **on every object access**, ideally by scoping queries (`findByIdAndOwnerId`). [Track 1's authorization lesson](/tracks/backend-first-principles/authorization) covers this. Random UUIDs make guessing harder but are **not** a substitute for checks.
 
 ### 2. Broken authentication
 
@@ -94,7 +95,7 @@ Your API is a **vending machine on a busy street**. The UI is the nice front pan
 />
 
 <SeniorLens>
-The most effective API security habit is **automated authorization tests**: for every endpoint, a test that calls it as the wrong user, the wrong role and no user, expecting rejection. Make it part of the endpoint template. BOLA and function-level bugs, the top two API breach causes, nearly vanish.
+The most effective API security habit is **automated authorization tests**: for every endpoint, a test that calls it as the wrong user, the wrong role and no user, expecting rejection. Make it part of the endpoint template. BOLA and broken function-level authorization, two of the most common API flaws (#1 and #5 on OWASP's list), become far rarer.
 </SeniorLens>
 
 <KeyTakeaways>
@@ -105,7 +106,7 @@ The most effective API security habit is **automated authorization tests**: for 
 </KeyTakeaways>
 
 <GoDeeper>
-- **[OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/)**.
-- **PortSwigger Web Security Academy:** API testing labs.
-- **Corey Ball, *Hacking APIs*** (attacker's perspective).
+- **[OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x11-t10/)**, still the current edition.
+- **[PortSwigger Web Security Academy: API testing](https://portswigger.net/web-security/api-testing)** labs.
+- **[Corey Ball, *Hacking APIs*](https://nostarch.com/hacking-apis)** (No Starch Press): the attacker's perspective.
 </GoDeeper>

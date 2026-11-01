@@ -3,6 +3,7 @@ title: "Common Web Vulnerabilities: Injection, XSS, CSRF, SSRF"
 description: How the classic attacks work, and the systematic defenses that make them structurally impossible.
 minutes: 13
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -45,7 +46,7 @@ A malicious site makes the victim's browser send a request to your site, **with 
 <script>document.forms[0].submit()</script>
 ```
 
-Defenses: **`SameSite=Lax` or `Strict` cookies** (modern default protection), **CSRF tokens** for cookie-authenticated state-changing requests (Spring Security does this by default for sessions), never change state with `GET`, check `Origin` headers. APIs using `Authorization: Bearer` headers (not cookies) aren't CSRF-able in the same way.
+Defenses: **`SameSite=Lax` or `Strict` cookies**, set explicitly (Chromium-based browsers treat cookies without a `SameSite` attribute as `Lax`, but other browsers don't, so never rely on the default), **CSRF tokens** for cookie-authenticated state-changing requests (Spring Security does this by default for sessions), never change state with `GET`, check `Origin` headers. APIs using `Authorization: Bearer` headers (not cookies) aren't CSRF-able in the same way.
 
 ## 4. Server-Side Request Forgery (SSRF)
 
@@ -114,7 +115,8 @@ Seniors eliminate vulnerability **classes**, not instances: a lint rule that ban
 </KeyTakeaways>
 
 <GoDeeper>
-- **[OWASP Top 10](https://owasp.org/Top10/)** and the **OWASP Cheat Sheet Series** (SQLi, XSS, CSRF, SSRF).
+- **[OWASP Top 10:2025](https://top10.owasp.org/2025/)** and the **[OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/)**: there's a cheat sheet for each attack here (SQL injection, XSS, CSRF, SSRF).
 - **[PortSwigger Web Security Academy](https://portswigger.net/web-security)**: free, hands-on labs for every vulnerability here.
-- **Spring Security reference:** CSRF and headers.
+- **Spring Security reference: [CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)** and **[security headers](https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html)**.
+- **[MDN: Set-Cookie `SameSite`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)**, including the per-browser default behavior.
 </GoDeeper>

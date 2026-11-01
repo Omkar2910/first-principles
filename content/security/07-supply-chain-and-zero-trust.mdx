@@ -3,10 +3,11 @@ title: Supply Chain Security and Zero Trust
 description: Securing dependencies and build pipelines, and why "inside the network" no longer means trusted.
 minutes: 10
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
-Your code is maybe 10% of what runs in production; the other 90% is open-source dependencies, base images, build tools and CI plugins. Log4Shell (2021) let attackers execute code on millions of Java servers through a logging library. SolarWinds and the xz backdoor showed attackers compromising **build pipelines and maintainers**. Meanwhile, attackers who get inside a network often move freely because internal traffic is trusted. Modern security assumes **neither your dependencies nor your network are automatically safe**.
+Most of what runs in production isn't code your team wrote. Audits of commercial codebases typically find **70–80% of the code is open source**, before counting base images, build tools and CI plugins. OWASP's 2025 Top 10 ranks **Software Supply Chain Failures** third. Log4Shell (2021) let attackers execute code remotely through a ubiquitous Java logging library, leaving a huge share of Java servers exposed overnight. SolarWinds and the xz backdoor showed attackers compromising **build pipelines and maintainers**. Meanwhile, attackers who get inside a network often move freely because internal traffic is trusted. Modern security assumes **neither your dependencies nor your network are automatically safe**.
 </Problem>
 
 ## Software supply chain security
@@ -88,6 +89,6 @@ Seniors treat **adding a dependency as a design decision**: Is it maintained? Ho
 
 <GoDeeper>
 - **[SLSA framework](https://slsa.dev/)** and **[Sigstore](https://www.sigstore.dev/)**.
-- **Google BeyondCorp** papers; **NIST SP 800-207** (Zero Trust Architecture).
-- **CISA guidance on SBOMs**.
+- **[BeyondCorp: A New Approach to Enterprise Security](https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/)** (Google) and **[NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)**.
+- **[CISA: SBOM resources](https://www.cisa.gov/sbom)** and the annual **[Black Duck OSSRA report](https://www.blackduck.com/resources/analyst-reports/open-source-security-risk-analysis.html)** (the open-source share figures above).
 </GoDeeper>
