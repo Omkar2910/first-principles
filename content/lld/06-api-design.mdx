@@ -4,6 +4,7 @@ title: API Design
 description: Designing APIs other teams love. Resource modeling, pagination, errors, versioning, idempotency and evolution.
 minutes: 12
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -62,7 +63,7 @@ Document which errors each endpoint can return and whether they're retryable.
 
 - Additive changes (new optional fields, new endpoints) are non-breaking. Clients must **ignore unknown fields**.
 - Breaking changes → new version (`/v2`) or date-based versions (Stripe pins each account to an API version and transforms responses).
-- **Deprecation process**: announce, add `Deprecation`/`Sunset` headers, measure usage of the old version, reach out to remaining clients, then remove.
+- **Deprecation process**: announce, add `Deprecation` ([RFC 9745](https://www.rfc-editor.org/rfc/rfc9745)) and `Sunset` ([RFC 8594](https://www.rfc-editor.org/rfc/rfc8594)) headers, measure usage of the old version, reach out to remaining clients, then remove.
 
 ## Contract-first and tooling
 
@@ -116,7 +117,7 @@ Seniors review APIs by **writing the client code first**: "How would the mobile 
 </KeyTakeaways>
 
 <GoDeeper>
-- **[Stripe API reference](https://stripe.com/docs/api)**: study it as a design example.
+- **[Stripe API reference](https://docs.stripe.com/api)**: study it as a design example.
 - **[Google API Improvement Proposals (AIPs)](https://google.aip.dev/)**.
 - **[Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/)**.
 </GoDeeper>
