@@ -3,6 +3,7 @@ title: Background Jobs and Scheduling
 description: Moving slow or unreliable work out of the request path with task queues, workers, retries and cron.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -120,6 +121,6 @@ The metric seniors watch for job systems isn't queue *length*. It's **age of the
 
 <GoDeeper>
 - **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*Task queues and background jobs*](https://www.youtube.com/watch?v=r-nQsyguU1Y).
-- **AWS SQS docs** on visibility timeout and DLQs.
+- **AWS SQS docs: [visibility timeout](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)** and **[dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)**.
 - **[JobRunr](https://www.jobrunr.io/)** and **[ShedLock](https://github.com/lukas-krecan/ShedLock)** for Java.
 </GoDeeper>

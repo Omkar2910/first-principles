@@ -3,6 +3,7 @@ title: Middleware and Request Context
 description: The pipeline every request passes through before and after your handler, and how data travels along it.
 minutes: 10
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -62,7 +63,7 @@ Spring layers: **Servlet filters** (outermost, raw HTTP, where Spring Security l
 
 Middleware often discovers something later stages need: the authenticated user, the tenant, the request ID, a trace ID, the client's locale. That data goes into a **request-scoped context**:
 
-- Java (thread-per-request): `ThreadLocal`-based holders such as `SecurityContextHolder` and SLF4J's `MDC`. (With virtual threads and async code, prefer **`ScopedValue`** or explicit propagation, since ThreadLocals don't automatically follow work onto other threads.)
+- Java (thread-per-request): `ThreadLocal`-based holders such as `SecurityContextHolder` and SLF4J's `MDC`. (With virtual threads and async code, prefer **`ScopedValue`** (final in JDK 25) or explicit propagation, since ThreadLocals don't automatically follow work onto other threads.)
 - Go: `context.Context` passed explicitly as the first argument.
 - Node: `AsyncLocalStorage`.
 
@@ -118,6 +119,6 @@ In mature orgs, most middleware isn't written by product teams at all. It comes 
 
 <GoDeeper>
 - **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*What are controllers, services, repositories, middlewares and request context?*](https://www.youtube.com/watch?v=hyc-7w3pee8).
-- **Spring Security architecture docs:** a great real-world filter chain to study.
+- **[Spring Security: servlet architecture](https://docs.spring.io/spring-security/reference/servlet/architecture.html)**: a great real-world filter chain to study.
 - **[W3C Trace Context](https://www.w3.org/TR/trace-context/)** spec.
 </GoDeeper>

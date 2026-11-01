@@ -3,6 +3,7 @@ title: Routing
 description: How a backend maps method + path to code, plus path/query params, versioning and route design.
 minutes: 8
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -21,7 +22,7 @@ GET    /users/:id/orders   → listUserOrders
 DELETE /users/:id          → deleteUser
 ```
 
-Internally most routers build a **trie (prefix tree)** of path segments so matching is fast regardless of how many routes exist. Static segments (`/users/me`) usually take priority over parameters (`/users/:id`). That's a common source of surprise when both exist.
+Internally, many routers (Go's httprouter, Fastify) build a **radix tree** of path segments so matching stays fast however many routes exist; others, like Express, test route patterns in order. Static segments (`/users/me`) usually take priority over parameters (`/users/:id`). That's a common source of surprise when both exist.
 
 <MentalModel>
 Routing is a **building directory**. The method is *which elevator* (GET elevator, POST elevator), the path is *floor and room*. `/users/42` means "users floor, room 42". The directory doesn't care what happens inside the room; it just gets you there.
