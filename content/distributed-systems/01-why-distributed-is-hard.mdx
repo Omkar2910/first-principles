@@ -3,6 +3,7 @@ title: Why Distributed Systems Are Hard
 description: Partial failure, unreliable networks and the eight fallacies. The mindset shift from one machine to many.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -31,7 +32,7 @@ Sending an important letter with **no tracking and no reply guaranteed**. If you
 
 ## The eight fallacies of distributed computing
 
-Coined at Sun Microsystems in the 1990s, still violated daily:
+Listed at Sun Microsystems in the 1990s (L Peter Deutsch's seven in 1994, building on earlier work by Bill Joy and Dave Lyon; James Gosling added the eighth), still violated daily:
 
 1. **The network is reliable.** Packets drop; links fail; cables get cut.
 2. **Latency is zero.** Every remote call costs milliseconds and varies wildly (tail latency).
@@ -100,7 +101,7 @@ The senior's first distributed-systems principle: **don't distribute unless you 
 </KeyTakeaways>
 
 <GoDeeper>
-- **DDIA chapter 8** (The Trouble with Distributed Systems): essential reading.
+- **[*Designing Data-Intensive Applications*](https://dataintensive.net/)**: *The Trouble with Distributed Systems* (ch. 8 in the 1st edition), essential reading.
 - **[Fallacies of distributed computing](https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing)**.
-- **Marc Brooker's blog** (AWS): timeouts, retries, and much more.
+- **[Marc Brooker's blog](https://brooker.co.za/blog/)** (AWS): timeouts, retries, and much more.
 </GoDeeper>

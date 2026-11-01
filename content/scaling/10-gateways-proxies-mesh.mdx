@@ -51,7 +51,7 @@ A classic anti-pattern is the **"smart gateway"**: business logic creeping into 
 
 ## Retries in the mesh: a warning
 
-Meshes make retries trivial to enable, which makes **retry storms** trivial to create. If each of 4 layers retries 3 times, one user request can become 3⁴ = 81 requests to the bottom service during an outage. Retry at **one** layer, with budgets and backoff (Track 4).
+Meshes make retries trivial to enable, which makes **retry storms** trivial to create. If each of 4 layers makes 3 attempts (1 try + 2 retries), one user request can become 3⁴ = 81 requests to the bottom service during an outage. Retry at **one** layer, with budgets and backoff (Track 4).
 
 ## Do you need a mesh?
 

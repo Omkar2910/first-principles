@@ -3,6 +3,7 @@ title: Consensus and Leader Election
 description: How a cluster of machines agrees on one value or one leader despite failures. Raft, quorums, and where you rely on it daily.
 minutes: 12
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -49,7 +50,7 @@ A paused old leader (long GC) may wake up and act on stale leadership. Systems i
 ## Where you use consensus (without implementing it)
 
 - **etcd** (Raft): Kubernetes' brain; all cluster state.
-- **ZooKeeper** (ZAB): Kafka's metadata in older versions, HBase, many Hadoop-era systems.
+- **ZooKeeper** (ZAB): Kafka's metadata before KRaft (ZooKeeper mode was removed in Kafka 4.0), HBase, many Hadoop-era systems.
 - **Kafka KRaft**: Kafka's own Raft-based metadata quorum.
 - **Consul** (Raft): service discovery and config.
 - **CockroachDB, TiDB, YugabyteDB** (Raft per data range), **Spanner** (Paxos).
@@ -102,5 +103,5 @@ Two practical consequences seniors remember: **place consensus nodes across fail
 <GoDeeper>
 - **[The Raft paper + visualization](https://raft.github.io/)**: play with the interactive Raft cluster there.
 - **[The Secret Lives of Data: Raft](http://thesecretlivesofdata.com/raft/)**: animated walkthrough.
-- **Martin Kleppmann, *How to do distributed locking*** (blog post on fencing).
+- **Martin Kleppmann, [*How to do distributed locking*](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)** (blog post on fencing).
 </GoDeeper>
