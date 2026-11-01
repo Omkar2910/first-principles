@@ -4,6 +4,7 @@ title: "Case Study: URL Shortener"
 description: The classic warm-up. ID generation, read-heavy caching, redirects and analytics at scale.
 minutes: 13
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -31,7 +32,7 @@ GET /{code}
   → 301/302 Location: https://original...
 ```
 
-**301 vs 302**: 301 (permanent) lets browsers cache the redirect, which means less load but you lose click analytics for repeat visits. 302 (temporary) hits you every time. Most shorteners use 302 for analytics.
+**301 vs 302**: 301 (permanent) lets browsers cache the redirect: less load, but repeat clicks from the same browser may never reach you, so per-click analytics undercount. 302/307 (temporary) sends every click through you and lets you change the destination later. Both are used in practice: Bitly documents using 301 (its links never change), while products that prioritize per-click analytics or editable links choose 302.
 
 ## 4. Data model
 
@@ -114,7 +115,7 @@ A URL shortener is a **read-availability** problem in disguise. The senior insig
 </KeyTakeaways>
 
 <GoDeeper>
-- **Alex Xu, *System Design Interview Vol. 1***: URL shortener chapter.
-- **Twitter's Snowflake** ID generator (GitHub archive).
-- **Hello Interview:** Bit.ly breakdown.
+- **Alex Xu, *System Design Interview* Vol. 1**: URL shortener chapter.
+- **[Twitter's Snowflake](https://github.com/twitter-archive/snowflake)** ID generator (archived).
+- **[Hello Interview: Bit.ly breakdown](https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly)** and **[Bitly: what is a 301 redirect?](https://support.bitly.com/hc/en-us/articles/230897368)**
 </GoDeeper>

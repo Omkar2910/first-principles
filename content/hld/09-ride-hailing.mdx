@@ -4,6 +4,7 @@ title: "Case Study: Ride-Hailing (Uber/Lyft)"
 description: Real-time location ingestion, geospatial indexing, matching drivers to riders, and trip state.
 minutes: 14
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -25,7 +26,7 @@ Design the core of a ride-hailing app: millions of drivers send their location e
 
 Scanning 5M drivers per request is impossible. Divide the map into **cells**:
 
-- **Geohash**: encodes lat/lng into a string; longer prefixes = smaller cells (`9q8yy` ≈ a few km²). Nearby points usually share prefixes; query the cell and its 8 neighbors.
+- **Geohash**: encodes lat/lng into a string; longer prefixes = smaller cells (a 5-character cell like `9q8yy` is roughly 5 km × 5 km; 6 characters ≈ 1.2 km × 0.6 km). Nearby points usually share prefixes; query the cell and its 8 neighbors.
 - **Quadtree**: recursively split regions with many points into four; dense downtowns get small cells, rural areas big ones.
 - **H3** (Uber's hexagonal grid): hexagons have uniform neighbor distances, which is great for "within k rings" searches, demand heatmaps and surge pricing.
 
@@ -128,7 +129,7 @@ The senior insight is **classifying data by value**: driver positions are high-v
 </KeyTakeaways>
 
 <GoDeeper>
-- **Uber engineering:** H3 hexagonal grid, *How Uber Computes ETA*, and DISCO dispatch talks.
-- **Redis GEO commands** documentation.
+- **[H3](https://h3geo.org/)**, Uber's open-source hexagonal grid, plus Uber engineering posts on ETA prediction and the DISCO dispatch system.
+- **[Redis geospatial indexes](https://redis.io/docs/latest/develop/data-types/geospatial/)** documentation.
 - **Alex Xu, *System Design Interview Vol. 2***: proximity service and nearby friends chapters.
 </GoDeeper>
