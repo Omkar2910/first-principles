@@ -114,6 +114,17 @@ The **Progress** page shows:
 
 Under **Career Ladder → Self-Assessment and Growth Plan**, rate yourself from Junior to Lead across 12 competencies, such as system design, production ownership and written communication. Choose a target level and the tool lists your gaps, each linked to the lesson that helps close it. Retake it every quarter.
 
+## About the content
+
+The lessons were written with AI assistance (Claude) and are being **fact-checked track by track** against primary sources: official documentation, specifications, standards and the original papers and books.
+
+Each lesson shows its status under the title:
+
+- **✓ Fact-checked (month)**: its specific claims (numbers, defaults, protocol details, product behavior) were checked against sources on that date, and its *Go deeper* references link to the real pages.
+- **Not yet fact-checked**: the explanation is likely sound, but treat specific details as unverified until you've confirmed them in the linked docs.
+
+Fast-moving topics (AI tooling, cloud services, specs like MCP) change after review, so the date matters. When a lesson and an official source disagree, trust the source.
+
 ## Your data and privacy
 
 There is no account and no server. **Everything you do is stored only in this browser** (in `localStorage`): completed lessons, review schedule, quiz history, activity, self-assessment answers and your theme.

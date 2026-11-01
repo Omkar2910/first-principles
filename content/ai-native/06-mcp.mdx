@@ -3,6 +3,7 @@ title: Model Context Protocol (MCP)
 description: A standard way to connect AI applications to tools and data. Architecture, primitives, and building a server.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -12,6 +13,8 @@ Every AI app wants access to the same things: GitHub, Jira, Slack, your database
 ## The idea
 
 MCP standardizes how AI applications discover and use **tools, data and prompts** from external systems, much like how USB standardized device connections or how the Language Server Protocol standardized editor ↔ language tooling.
+
+Messages are **JSON-RPC 2.0**. A **host** (the AI application) runs one **client** per connected **server**:
 
 ```text
 AI application (host: IDE agent, desktop chat app, your custom agent)
@@ -31,13 +34,17 @@ Servers can expose:
 - **Resources**: readable data/context identified by URIs (files, DB schemas, documents) that the application can pull into context.
 - **Prompts**: reusable prompt templates/workflows the user can invoke.
 
-Clients can offer servers capabilities too (for example **sampling**, letting a server request an LLM completion via the client, and **elicitation**, asking the user for input).
+Clients can offer one feature back to servers: **elicitation**, which lets a server ask the user for more information partway through a request (a missing parameter, a confirmation). Older revisions also had client-side **sampling** (a server borrowing the host's LLM) and **roots**; both are deprecated as of the 2026-07-28 revision.
 
-**Transports**: **stdio** for local servers launched by the host (e.g. a CLI tool on your machine), and **streamable HTTP** for remote servers, typically secured with OAuth.
+**Transports**: **stdio** for local servers launched by the host (e.g. a CLI tool on your machine), and **streamable HTTP** for remote servers, secured with OAuth 2.x. The older HTTP+SSE transport is deprecated.
+
+**Stateless by design** (2026-07-28 revision): there's no initialization handshake or protocol session. Every request carries its protocol version and client capabilities, and a server that needs more input returns an "input required" result that the client answers by retrying the request. That makes remote MCP servers behave like ordinary stateless HTTP services: easy to load-balance and scale horizontally.
+
+Beyond the core, optional **extensions** add things like long-running **tasks** and interactive **MCP Apps** (UI rendered inside the conversation).
 
 ## Building a server (sketch)
 
-Official SDKs exist for TypeScript, Python, Java/Kotlin (and Spring AI integrates MCP), C#, Go and more. Conceptually:
+Official SDKs exist for TypeScript, Python, C#, Go, Rust, Ruby, Java, Kotlin, Swift and PHP; Spring AI builds its MCP support on the Java SDK. SDKs adopt new protocol revisions on their own schedules, so check which revision yours supports. Conceptually:
 
 ```java
 // Pseudocode with an MCP Java SDK / Spring AI MCP server
@@ -58,7 +65,7 @@ MCP makes connecting easy, which makes **security discipline** essential:
 - **Authenticate and authorize** remote servers (OAuth); tools act with the **end user's** permissions, scoped to least privilege.
 - **Treat tool results as untrusted input**: content fetched by a tool (an issue comment, a web page, an email) can contain **prompt injection** attempting to hijack the agent (lesson 9).
 - **Only install trusted servers**: a malicious or compromised MCP server can expose data or misdescribe tools. Review what you connect; pin versions.
-- **Human confirmation** for consequential actions; hosts typically ask before running tools.
+- **Human confirmation**: the spec requires hosts to get the user's consent before invoking tools, and to treat tool descriptions and annotations from untrusted servers as untrusted themselves.
 - Prefer **read-only** servers where possible (e.g. read-only DB roles).
 
 <Quiz
@@ -82,7 +89,7 @@ MCP makes connecting easy, which makes **security discipline** essential:
   bad={[
     "New attack surface: untrusted servers, tool-result injection",
     "Too many connected tools can confuse models and bloat context",
-    "Still evolving; keep SDKs and specs up to date",
+    "Still evolving: the 2026-07-28 revision made breaking changes, so track spec revisions and SDK support",
   ]}
 />
 
@@ -99,13 +106,13 @@ An MCP server is a **public API for AI agents**, and deserves the same rigor: au
 
 <KeyTakeaways>
 - MCP standardizes connecting AI applications to tools, resources and prompts.
-- Hosts run clients that talk to servers over stdio (local) or streamable HTTP (remote).
+- Hosts run clients that talk JSON-RPC to servers over stdio (local) or streamable HTTP (remote); the current revision is stateless.
 - Build once, use from many AI apps.
 - Security: auth, least privilege, treat tool outputs as untrusted, trusted servers only.
 </KeyTakeaways>
 
 <GoDeeper>
-- **[modelcontextprotocol.io](https://modelcontextprotocol.io/)**: specification, concepts and SDKs.
-- **Spring AI MCP** documentation (Java servers and clients).
-- **Anthropic's MCP announcement** and engineering posts on tool design.
+- **[MCP specification, 2026-07-28 revision](https://modelcontextprotocol.io/specification/2026-07-28)** and its **[changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)**: the authoritative source; check for newer revisions.
+- **[Official MCP SDKs](https://modelcontextprotocol.io/docs/sdk)**, and **[Spring AI MCP](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-overview.html)** for Java servers and clients.
+- **[Introducing the Model Context Protocol](https://www.anthropic.com/news/model-context-protocol)** (Anthropic, 2024) and **[Writing effective tools for agents](https://www.anthropic.com/research/writing-tools-for-agents)**.
 </GoDeeper>

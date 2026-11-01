@@ -163,6 +163,7 @@ npm run dev     # http://localhost:3000
 npm run build   # pre-renders every page (≈150)
 npm run start   # serve the production build
 npm run lint
+npm run check:links   # every external link in content/ and docs/ (needs network)
 ```
 
 The output is static, so any host that serves a Next.js build works: Vercel, a container running `next start`, or a CDN.

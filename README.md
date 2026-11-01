@@ -6,6 +6,7 @@ A personal learning platform for backend engineering, system design, AI-native e
 npm install
 npm run dev    # http://localhost:3000
 npm run build  # static build of every page
+npm run check:links  # verify every external link in content/ and docs/
 ```
 
 ## Documentation

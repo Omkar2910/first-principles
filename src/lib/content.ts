@@ -18,6 +18,8 @@ export type LessonMeta = {
   level: Level;
   /** Optional grouping label shown on the track page. */
   section?: string;
+  /** ISO date the lesson was last fact-checked against sources; absent = not yet reviewed. */
+  reviewed?: string;
 };
 
 /** Minimal frontmatter parser: flat `key: value` pairs between `---` fences. */
@@ -55,6 +57,7 @@ function metaFromFile(track: string, file: string): LessonMeta {
     minutes: Number(data.minutes ?? 10),
     level: (data.level as Level) ?? "junior",
     section: data.section,
+    reviewed: data.reviewed,
   };
 }
 

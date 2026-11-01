@@ -57,7 +57,8 @@ figure[data-rehype-pretty-code-figure] {
   @apply my-6;
 }
 figure[data-rehype-pretty-code-figure] pre {
-  @apply my-0 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 py-4 text-[13px] leading-relaxed dark:border-slate-800 dark:bg-slate-900/70;
+  /* Explicit text color: unhighlighted blocks (```text) would otherwise inherit prose's light pre color. */
+  @apply my-0 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 py-4 text-[13px] leading-relaxed text-slate-800 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-200;
 }
 figure[data-rehype-pretty-code-figure] pre > code {
   @apply grid;

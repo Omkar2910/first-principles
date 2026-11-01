@@ -88,6 +88,16 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
             </Badge>
             <Badge>{lesson.meta.minutes} min read</Badge>
             <LevelBadge level={lesson.meta.level} />
+            <Link href="/guide#about-the-content" className="rounded-full">
+              {lesson.meta.reviewed ? (
+                <Badge tone="emerald" title={`Claims checked against primary sources on ${lesson.meta.reviewed}`}>
+                  ✓ Fact-checked{" "}
+                  {new Date(lesson.meta.reviewed).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}
+                </Badge>
+              ) : (
+                <Badge title="This lesson hasn't been checked against primary sources yet">Not yet fact-checked</Badge>
+              )}
+            </Link>
           </div>
 
           {/* Phones and tablets get the track's lesson list as a collapsible menu. */}

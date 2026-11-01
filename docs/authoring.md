@@ -26,6 +26,7 @@ level: junior        # junior | mid | senior | lead
 | `minutes` | yes | Reading-time badges and track totals |
 | `level` | yes | Level badge (Beginner, Intermediate, Advanced, Leadership) |
 | `section` | no | Groups *consecutive* lessons under a heading on the track page and sidebar |
+| `reviewed` | no | ISO date (`2026-11-01`) the lesson was last fact-checked; shows the "Fact-checked" badge. Leave it out until the lesson has been reviewed. |
 
 The parser handles flat `key: value` lines only: no nesting, lists or multi-line values.
 
@@ -119,6 +120,16 @@ Practice mode and quiz statistics read quizzes straight from the MDX source, so:
 - **Short paragraphs, plain words.** Define jargon on first use.
 - **Takeaways are memory hooks**, not a summary of every section: three to five bullets.
 
+## Fact-checking a lesson
+
+Lessons start as drafts. Before adding `reviewed:` to the frontmatter:
+
+1. **List the checkable claims**: numbers, defaults, version-specific behavior, protocol and API details, names of standards and their items, attributions ("X coined Y").
+2. **Check each against a primary source**: official docs, the spec or RFC, the standard itself (e.g. the OWASP list), the original paper or book. Secondary blog posts don't count on their own.
+3. **Fix or soften** anything wrong or unverifiable. Pin time-sensitive facts to a version or date ("as of the 2026-07-28 MCP revision").
+4. **Link every Go deeper reference** to the real page, and say in a few words why it's worth reading.
+5. Run `npm run check:links`, then set `reviewed:` to today's date.
+
 ## Adding a simulator
 
 1. Create `src/components/sims/MySim.tsx`:
@@ -164,3 +175,5 @@ Guidelines:
 - [ ] Every quiz question is unique and its `answer` index is correct.
 - [ ] `<KeyTakeaways>` has three to five standalone bullets.
 - [ ] Code blocks have a language.
+- [ ] `npm run check:links` reports no broken links.
+- [ ] If you fact-checked it, `reviewed:` is set to today's date.
