@@ -168,6 +168,18 @@ npm run check:links   # every external link in content/ and docs/ (needs network
 
 The output is static, so any host that serves a Next.js build works: Vercel, a container running `next start`, or a CDN.
 
+### GitHub Pages
+
+`.github/workflows/deploy-pages.yml` deploys every push to `main`. It builds with `STATIC_EXPORT=true`, which switches `next.config.ts` to `output: "export"` (plain HTML in `out/`, trailing slashes), and with `BASE_PATH=/<repo-name>`, because a project site is served from `https://<owner>.github.io/<repo-name>/`. To try the same build locally:
+
+```bash
+STATIC_EXPORT=true BASE_PATH=/first-principles npm run build
+```
+
+One-time setup: in the repository, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+
+Internal links must go through `next/link` (lessons get this automatically, because `a` is mapped in `src/components/mdx.tsx`). A raw `<a href="/…">` would miss the base path.
+
 ## Extending
 
 | To add… | Do this |

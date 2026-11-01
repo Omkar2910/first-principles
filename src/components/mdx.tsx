@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+import Link from "next/link";
 import { compileMDX } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
@@ -8,8 +10,15 @@ import { Flow } from "./lesson/Flow";
 import { Scenario } from "./lesson/Scenario";
 import * as sims from "./sims";
 
+/** Internal links go through next/link so they pick up basePath and client navigation. */
+function MdxLink({ href = "", ...props }: ComponentProps<"a">) {
+  if (href.startsWith("/")) return <Link href={href} {...props} />;
+  return <a href={href} {...props} />;
+}
+
 /** Every component a lesson can use. Add new simulators here. */
 const components = {
+  a: MdxLink,
   Problem,
   MentalModel,
   SeniorLens,
