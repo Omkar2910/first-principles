@@ -3,6 +3,7 @@ title: Containers and Docker
 description: What containers really are, writing good Dockerfiles for Java services, and image best practices.
 minutes: 11
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -34,24 +35,32 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
-RUN ./mvnw -q dependency:go-offline          # cached unless pom.xml changes
+# Cached unless pom.xml changes
+RUN ./mvnw -q dependency:go-offline
 COPY src src
+# Assumes the jar is built as target/app.jar (<finalName>app</finalName>)
 RUN ./mvnw -q package -DskipTests && \
     java -Djarmode=tools -jar target/app.jar extract --layers --destination extracted
 
 # ---- runtime stage ----
-FROM eclipse-temurin:21-jre                  # JRE only: smaller, fewer CVEs (or distroless)
+# JRE only: smaller, fewer CVEs (or a distroless Java image)
+FROM eclipse-temurin:21-jre
 RUN useradd --system --uid 10001 app
-USER app                                      # never run as root
+# Never run as root
+USER app
 WORKDIR /app
 COPY --from=build /src/extracted/dependencies/ ./
 COPY --from=build /src/extracted/spring-boot-loader/ ./
 COPY --from=build /src/extracted/snapshot-dependencies/ ./
-COPY --from=build /src/extracted/application/ ./   # only this layer changes on most commits
+# Only this layer changes on most commits
+COPY --from=build /src/extracted/application/ ./
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]       # exec form → Java is PID 1 and receives SIGTERM
+# Exec form: Java is PID 1 and receives SIGTERM
+ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
+
+Note the comments on their own lines: Dockerfiles only treat `#` as a comment at the **start** of a line. A trailing `# comment` becomes part of the instruction's arguments, and on `ENTRYPOINT` it breaks the JSON, so Docker falls back to shell form and SIGTERM no longer reaches Java directly.
 
 (Spring Boot can also build images without a Dockerfile: `./mvnw spring-boot:build-image` via Buildpacks.)
 
@@ -63,7 +72,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]       # exec form → Java is PID 1 and r
 - **Pin versions** (base image tags or digests) for reproducibility.
 - **No secrets in images** (they live forever in layers); inject at runtime.
 - **One process per container**; log to stdout/stderr.
-- **Exec-form ENTRYPOINT** so signals reach your app (graceful shutdown).
+- **Exec-form ENTRYPOINT** (a valid JSON array) so signals reach your app (graceful shutdown).
 - **Scan images** for vulnerabilities in CI (Trivy, Grype); rebuild regularly to pick up base-image patches.
 - **`.dockerignore`** to keep `target/`, `.git`, local configs out of the build context.
 - **Immutable tags per build** (`app:git-sha`), not just `latest`.
@@ -116,7 +125,7 @@ Your container image is part of your **security perimeter**. Seniors care about 
 </KeyTakeaways>
 
 <GoDeeper>
-- **Docker docs:** Dockerfile best practices and multi-stage builds.
-- **Spring Boot docs:** container images (layering, Buildpacks).
-- **Julia Evans, *How Containers Work*** zine.
+- **Docker docs: [Building best practices](https://docs.docker.com/build/building/best-practices/)**, **[multi-stage builds](https://docs.docker.com/build/building/multi-stage/)** and the **[Dockerfile reference](https://docs.docker.com/reference/dockerfile/)**.
+- **[Spring Boot: container images](https://docs.spring.io/spring-boot/reference/packaging/container-images/index.html)** (layered extraction, Buildpacks).
+- **Julia Evans: [*How Containers Work*](https://wizardzines.com/zines/containers/)** zine.
 </GoDeeper>

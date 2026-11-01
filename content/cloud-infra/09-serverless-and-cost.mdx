@@ -3,6 +3,7 @@ title: Serverless and Cloud Cost Engineering
 description: When functions and fully managed services shine, their sharp edges, and how to design for cost.
 minutes: 10
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -11,7 +12,7 @@ A team runs 12 always-on servers for an internal tool used 2 hours a day. Anothe
 
 ## What "serverless" means
 
-You deploy code or use a service without managing servers; it **scales automatically (including to zero)** and you **pay per use**. Examples: Lambda/Cloud Functions, Cloud Run/Fargate (serverless containers), DynamoDB on-demand, S3, SQS, EventBridge, Step Functions, API Gateway.
+You deploy code or use a service without managing servers; it **scales automatically (including to zero)** and you **pay per use**. Examples: Lambda/Cloud Run functions, Cloud Run/Fargate (serverless containers), DynamoDB on-demand, S3, SQS, EventBridge, Step Functions, API Gateway.
 
 ## Where it shines
 
@@ -37,9 +38,9 @@ Serverless is **ride-hailing**; servers are **owning a car**. For occasional tri
 | Driver | What to do |
 |---|---|
 | **Idle capacity** | Autoscaling, scale-to-zero for non-prod, shut down dev at night |
-| **Over-provisioning** | Right-size from real utilization (most instances run at 10–20% CPU) |
+| **Over-provisioning** | Right-size from real utilization (instances sized "to be safe" often idle at low average CPU) |
 | **Commitment discounts** | Savings Plans / Reserved Instances for steady baseline load |
-| **Spot / preemptible** | Batch jobs, CI runners, stateless workers (up to ~70–90% cheaper) |
+| **Spot / preemptible** | Batch jobs, CI runners, stateless workers (AWS quotes up to 90% off on-demand; capacity can be reclaimed at short notice) |
 | **Data transfer** | Watch egress to internet, cross-region and cross-AZ traffic; use CDNs and VPC endpoints |
 | **Storage** | Lifecycle policies (S3 → Infrequent Access → Glacier), delete orphaned snapshots/volumes |
 | **Observability costs** | Logs and metrics cardinality can explode; sample, set retention, drop noise |
@@ -95,7 +96,7 @@ Seniors include a **cost section in every design doc**: expected monthly cost at
 </KeyTakeaways>
 
 <GoDeeper>
-- **AWS Well-Architected:** Cost Optimization and Serverless Lens.
+- **AWS Well-Architected: [Cost Optimization pillar](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html)** and **[Serverless Applications Lens](https://docs.aws.amazon.com/wellarchitected/latest/serverless-applications-lens/welcome.html)**.
 - **[FinOps Foundation](https://www.finops.org/)** framework.
-- **Yan Cui (theburningmonk)** blog on serverless patterns and pitfalls.
+- **[Yan Cui (theburningmonk)](https://theburningmonk.com/)** on serverless patterns and pitfalls.
 </GoDeeper>

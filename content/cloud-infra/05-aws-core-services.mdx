@@ -3,6 +3,7 @@ title: The Core Cloud Services Map
 description: The 20 AWS services (and their GCP/Azure equivalents) that cover most backend architectures.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -15,11 +16,11 @@ AWS has 200+ services, and their names don't help ("Kinesis", "Athena", "Cognito
 |---|---|---|---|---|
 | **Compute (VMs)** | EC2 | Compute Engine | Virtual Machines | Full control, special workloads |
 | **Containers** | ECS / Fargate, EKS | Cloud Run, GKE | Container Apps, AKS | Running services |
-| **Serverless functions** | Lambda | Cloud Functions | Functions | Event-driven glue, spiky low-volume APIs |
+| **Serverless functions** | Lambda | Cloud Run functions | Functions | Event-driven glue, spiky low-volume APIs |
 | **Object storage** | S3 | Cloud Storage | Blob Storage | Files, backups, data lakes, static sites |
 | **Relational DB** | RDS, Aurora | Cloud SQL, AlloyDB | Azure SQL / PostgreSQL | Primary transactional data |
 | **Key-value / document** | DynamoDB | Firestore / Bigtable | Cosmos DB | Massive-scale key access |
-| **Cache** | ElastiCache (Redis/Valkey) | Memorystore | Cache for Redis | Caching, sessions, rate limits |
+| **Cache** | ElastiCache (Redis/Valkey) | Memorystore | Managed Redis | Caching, sessions, rate limits |
 | **Queue** | SQS | Pub/Sub, Cloud Tasks | Service Bus Queues | Background jobs, decoupling |
 | **Pub/sub & events** | SNS, EventBridge | Pub/Sub, Eventarc | Event Grid, Service Bus Topics | Fan-out, event routing |
 | **Streaming** | Kinesis, MSK (Kafka) | Pub/Sub, Managed Kafka | Event Hubs | Event streams, CDC |
@@ -34,7 +35,9 @@ AWS has 200+ services, and their names don't help ("Kinesis", "Athena", "Cognito
 | **Secrets & keys** | Secrets Manager, KMS | Secret Manager, Cloud KMS | Key Vault | Credentials, encryption keys |
 | **Observability** | CloudWatch, X-Ray | Cloud Monitoring/Logging/Trace | Monitor, App Insights | Metrics, logs, traces |
 | **Workflows** | Step Functions | Workflows | Logic Apps / Durable Functions | Orchestrated multi-step processes |
-| **AI / LLMs** | Bedrock, SageMaker | Vertex AI | Azure AI Foundry | Model hosting and APIs |
+| **AI / LLMs** | Bedrock, SageMaker | Vertex AI | Microsoft Foundry | Model hosting and APIs |
+
+Product names change often: Google's Cloud Functions became *Cloud Run functions* in 2024, Azure is retiring Azure Cache for Redis in favor of *Azure Managed Redis*, and Azure AI Foundry is now *Microsoft Foundry*. The categories are what last.
 
 ## A typical architecture on AWS
 
@@ -80,7 +83,7 @@ The cloud catalog is a **giant hardware store**. You don't need every aisle. Mos
 />
 
 <SeniorLens>
-For each managed service, seniors know its **limits and failure modes**: SQS's 256 KB message limit and visibility timeouts, Lambda's cold starts and concurrency limits, DynamoDB's partition throughput, RDS failover time. Limits found in a design review are cheap; limits found in production are incidents.
+For each managed service, seniors know its **limits and failure modes**: SQS's message size limit (1 MiB since August 2025, previously 256 KiB) and visibility timeouts, Lambda's cold starts and concurrency limits, DynamoDB's partition throughput, RDS failover time. Limits found in a design review are cheap; limits found in production are incidents.
 </SeniorLens>
 
 <KeyTakeaways>
@@ -91,7 +94,7 @@ For each managed service, seniors know its **limits and failure modes**: SQS's 2
 </KeyTakeaways>
 
 <GoDeeper>
-- **AWS Well-Architected Framework** and **AWS Architecture Center** reference architectures.
+- **[AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)** and the **[AWS Architecture Center](https://aws.amazon.com/architecture/)** reference architectures.
 - **[Google Cloud developer cheat sheet](https://github.com/priyankavergadia/google-cloud-4-words)**: every GCP service in 4 words.
-- **AWS service quotas documentation** for the services you use.
+- **[AWS service quotas](https://docs.aws.amazon.com/general/latest/gr/aws_service_limits.html)** for the services you use. Limits change; check them rather than memorizing (e.g. [SQS's 2025 payload increase](https://aws.amazon.com/about-aws/whats-new/2025/08/amazon-sqs-max-payload-size-1mib/)).
 </GoDeeper>

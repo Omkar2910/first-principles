@@ -3,6 +3,7 @@ title: Infrastructure as Code
 description: Defining cloud resources in version-controlled code with Terraform and friends, and doing it safely.
 minutes: 9
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -54,12 +55,12 @@ IaC is the difference between **a recipe and a dish someone once cooked**. If al
 
 ## Practices that keep IaC safe
 
-- **Remote state with locking** (e.g. S3 + DynamoDB lock / Terraform Cloud) so two applies can't collide. State may contain secrets, so protect it.
+- **Remote state with locking** (e.g. the S3 backend with native locking via `use_lockfile = true`, or HCP Terraform, formerly Terraform Cloud) so two applies can't collide. The older DynamoDB lock table for the S3 backend is deprecated. State may contain secrets, so protect it.
 - **Plan in CI on every PR**; apply only from the pipeline after approval. No laptop applies to production.
 - **Modules** for reusable patterns (a "standard service" module: ECR repo, IAM role, log group, alarms).
 - **Separate state per environment/component** to limit blast radius.
 - **Drift detection**: scheduled plans to catch console changes.
-- **Policy as code** (OPA/Conftest, Sentinel, Checkov, tfsec) to block public buckets, unencrypted volumes, `0.0.0.0/0` SSH rules before they're created.
+- **Policy as code** (OPA/Conftest, Sentinel, Checkov, or Trivy's `trivy config`, which replaced the deprecated tfsec) to block public buckets, unencrypted volumes, `0.0.0.0/0` SSH rules before they're created.
 - Watch for **destructive changes** in plans (`-/+ destroy and then create replacement`). A renamed resource can mean a deleted database. Use `prevent_destroy` on critical resources.
 
 <Quiz
@@ -106,7 +107,7 @@ The most important IaC skill is **reading a plan**. Seniors scan every plan for 
 </KeyTakeaways>
 
 <GoDeeper>
-- **Yevgeniy Brikman, *Terraform: Up & Running***.
+- **[Yevgeniy Brikman, *Terraform: Up & Running*](https://www.terraformupandrunning.com/)**.
 - **[Terraform docs: refactoring with moved blocks](https://developer.hashicorp.com/terraform/language/modules/develop/refactoring)**.
-- **Checkov / tfsec** documentation for policy scanning.
+- **Terraform: [S3 backend and state locking](https://developer.hashicorp.com/terraform/language/backend/s3)**; **[Checkov](https://www.checkov.io/)** and **[Trivy](https://trivy.dev/)** for IaC policy scanning.
 </GoDeeper>

@@ -3,6 +3,7 @@ title: CI/CD and Deployment Pipelines
 description: From commit to production safely and often. Pipelines, environments, artifact promotion and GitOps.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -50,16 +51,17 @@ Instead of the pipeline pushing to the cluster, the **desired state lives in a G
 
 ## Measuring delivery: DORA metrics
 
-Research (Accelerate / DORA) found four metrics that predict both delivery performance and stability:
+The DORA research program (popularized by the book *Accelerate*) measures software delivery with five metrics, in two groups:
 
-| Metric | Elite teams |
-|---|---|
-| **Deployment frequency** | On demand, multiple times per day |
-| **Lead time for changes** (commit → prod) | Less than a day |
-| **Change failure rate** | Low (roughly 0–15%) |
-| **Time to restore service** | Less than an hour |
+| Metric | Measures | Group |
+|---|---|---|
+| **Change lead time** | Commit → running in production | Throughput |
+| **Deployment frequency** | How often you deploy to production | Throughput |
+| **Failed deployment recovery time** | Time to recover from a deployment that needs immediate intervention (formerly "time to restore service") | Throughput |
+| **Change fail rate** | Share of deployments that need immediate intervention | Instability |
+| **Deployment rework rate** | Share of deployments that are unplanned fixes for production incidents | Instability |
 
-The key finding: **speed and stability go together**. Small, frequent changes are safer than big, rare ones.
+The key finding, repeated across years of DORA research: **speed and stability go together**. Top performers do well on all five, and small, frequent changes are safer than big, rare ones. Track your own trend rather than chasing published benchmarks.
 
 <Quiz
   question="Your pipeline rebuilds the application separately for staging and production from the same commit. Why is that risky?"
@@ -101,11 +103,11 @@ When a team is afraid to deploy, the fix is almost never "deploy less". It's **m
 - CI: integrate and test every change automatically; CD: always deployable (or auto-deployed).
 - Build once, promote the same artifact; everything as code.
 - Trunk-based development + feature flags + backward-compatible migrations.
-- DORA metrics: frequent, fast, low-failure, quick-recovery delivery go together.
+- DORA's five metrics: throughput (lead time, deploy frequency, recovery time) and instability (change fail rate, rework rate) improve together.
 </KeyTakeaways>
 
 <GoDeeper>
-- **Forsgren, Humble, Kim, *Accelerate***: the research behind DORA.
-- **Jez Humble & David Farley, *Continuous Delivery***.
+- **[DORA's software delivery metrics guide](https://dora.dev/guides/dora-metrics/)** and **[Forsgren, Humble, Kim, *Accelerate*](https://itrevolution.com/product/accelerate/)**: the research behind them.
+- **[Jez Humble & David Farley, *Continuous Delivery*](https://continuousdelivery.com/)**.
 - **[Argo CD docs](https://argo-cd.readthedocs.io/)** for GitOps.
 </GoDeeper>
