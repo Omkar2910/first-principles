@@ -3,6 +3,7 @@ title: Zero-Downtime Schema Migrations
 description: Changing a live database without breaking running code, using expand/contract, backfills and safe DDL.
 minutes: 10
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -34,7 +35,7 @@ Five steps for a rename. That's the price of zero downtime, and why renames shou
 | Risky | Why | Safer |
 |---|---|---|
 | `CREATE INDEX` | Blocks writes during build | `CREATE INDEX CONCURRENTLY` |
-| `ADD COLUMN ... NOT NULL` without default (older PG) / with volatile default | Rewrites table / fails on existing rows | Add nullable → backfill → add constraint `NOT VALID` → `VALIDATE` |
+| `ADD COLUMN` with a volatile default (e.g. `random()`), or any default before PG 11; `ADD COLUMN ... NOT NULL` with no default | Rewrites the table under an exclusive lock / fails on existing rows | Add nullable (or with a constant default, PG 11+) → backfill → `CHECK (col IS NOT NULL) NOT VALID` → `VALIDATE` → `SET NOT NULL` |
 | `ALTER COLUMN TYPE` | Full table rewrite with exclusive lock | New column + backfill + switch |
 | Adding a foreign key | Validates all rows under lock | `ADD CONSTRAINT ... NOT VALID`, then `VALIDATE CONSTRAINT` |
 | Any DDL on a busy table | Waits for an exclusive lock and queues everything behind it | Set `lock_timeout` (e.g. 3s) and retry |
@@ -91,7 +92,7 @@ A useful review rule: **every migration PR must state whether it's compatible wi
 </KeyTakeaways>
 
 <GoDeeper>
-- **Stripe engineering blog:** *Online migrations at scale*.
+- **Stripe engineering blog: [Online migrations at scale](https://stripe.com/blog/online-migrations)**.
 - **[strong_migrations](https://github.com/ankane/strong_migrations)** README: a great catalog of dangerous operations (Rails, but universal).
-- **Flyway** and **Liquibase** docs.
+- **[Flyway](https://documentation.red-gate.com/flyway)** and **[Liquibase](https://docs.liquibase.com/)** docs, plus **[Postgres: ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)** (which forms take which locks).
 </GoDeeper>

@@ -3,6 +3,7 @@ title: "Transactions and ACID"
 description: All-or-nothing changes, what each ACID letter really guarantees, and how to use transactions well in Spring.
 minutes: 10
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -53,7 +54,7 @@ class TransferService {
 The `@Transactional` gotchas every Spring developer hits:
 - **Self-invocation**: calling a `@Transactional` method from *another method of the same class* bypasses the proxy, so no transaction starts.
 - **Checked exceptions don't roll back by default**. Only `RuntimeException`/`Error` do, unless you set `rollbackFor`.
-- **Only public methods** on Spring beans are proxied (by default).
+- **Visibility**: only methods called *through the proxy* are transactional. Spring 6.0+ also supports `protected` and package-private methods on class-based proxies; interface-based proxies still need `public` interface methods. **Private methods never are.**
 - **Long transactions** hold locks: don't call HTTP services or send emails inside them.
 - **Propagation**: `REQUIRED` (default) joins an existing transaction; `REQUIRES_NEW` suspends it and starts a separate one (useful for audit logs that must persist even if the main work rolls back).
 
@@ -104,7 +105,7 @@ A senior reading `@Transactional` code checks three things: **Is anything inside
 </KeyTakeaways>
 
 <GoDeeper>
-- **DDIA chapter 7** (Transactions): the best explanation of what ACID really means.
-- **Spring docs:** declarative transaction management.
+- **[*Designing Data-Intensive Applications*](https://dataintensive.net/)**: the *Transactions* chapter (ch. 7 in the 1st edition), the best explanation of what ACID really means.
+- **[Spring docs: declarative transaction management](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative.html)**.
 - **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*Mastering Databases with Postgres*](https://www.youtube.com/watch?v=F7Vwp2Xo5Do).
 </GoDeeper>

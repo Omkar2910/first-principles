@@ -3,6 +3,7 @@ title: Why Databases Exist
 description: What a database gives you that a file doesn't, including durability, concurrency, querying and integrity, and how it does it.
 minutes: 9
 level: junior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -47,7 +48,7 @@ You don't need to implement either, but "B-tree = read-optimized, LSM = write-op
 
 **Relational databases** (Postgres, MySQL, SQL Server, Oracle) store data in tables with a schema, support joins and offer strong transactional guarantees. They're the right default for most business systems.
 
-**Non-relational** (NoSQL) databases trade some of those features for specific strengths: flexible documents, massive write scale, low-latency key lookups, graph traversal. Lesson 8 covers them. The rule of thumb many experienced engineers follow: **start with Postgres unless you can name the specific requirement it can't meet**.
+**Non-relational** (NoSQL) databases trade some of those features for specific strengths: flexible documents, massive write scale, low-latency key lookups, graph traversal. Lesson 7 covers them. The rule of thumb many experienced engineers follow: **start with Postgres unless you can name the specific requirement it can't meet**.
 
 <Quiz
   question="When does a Postgres COMMIT return success to your application?"
@@ -94,6 +95,6 @@ Database constraints are **the last line of defense** against application bugs. 
 
 <GoDeeper>
 - **Sriniously, [*Backend from First Principles*](https://www.youtube.com/playlist?list=PLui3EUkuMTPgZcV0QhQrOcwMPcBCcd_Q1):** [*Mastering Databases with Postgres*](https://www.youtube.com/watch?v=F7Vwp2Xo5Do).
-- **Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 3** (Storage and Retrieval). The single most recommended book for this whole track.
+- **Martin Kleppmann, [*Designing Data-Intensive Applications*](https://dataintensive.net/)**: the *Storage and Retrieval* chapter (ch. 3 in the 1st edition). The single most recommended book for this whole track.
 - **[Use The Index, Luke](https://use-the-index-luke.com/)**: free, superb.
 </GoDeeper>

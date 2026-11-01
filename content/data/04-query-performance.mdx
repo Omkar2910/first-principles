@@ -3,6 +3,7 @@ title: Query Performance in Practice
 description: N+1 queries, pagination that scales, connection pools, and the ORM habits that quietly kill performance.
 minutes: 11
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -112,7 +113,7 @@ Seniors read ORM code with the SQL in their heads. When reviewing a PR that adds
 </KeyTakeaways>
 
 <GoDeeper>
-- **Vlad Mihalcea's blog** and *High-Performance Java Persistence*: the reference for JPA/Hibernate performance.
+- **[Vlad Mihalcea's blog](https://vladmihalcea.com/)** and *High-Performance Java Persistence*: the reference for JPA/Hibernate performance.
 - **[HikariCP: About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing)**.
-- **Use The Index, Luke**: pagination chapter ("We need tool support for keyset pagination").
+- **Use The Index, Luke: [No Offset](https://use-the-index-luke.com/no-offset)** (why keyset pagination beats OFFSET).
 </GoDeeper>

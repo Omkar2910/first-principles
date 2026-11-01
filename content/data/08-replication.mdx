@@ -3,6 +3,7 @@ title: Replication
 description: Keeping copies of data on multiple machines for availability and read scale, and the consistency problems that creates.
 minutes: 12
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -59,7 +60,7 @@ Managed databases (RDS, Cloud SQL, Aurora) handle much of this, but you still ne
 ## Multi-leader and leaderless
 
 - **Multi-leader**: multiple nodes accept writes (often one per region). Low-latency local writes, but **write conflicts** must be resolved (last-write-wins, merge functions, CRDTs).
-- **Leaderless** (Dynamo-style: Cassandra, DynamoDB internals): write to N replicas, read from several, use **quorums** (`W + R > N`) so reads overlap with the latest write. Highly available; consistency is tunable per query.
+- **Leaderless** (Dynamo-style: Cassandra, Riak, ScyllaDB; named after Amazon's 2007 Dynamo paper): write to N replicas, read from several, use **quorums** (`W + R > N`) so reads overlap with the latest write. Highly available; consistency is tunable per query. (Despite the name, Amazon **DynamoDB** is not leaderless: each partition's replicas elect a leader with Multi-Paxos, and only the leader accepts writes.)
 
 <Quiz
   question="Users complain that after changing their username, the page still shows the old one for a few seconds. Reads go to async replicas. What's a targeted fix?"
@@ -105,7 +106,7 @@ Two numbers every senior should know for each critical datastore: **RPO** (how m
 </KeyTakeaways>
 
 <GoDeeper>
-- **DDIA chapter 5** (Replication): the definitive treatment.
-- **AWS Aurora / RDS docs** on Multi-AZ and read replicas.
-- **GitHub's 2018 incident postmortem** (a real-world failover and split-brain story).
+- **[*Designing Data-Intensive Applications*](https://dataintensive.net/)**: the *Replication* chapter (ch. 5 in the 1st edition), the definitive treatment.
+- **[AWS RDS: Multi-AZ deployments](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html)**, and the **[DynamoDB paper](https://www.usenix.org/conference/atc22/presentation/elhemali)** (USENIX ATC 2022) for how a leader-per-partition design works at scale.
+- **[GitHub's October 21, 2018 post-incident analysis](https://github.blog/news-insights/company-news/oct21-post-incident-analysis/)**: a 43-second network partition triggered a cross-region failover that left writes on both sides and took a day to reconcile.
 </GoDeeper>
