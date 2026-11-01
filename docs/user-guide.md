@@ -116,7 +116,7 @@ Under **Career Ladder → Self-Assessment and Growth Plan**, rate yourself from 
 
 ## About the content
 
-The lessons were written with AI assistance (Claude) and are being **fact-checked track by track** against primary sources: official documentation, specifications, standards and the original papers and books.
+The lessons were written with AI assistance (Claude) and then **fact-checked** against primary sources: official documentation, specifications, standards, and the original papers and books. Every lesson was reviewed in November 2026, and new or substantially changed lessons are reviewed before they're marked as checked.
 
 Each lesson shows its status under the title:
 

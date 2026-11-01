@@ -46,6 +46,11 @@ for (let i = 0; i < urls.length; i += CONCURRENCY) {
   results.push(...(await Promise.all(batch.map(async (url) => ({ url, status: await check(url) })))));
 }
 
+// Some hosts throttle parallel requests: retry network failures and timeouts once, one at a time.
+for (const r of results.filter((r) => typeof r.status !== "number")) {
+  r.status = await check(r.url);
+}
+
 const blocked = results.filter((r) => [401, 403, 429].includes(r.status));
 const broken = results.filter((r) => typeof r.status !== "number" || (r.status >= 400 && !blocked.includes(r)));
 
