@@ -3,6 +3,7 @@ title: Cache Invalidation and Failure Modes
 description: Stampedes, hot keys, penetration, stale data, and the techniques that keep caches from causing outages.
 minutes: 11
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -107,7 +108,7 @@ A great design-review question: **"What's the database load if the cache hit rat
 </KeyTakeaways>
 
 <GoDeeper>
-- **Facebook, *Scaling Memcache at Facebook*** (NSDI paper): leases, thundering herds, regional invalidation.
-- **Cloudflare blog:** posts on request coalescing.
-- **Optimal probabilistic cache stampede prevention** (Vattani et al.): the XFetch algorithm.
+- **Facebook, [*Scaling Memcache at Facebook*](https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala)** (NSDI 2013): leases, thundering herds, regional invalidation.
+- **Cloudflare: [Introducing Concurrent Streaming Acceleration](https://blog.cloudflare.com/introducing-concurrent-streaming-acceleration/)**: request coalescing at a CDN, with waiting clients streamed the response as it arrives.
+- **Vattani, Chierichetti, Lowenstein, [*Optimal Probabilistic Cache Stampede Prevention*](https://www.vldb.org/pvldb/vol8/p886-vattani.pdf)** (VLDB 2015): the XFetch algorithm.
 </GoDeeper>

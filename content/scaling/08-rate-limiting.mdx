@@ -3,6 +3,7 @@ title: Rate Limiting
 description: Protecting services from abuse and overload with token buckets, sliding windows, and distributed counters.
 minutes: 11
 level: mid
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -53,7 +54,7 @@ local ts = tonumber(b[2]) or tonumber(ARGV[3])
 tokens = math.min(tonumber(ARGV[1]), tokens + (tonumber(ARGV[3]) - ts) / 1000 * tonumber(ARGV[2]))
 local allowed = tokens >= 1
 if allowed then tokens = tokens - 1 end
-redis.call('HMSET', KEYS[1], 'tokens', tokens, 'ts', ARGV[3])
+redis.call('HSET', KEYS[1], 'tokens', tokens, 'ts', ARGV[3])
 redis.call('PEXPIRE', KEYS[1], 60000)
 return allowed and 1 or 0
 ```
@@ -70,10 +71,11 @@ Return headers so clients can behave well:
 ```http
 HTTP/1.1 429 Too Many Requests
 Retry-After: 12
-RateLimit-Limit: 100
-RateLimit-Remaining: 0
-RateLimit-Reset: 12
+RateLimit-Policy: "default";q=100;w=60
+RateLimit: "default";r=0;t=12
 ```
+
+These follow the IETF *RateLimit header fields* draft (still a draft): `q` = quota, `w` = window in seconds, `r` = remaining, `t` = seconds until reset. Many APIs still send the older de facto trio `RateLimit-Limit` / `RateLimit-Remaining` / `RateLimit-Reset` (or `X-RateLimit-*`) from earlier drafts.
 
 Clients should respond with **exponential backoff and jitter**, not immediate retries.
 
@@ -116,7 +118,7 @@ Rate limiting is also a **product feature**: limits often map to pricing tiers (
 </KeyTakeaways>
 
 <GoDeeper>
-- **Stripe engineering:** *Scaling your API with rate limiters*.
-- **Cloudflare blog:** *How we built rate limiting capable of scaling to millions of domains* (sliding window counter).
-- **Alex Xu, *System Design Interview Vol. 1***: rate limiter chapter.
+- **Stripe: [Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters)**.
+- **Cloudflare: [How we built rate limiting capable of scaling to millions of domains](https://blog.cloudflare.com/counting-things-a-lot-of-different-things/)** (sliding window counter).
+- **[IETF draft: RateLimit header fields for HTTP](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/)**, and Alex Xu's *System Design Interview* Vol. 1 rate limiter chapter.
 </GoDeeper>

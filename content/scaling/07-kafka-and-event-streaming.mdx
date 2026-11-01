@@ -3,6 +3,7 @@ title: Kafka and Event Streaming
 description: Topics, partitions, offsets and consumer groups, and why a replayable log changes how systems are built.
 minutes: 13
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -15,7 +16,7 @@ A traditional queue deletes a message once it's consumed. But what if a new anal
 - **Partition**: a topic is split into N partitions; each is an **ordered, append-only log**. Partitions are the unit of parallelism and ordering.
 - **Offset**: a message's position in its partition (0, 1, 2…). Messages are immutable.
 - **Producer**: appends messages. A message **key** determines the partition: `hash(key) % partitions`.
-- **Consumer group**: a set of consumers sharing work. **Each partition is read by exactly one consumer in the group.** Different groups read independently.
+- **Consumer group**: a set of consumers sharing work. **Each partition is read by exactly one consumer in the group.** Different groups read independently. (Kafka 4.2+ also offers **share groups**, "queues for Kafka", where several consumers process the same partition with per-record acknowledgement; ordering is then not guaranteed.)
 - **Committed offset**: where a group has processed up to, per partition. Restart → resume from there.
 - **Retention**: messages are kept for a time/size limit (days, or forever with compaction), regardless of consumption.
 
@@ -60,6 +61,7 @@ Kafka is a set of **ledger books** (partitions) that only ever get new lines app
 | Multiple independent readers | Natural (groups) | Need fan-out setup |
 | Ordering | Per partition | Usually none (FIFO variants exist) |
 | Per-message routing, priorities, delays | Weak | Strong |
+| Per-message acks, competing consumers on one stream | Share groups (Kafka 4.2+) | Native |
 | Operational weight | Heavier (managed: MSK, Confluent) | Lighter |
 
 Use Kafka for **event streams many systems consume**; use a queue for **tasks to be done once**.
@@ -110,7 +112,7 @@ Events published to Kafka become **APIs that you can't see the callers of**. Sen
 </KeyTakeaways>
 
 <GoDeeper>
-- **Jay Kreps, *The Log: What every software engineer should know about real-time data's unifying abstraction***: a classic essay.
-- **[Kafka documentation: design section](https://kafka.apache.org/documentation/#design)**.
-- **Confluent Developer** courses (free).
+- **Jay Kreps, *The Log: What every software engineer should know about real-time data's unifying abstraction*** (LinkedIn Engineering, 2013; later expanded into the short book *I ♥ Logs*): a classic essay.
+- **[Kafka documentation: design section](https://kafka.apache.org/documentation/#design)** and the **[Kafka 4.2 release announcement](https://kafka.apache.org/blog/2026/02/17/apache-kafka-4.2.0-release-announcement/)** (share groups).
+- **[Confluent Developer](https://developer.confluent.io/)** courses (free).
 </GoDeeper>

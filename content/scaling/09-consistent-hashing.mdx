@@ -3,6 +3,7 @@ title: Consistent Hashing
 description: Distributing keys across a changing set of servers while moving as few keys as possible.
 minutes: 10
 level: senior
+reviewed: 2026-11-01
 ---
 
 <Problem>
@@ -34,7 +35,7 @@ With only a few servers on the ring, the gaps between them are uneven: one serve
 ## Where it's used
 
 - **Distributed caches**: Memcached clients (ketama), Redis client-side sharding.
-- **Databases**: Cassandra and DynamoDB partition data across nodes on a token ring.
+- **Databases**: Cassandra (and the original Amazon Dynamo design) place data on a token ring with virtual nodes. DynamoDB, its managed descendant, hash-partitions keys and routes requests through a partition metadata service instead of a client-visible ring.
 - **Load balancers**: hash-based routing (Envoy ring hash / Maglev) for cache locality or sticky routing.
 - **CDNs**: mapping content to cache servers within a PoP.
 
@@ -84,7 +85,7 @@ In interviews, consistent hashing is a means, not an end. Bring it up **when the
 </KeyTakeaways>
 
 <GoDeeper>
-- **Karger et al., *Consistent Hashing and Random Trees*** (1997): the original paper.
-- **Amazon's *Dynamo* paper (2007)**: consistent hashing in a real database.
-- **Google, *A Fast, Minimal Memory, Consistent Hash Algorithm*** (Jump hash).
+- **Karger et al., *Consistent Hashing and Random Trees*** (STOC 1997): the original paper.
+- **[Amazon's *Dynamo* paper](https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf)** (SOSP 2007): consistent hashing in a real database.
+- **Lamping & Veach (Google), [*A Fast, Minimal Memory, Consistent Hash Algorithm*](https://arxiv.org/abs/1406.2294)** (Jump hash).
 </GoDeeper>
