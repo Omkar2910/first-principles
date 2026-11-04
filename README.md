@@ -18,14 +18,14 @@ npm run check:links  # verify every external link in content/ and docs/
 
 ## What's inside
 
-**12 tracks · 130 lessons (~114k words) · 18 interactive simulators**
+**12 tracks · 131 lessons (~117k words) · 19 interactive simulators**
 
 | # | Track | Lessons |
 |---|---|---|
 | 0 | Foundations: request lifecycle, processes & threads, concurrency, memory & latency, TCP/IP, DNS, HTTP, TLS, I/O models, server lifecycle | 10 |
 | 1 | Backend from First Principles: routing, serialization, validation, middleware, layering, authN/authZ, API styles, errors, config & logging, jobs, testing, production readiness | 14 |
 | 2 | Data: modeling, indexes, query performance, ACID, isolation levels, NoSQL, replication, sharding, migrations, choosing a DB | 11 |
-| 3 | Scaling: fundamentals, load balancing, caching & pitfalls, CDN, queues, Kafka, rate limiting, consistent hashing, gateways/mesh | 10 |
+| 3 | Scaling: fundamentals, stateless vs stateful services, load balancing, caching & pitfalls, CDN, queues, Kafka, rate limiting, consistent hashing, gateways/mesh | 11 |
 | 4 | Distributed Systems: partial failure, CAP/PACELC, consistency, resilience patterns, idempotency, sagas, outbox/CDC, consensus, clocks, microservices | 10 |
 | 5 | High-Level Design: framework, estimation + 9 case studies (URL shortener, feed, chat, notifications, payments, autocomplete, ride-hailing, video, ticketing) | 11 |
 | 6 | Low-Level Design: OOP, SOLID, patterns, API design, DDD/hexagonal, parking lot, Splitwise | 9 |

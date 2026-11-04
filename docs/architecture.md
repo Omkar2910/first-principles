@@ -72,7 +72,7 @@ src/
 |---|---|---|
 | `/` | Static | Hero, continue-learning card, roadmap of stages and tracks |
 | `/tracks/[track]` | SSG (one per track with lessons) | Track overview and lesson list |
-| `/tracks/[track]/[lesson]` | SSG (130 pages) | Lesson: sidebar, MDX content, outline, completion |
+| `/tracks/[track]/[lesson]` | SSG (131 pages) | Lesson: sidebar, MDX content, outline, completion |
 | `/review` | Static | Spaced-repetition session and browse mode |
 | `/practice` | Static | Cross-course quiz sessions |
 | `/progress` | Static (client-rendered body) | Stats, heatmap, per-track table, backup |

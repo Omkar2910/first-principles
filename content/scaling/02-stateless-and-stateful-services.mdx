@@ -1,0 +1,237 @@
+---
+title: Stateless vs Stateful Services
+description: Why stateless servers scale, what breaks when they're not, and the fixes compared end to end. Sticky sessions, session replication, a shared Redis session store and signed tokens.
+minutes: 15
+level: mid
+reviewed: 2026-11-04
+---
+
+<Problem>
+Your app works perfectly on one server. You add two more behind a load balancer for the launch. Within minutes, support tickets arrive: "I logged in, clicked *My orders*, and it asked me to log in again." Nothing is crashing. The login succeeded on `app-1`, which saved the session **in its own memory**, and the next request went to `app-2`, which has never heard of this user. The bug isn't in any one server. It's in *where the state lives*.
+</Problem>
+
+## What "state" means here
+
+**State** is any data that must survive *between* requests. A variable that lives for one request and is gone afterwards doesn't count.
+
+A service is **stateful** when a request only works if it reaches the particular instance that holds some data from earlier. It's **stateless** when *any* instance can handle *any* request, because everything a request needs comes with the request (a cookie, a token) or lives in a shared store all instances can reach.
+
+The usual suspects, and where each one should move:
+
+| State held on the instance | What breaks with 2+ instances | Where it should live |
+|---|---|---|
+| Login session (`HttpSession`, an in-memory map) | User appears logged out on another server | Shared session store (Redis, a DB) or a signed token |
+| Shopping cart, multi-step form progress | Cart "empties" between pages | Database, or the session store |
+| Uploaded files on local disk | File exists on one server only; lost on redeploy | Object storage (S3, GCS) |
+| In-memory counters (rate limits, quotas) | Each server counts separately, so limits are multiplied by N | Redis (`INCR` + expiry) |
+| Scheduled jobs (`@Scheduled`) | The 9 a.m. email is sent N times | One scheduler, or a distributed lock so one instance runs it |
+| In-memory cache | Only costs speed: each server warms its own | Fine as an optimization, or a shared cache |
+| Open WebSocket connections | Messages for a user must reach the server holding their socket | Stays stateful, plus a registry (see below) |
+
+<MentalModel>
+A stateless service is a **bank with many tellers and one central ledger**. You can walk up to any teller, because your balance isn't in the teller's head; they look it up. A stateful service is a **village shopkeeper who keeps your tab in his memory**. It works until you visit his cousin's shop, or he goes on holiday.
+</MentalModel>
+
+Stateless never means "no state". It means **state moves out of the app server into a tier built to hold it**: a database, Redis, object storage. The app servers become interchangeable.
+
+## Why stateless wins
+
+- **Horizontal scaling is trivial.** The load balancer can send any request anywhere, so adding capacity is just adding instances. Autoscalers can add and remove them freely.
+- **Failures are cheap.** When an instance dies, you lose only the requests it was handling at that moment. Users don't notice, because their state was never on it.
+- **Deploys are boring.** Rolling deploys replace instances one by one; nobody gets logged out.
+- **Load stays even.** Every request can go to the least busy server (see [Load Balancing](/tracks/scaling/load-balancing)).
+- **Debugging is simpler.** No "only happens when you hit server 3" bugs.
+
+The Twelve-Factor App puts it bluntly in its *Processes* factor: "Sticky sessions are a violation of twelve-factor and should never be used or relied upon."
+
+The cost is real too: the state now lives somewhere else, so you pay a **network hop** to read it, and that shared store becomes a component you must run, scale and keep available.
+
+## Try it
+
+Start with **In server memory** and press *send* a few times. Then try each strategy with the same three experiments: **kill a server**, **redeploy**, and **log Asha out**.
+
+<SessionStateSim />
+
+You should see that in-memory sessions break immediately, sticky sessions break only when a server dies or you redeploy, the Redis store survives both but returns 503s once Redis dies, and tokens survive everything but *can't log Asha out*.
+
+## Fix 1: Sticky sessions (session affinity)
+
+The quickest fix: tell the load balancer to send each user back to the same server every time.
+
+How the load balancer recognises "the same user":
+
+- **A cookie the load balancer sets.** AWS ALB's duration-based stickiness uses a cookie named `AWSALB`; the stickiness duration is configurable from 1 second to 7 days. ALB can also follow a cookie your application sets.
+- **A hash of the client IP.** NGINX's `ip_hash`, or a Kubernetes Service with `sessionAffinity: ClientIP` (default timeout 10800 seconds, i.e. 3 hours).
+
+```yaml
+# Kubernetes: same client IP → same pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 8080
+  sessionAffinity: ClientIP
+```
+
+It works, and it needs zero code changes. That's why it's common in legacy apps. But it only *hides* the state; it doesn't remove it:
+
+1. **A server dies, its users are logged out.** When the sticky target is unhealthy or deregistered, ALB simply picks a new target and re-pins the user there. Whatever was in the old server's memory is gone.
+2. **Every deploy is a mass logout.** Restarting instances wipes their memory, unless you drain each server for as long as sessions last.
+3. **Load goes uneven.** Users are pinned to servers, so you can't rebalance. A few heavy users on one server stay there. With IP hashing, a whole office behind one NAT IP lands on a single server.
+4. **Scaling out is slow to help.** New instances only get *new* users; existing users stay pinned to the overloaded old servers.
+
+**When stickiness is fine:** as a *performance optimization* where losing it costs only speed (for example, a warm local cache), for long-lived connections such as WebSockets, or as a temporary bridge while you move sessions out of a legacy app.
+
+## Fix 2: Session replication
+
+Copy every session to the other servers, so any server can serve any user. Java app servers support this directly. Tomcat's `DeltaManager` replicates every session to all the other nodes. Tomcat's own docs say this "works great for smaller clusters" but isn't recommended past about 4 nodes. Its `BackupManager` copies each session to just one backup node instead.
+
+It removes the data loss, but every write costs network traffic to the other nodes, which limits it to small clusters. Most teams skip straight to Fix 3.
+
+## Fix 3: A centralized session store (Redis)
+
+Keep the **session** idea (an opaque ID in a cookie, data on the server side), but put the data in a store **every instance shares**. Redis is the usual choice: in-memory, fast, and built-in key expiry fits sessions exactly.
+
+<Flow
+  nodes={["Browser", "Load balancer", "Any app instance", "Redis"]}
+  labels={["Cookie: SESSION=8f2c…", "round robin / least busy", "GET session:8f2c… (refresh TTL)"]}
+  caption="The cookie carries only an ID. Any instance can look the session up, so the load balancer is free to send each request anywhere."
+/>
+
+What happens on each request:
+
+```text
+1. Login   → app creates session id 8f2c…, writes it to Redis with a TTL (30 min)
+             → Set-Cookie: SESSION=8f2c…; HttpOnly; Secure; SameSite=Lax
+2. Request → any instance reads the cookie, fetches the session from Redis,
+             and extends its TTL (sliding expiry)
+3. Logout  → delete the key: the user is logged out on every server instantly
+4. Idle    → Redis expires the key after the TTL; the next request must log in
+```
+
+In Spring Boot you don't write this yourself. Add `spring-boot-starter-session-data-redis` (as named in the Spring Boot 4 docs), and your existing `HttpSession` code now reads and writes Redis:
+
+```properties
+spring.data.redis.host=sessions.internal
+spring.session.timeout=30m
+# Default is Java serialization; JSON survives class changes during rolling deploys
+```
+
+Your controllers don't change. That's the point: it's the same session API, with the data simply no longer on the instance.
+
+### The challenges it brings, and how to handle them
+
+| Challenge | What goes wrong | How to handle it |
+|---|---|---|
+| **Every request now depends on Redis** | Redis down = nobody can log in or stay logged in (try it in the sim) | Run it highly available: a replica with automatic failover (Sentinel, or a managed service like ElastiCache). Monitor it like a database. |
+| **An extra network hop per request** | Adds latency to every request | Same region and zone as the app; keep the session small; one lookup per request, not several |
+| **Memory pressure and eviction** | If Redis is shared with your cache and evicts keys under memory pressure, it may evict *sessions*, and users are randomly logged out | Give sessions their own Redis with `maxmemory-policy noeviction`, so a full instance rejects writes loudly instead of sessions silently vanishing, and alert on memory. (The `volatile-*` policies don't protect them: sessions have a TTL, so they're eligible.) |
+| **Bloated sessions** | Whole user objects or carts stored in the session → slow reads, lots of memory | Store just the user ID and a few small fields; keep real data in the database |
+| **Serialization across versions** | During a rolling deploy, old and new code read the same session; Java-serialized objects can fail to deserialize after a class change | Serialize as JSON, and keep session contents simple and backwards-compatible |
+| **Session fixation** | An attacker plants a known session ID before the victim logs in | Issue a new session ID at login (Spring Security does this by default) |
+| **"Log me out everywhere"** | You need all sessions for a user, not just one ID | Spring Session's indexed Redis repository can find sessions by user (`findByPrincipalName`) |
+
+## Fix 4: Put the state in the client (signed tokens)
+
+The other way to be stateless is to have **the client carry the state**: a signed token (usually a JWT) holding the user ID and expiry. Any instance verifies the signature with a key, so there's no lookup and no shared store.
+
+The catch is the one you saw in the sim: the server can't easily take a token back. A logged-out or banned user's token stays valid until it expires. Hence short-lived access tokens plus revocable refresh tokens. The full comparison is in [Authentication](/tracks/backend-first-principles/authentication).
+
+## Comparing the options
+
+| | Sticky sessions | Replication | Shared Redis store | Signed tokens |
+|---|---|---|---|---|
+| App servers stateless? | No | No (state copied everywhere) | **Yes** | **Yes** |
+| Server dies | Its users logged out | Survives | Survives | Survives |
+| Deploy | Logs users out | Survives | Survives | Survives |
+| Instant logout / ban | Yes | Yes | **Yes** (delete key) | **No** (valid until expiry) |
+| New dependency | None | Cluster networking | Redis, on every request | Key management |
+| Load balancing | Uneven, pinned | Any | Any | Any |
+| Typical fit | Legacy apps, a stopgap | Small Java clusters | Most web apps with logins | APIs, many services, mobile clients |
+
+<Quiz
+  question="Your app uses sticky sessions with sessions stored in server memory. One of four servers crashes. What happens to the users pinned to it?"
+  options={["They are routed to another server and stay logged in, because the load balancer copies their session", "They are routed to another server but must log in again, because their session existed only in the dead server's memory", "Their requests fail until the server is restarted, because stickiness pins them permanently", "Nothing: the cookie contains the session data"]}
+  answer={1}
+  explanation="Load balancers re-route a sticky user when the target is unhealthy (AWS ALB picks a new target and updates the cookie), but they never move application data. The session lived only in that server's memory, so it's gone. The cookie holds an ID or a routing hint, not the session itself."
+/>
+
+## Some things must stay stateful
+
+Not everything can be stateless, and that's fine. The trick is to **keep stateful parts few, small and deliberate**:
+
+- **Databases, Kafka, Redis itself.** The state has to live *somewhere*. In Kubernetes they run as StatefulSets with stable identity and storage (see [Kubernetes](/tracks/cloud-infra/kubernetes)), and they're operated with replication and backups.
+- **WebSocket gateways.** A socket is tied to one machine. You don't make the gateway stateless; you keep a **registry** in Redis (`user → gateway`) so other services can find the right one (see [Chat System](/tracks/hld/chat-system)).
+- **Partitioned caches and workers.** Route by key so each node owns a slice, and plan for nodes leaving (see [Consistent Hashing](/tracks/scaling/consistent-hashing)).
+
+A good test for any state on an app instance: **if this instance vanished right now, would we lose only speed, or would we lose correctness?** A local cache loses only speed, which is fine. A session, a file, or a job that was supposed to run loses correctness, so it must move out.
+
+<Quiz
+  question="Which piece of state is acceptable to keep in an app instance's memory in a horizontally scaled service?"
+  options={["The logged-in user's session", "Files a user just uploaded", "A local cache of product details that are also in the database", "A counter enforcing 100 requests per minute per user"]}
+  answer={2}
+  explanation="Losing the cache only costs speed: the data is re-read from the database. A session or upload on one instance is lost when it dies, and a per-instance rate-limit counter lets a user make 100 × N requests per minute across N servers."
+/>
+
+<Quiz
+  question="You moved sessions to a Redis instance that also serves as your application cache with an allkeys-lru eviction policy. Under heavy load, users report being logged out at random. What's the most likely cause?"
+  options={["The session TTL is too long", "Sticky sessions are not enabled", "Redis is evicting session keys to make room for cache entries", "Session cookies are missing the Secure flag"]}
+  answer={2}
+  explanation="With an allkeys policy, Redis may evict any key when memory fills, sessions included. Keep sessions in a separate Redis (or one configured not to evict them) and watch its memory. Sticky sessions wouldn't help: the session would still be gone."
+/>
+
+<Scenario
+  situation="A legacy Java app keeps sessions in HttpSession memory and runs on 2 servers with sticky sessions. Traffic will triple next month, and every Friday's deploy logs everyone out. Product asks for a fix within the sprint."
+  choices={[
+    { text: "Increase the stickiness duration to 7 days so users stay pinned longer.", feedback: "This doesn't touch the cause. Deploys and crashes still wipe memory, and longer pinning makes load imbalance worse as you scale out." },
+    { text: "Rewrite authentication to JWTs across the app this sprint.", feedback: "Possible eventually, but it's a large, risky change, and it trades the problem for a new one (revocation). Not the smallest fix that works." },
+    { text: "Add Spring Session with a highly available Redis, keep the HttpSession API, verify session contents serialize cleanly, then turn off stickiness and scale out.", feedback: "The smallest change that makes the servers stateless: controllers keep using HttpSession, deploys and crashes stop logging users out, and the load balancer can spread load freely. The new risk (Redis availability) is explicit and manageable.", best: true },
+    { text: "Turn on Tomcat session replication across all servers.", feedback: "It fixes logouts for 2 servers, but all-to-all replication gets more expensive with every node, and you're about to add nodes. It also ties you to the servlet container." },
+  ]}
+/>
+
+<Tradeoffs
+  good={[
+    "Stateless servers: scale out, scale in and redeploy without users noticing",
+    "Failures cost only in-flight requests, never user data",
+    "The load balancer can always pick the least busy server",
+  ]}
+  bad={[
+    "A network hop to fetch state on each request",
+    "The shared store (Redis, DB) becomes critical infrastructure to run highly available",
+    "Signed tokens avoid the store but make revocation hard",
+  ]}
+/>
+
+<LevelTags
+  junior="Explains stateless vs stateful and why sessions in server memory break behind a load balancer."
+  mid="Moves sessions to Redis (Spring Session), files to object storage and counters to Redis; knows why sticky sessions are a stopgap."
+  senior="Chooses between a session store and tokens based on revocation and topology; designs the store for availability, eviction and rolling deploys."
+  lead="Sets 'stateless by default' as a platform standard, and keeps the inventory of stateful components with owners and failover plans."
+/>
+
+<SeniorLens>
+In design reviews, ask one question about every component: **"What happens to users if this instance disappears right now?"** If the answer is "they lose their session / upload / job", the state is in the wrong place. Sticky sessions don't change that answer. They just make it happen less often, and so are harder to test. Seniors also check the *shared store's* failure mode: if Redis goes down, do we fail closed (everyone logged out) or degrade? Decide that on purpose.
+</SeniorLens>
+
+<KeyTakeaways>
+- Stateless = any instance can serve any request; state moves to a shared store or the client.
+- State in server memory breaks the moment there are two servers. Sticky sessions hide it until a crash or deploy.
+- A shared Redis session store keeps the session model and makes servers interchangeable; run Redis highly available and don't let it evict sessions.
+- Signed tokens remove the store but make logout and bans hard.
+- Ask of every instance: does losing it cost only speed, or correctness?
+</KeyTakeaways>
+
+<GoDeeper>
+- **The Twelve-Factor App: [*VI. Processes*](https://12factor.net/processes)**: the short, classic case for stateless, share-nothing processes.
+- **AWS: [*Sticky sessions for your Application Load Balancer*](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/sticky-sessions.html)**: cookie types, durations and what happens when a target fails.
+- **Spring Boot: [*Spring Session*](https://docs.spring.io/spring-boot/reference/web/spring-session.html)** and **Spring Session: [*Redis configuration*](https://docs.spring.io/spring-session/reference/configuration/redis.html)**: the starter, timeout property, indexed repository and serialization.
+- **Apache Tomcat: [*Clustering/Session Replication How-To*](https://tomcat.apache.org/tomcat-11.0-doc/cluster-howto.html)**: DeltaManager vs BackupManager and their limits.
+- **Kubernetes: [*Virtual IPs and Service Proxies*, session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity)**.
+- **OWASP: [*Session Management Cheat Sheet*](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)**: session IDs, expiry and fixation.
+</GoDeeper>

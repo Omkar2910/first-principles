@@ -17,3 +17,4 @@ export { AvailabilityCalculator } from "./AvailabilityCalculator";
 export { EmbeddingSim } from "./EmbeddingSim";
 export { LlmCostCalculator } from "./LlmCostCalculator";
 export { SelfAssessment } from "./SelfAssessment";
+export { SessionStateSim } from "./SessionStateSim";

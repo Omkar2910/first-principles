@@ -3,7 +3,7 @@ title: User guide
 description: How to get the most out of First Principles, from your first lesson to a daily review habit.
 ---
 
-First Principles is a self-paced course in backend engineering, system design, AI-native engineering and career growth. It has 12 tracks and 130 lessons. This guide covers how the platform works and how to study with it.
+First Principles is a self-paced course in backend engineering, system design, AI-native engineering and career growth. It has 12 tracks and 131 lessons. This guide covers how the platform works and how to study with it.
 
 ## The five-minute version
 

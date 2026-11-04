@@ -19,7 +19,7 @@ First Principles takes the opposite approach. Every concept starts with **the pr
 
 ## What's in it
 
-**12 tracks · 130 lessons · 112 quizzes · 18 interactive simulators**, arranged in four stages:
+**12 tracks · 131 lessons · 115 quizzes · 19 interactive simulators**, arranged in four stages:
 
 | Stage | Tracks |
 |---|---|

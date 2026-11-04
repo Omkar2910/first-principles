@@ -38,7 +38,7 @@ A service is **stateless** when any instance can handle any request because no r
 | Scheduled job locks | DB / distributed lock |
 | In-progress workflows | DB / queue |
 
-Once stateless, instances become **cattle, not pets**: autoscalers add and remove them freely, and deploys replace them without anyone noticing.
+Once stateless, instances become **cattle, not pets**: autoscalers add and remove them freely, and deploys replace them without anyone noticing. The next lesson, [Stateless vs Stateful Services](/tracks/scaling/stateless-and-stateful-services), shows what breaks when they're not, and compares sticky sessions with a shared Redis session store.
 
 ## Find the bottleneck first
 

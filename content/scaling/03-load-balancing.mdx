@@ -54,7 +54,7 @@ Health checks should reflect **ability to serve**: see the readiness lesson in T
 
 ## Sticky sessions
 
-Sticky sessions (session affinity) route a user to the same backend via a cookie. They let you keep session state in memory, but they **undermine horizontal scaling**: uneven load, and a server dying loses its users' sessions. Prefer stateless services; use stickiness only for things like WebSocket connections or a cache-locality optimization.
+Sticky sessions (session affinity) route a user to the same backend via a cookie. They let you keep session state in memory, but they **undermine horizontal scaling**: uneven load, and a server dying loses its users' sessions. Prefer stateless services; use stickiness only for things like WebSocket connections or a cache-locality optimization. The full story (what breaks, and the alternatives: replication, a shared Redis session store, signed tokens) is in [Stateless vs Stateful Services](/tracks/scaling/stateless-and-stateful-services).
 
 ## Avoiding a single point of failure
 
