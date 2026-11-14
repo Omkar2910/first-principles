@@ -66,9 +66,9 @@ export function KafkaSim() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-slate-500">Produce event for:</span>
+        <span className="text-xs text-ink-500">Produce event for:</span>
         {USERS.map((u) => (
-          <button key={u.key} onClick={() => produce(u.key)} className="flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600">
+          <button key={u.key} onClick={() => produce(u.key)} className="flex items-center gap-1 rounded-md border border-ink-300 px-2 py-1 text-xs dark:border-ink-600">
             <span className={`h-2.5 w-2.5 rounded-full ${u.color}`} /> {u.key}
           </button>
         ))}
@@ -84,9 +84,9 @@ export function KafkaSim() {
           <div key={p} className="flex items-center gap-2">
             <div className="w-28 shrink-0 text-xs">
               <div className="font-semibold">partition {p}</div>
-              <div className="text-slate-500">→ consumer {owner(p) + 1}</div>
+              <div className="text-ink-500">→ consumer {owner(p) + 1}</div>
             </div>
-            <div className="flex min-h-8 flex-1 items-center gap-1 overflow-x-auto rounded-md bg-slate-50 p-1 dark:bg-slate-800/60">
+            <div className="flex min-h-8 flex-1 items-center gap-1 overflow-x-auto rounded-md bg-ink-50 p-1 dark:bg-ink-800/60">
               {log.map((m, i) => (
                 <span
                   key={m.seq}
@@ -97,12 +97,12 @@ export function KafkaSim() {
                 </span>
               ))}
             </div>
-            <div className="w-16 shrink-0 text-right text-[11px] tabular-nums text-slate-500">lag {log.length - committed[p]}</div>
+            <div className="w-16 shrink-0 text-right text-[11px] tabular-nums text-ink-500">lag {log.length - committed[p]}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+      <div className="mt-4 rounded-lg bg-ink-50 p-3 text-xs text-ink-700 dark:bg-ink-800/60 dark:text-ink-300">
         Same key → same partition → <b>strict order per user</b>. Faded = consumed (offset committed).
         {idle > 0 && (
           <span className="mt-1 block font-semibold text-amber-700 dark:text-amber-400">

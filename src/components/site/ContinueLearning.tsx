@@ -20,10 +20,10 @@ export function ContinueLearning({ lessons }: { lessons: Item[] }) {
     lessons.find((l) => startedTracks.has(l.track) && !done(l)) ?? lessons.find((l) => !done(l));
 
   return (
-    <Card className="p-5 shadow-xl shadow-slate-200/50 dark:shadow-none">
+    <Card className="p-5 shadow-xl shadow-ink-200/50 dark:shadow-none">
       <div className="flex items-baseline justify-between text-sm">
         <Eyebrow>{doneCount === 0 ? "Start here" : "Continue learning"}</Eyebrow>
-        <span className="text-xs tabular-nums text-slate-500">
+        <span className="text-xs tabular-nums text-ink-500">
           {doneCount}/{total} lessons
         </span>
       </div>
@@ -31,11 +31,11 @@ export function ContinueLearning({ lessons }: { lessons: Item[] }) {
       {next ? (
         <Link
           href={`/tracks/${next.track}/${next.slug}`}
-          className="group mt-4 block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
+          className="group mt-4 block rounded-xl border border-ink-200 bg-ink-50 p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-ink-800 dark:bg-ink-800/40 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
         >
           <div className="text-xs font-medium text-brand-600 dark:text-brand-400">{next.trackTitle}</div>
           <div className="mt-0.5 font-semibold">{next.title}</div>
-          <div className="mt-3 text-sm font-medium text-slate-600 group-hover:text-brand-700 dark:text-slate-300 dark:group-hover:text-brand-300">
+          <div className="mt-3 text-sm font-medium text-ink-600 group-hover:text-brand-700 dark:text-ink-300 dark:group-hover:text-brand-300">
             {doneCount === 0 ? "Begin" : "Resume"} →
           </div>
         </Link>
@@ -45,7 +45,7 @@ export function ContinueLearning({ lessons }: { lessons: Item[] }) {
       {dueCount > 0 && (
         <Link
           href="/review"
-          className="mt-2 flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm transition-colors hover:border-brand-300 dark:border-slate-800 dark:hover:border-brand-500/40"
+          className="mt-2 flex items-center justify-between rounded-xl border border-ink-200 p-3 text-sm transition-colors hover:border-brand-300 dark:border-ink-800 dark:hover:border-brand-500/40"
         >
           <span className="flex items-center gap-2">
             <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold tabular-nums text-white">
@@ -53,7 +53,7 @@ export function ContinueLearning({ lessons }: { lessons: Item[] }) {
             </span>
             card{dueCount === 1 ? "" : "s"} ready to review
           </span>
-          <span aria-hidden className="text-slate-400">→</span>
+          <span aria-hidden className="text-ink-400">→</span>
         </Link>
       )}
     </Card>

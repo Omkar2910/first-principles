@@ -43,7 +43,7 @@ export function TokenBucketSim() {
       </div>
 
       <div className="mt-5 flex items-end gap-6">
-        <div className="relative h-40 w-24 overflow-hidden rounded-b-2xl border-2 border-t-0 border-slate-400 dark:border-slate-500">
+        <div className="relative h-40 w-24 overflow-hidden rounded-b-2xl border-2 border-t-0 border-ink-400 dark:border-ink-500">
           <div className="absolute bottom-0 w-full bg-sky-400/80 transition-all duration-100" style={{ height: `${(tokens / capacity) * 100}%` }} />
           <div className="absolute inset-0 flex items-center justify-center font-mono text-lg font-semibold">{tokens.toFixed(1)}</div>
         </div>
@@ -55,7 +55,7 @@ export function TokenBucketSim() {
       </div>
 
       <div className="mt-5">
-        <div className="mb-1 text-xs text-slate-500">Last 60 requests (green = 200 OK, red = 429 Too Many Requests)</div>
+        <div className="mb-1 text-xs text-ink-500">Last 60 requests (green = 200 OK, red = 429 Too Many Requests)</div>
         <div className="flex flex-wrap gap-0.5">
           {log.map((ok, i) => (
             <span key={i} className={`h-4 w-4 rounded-sm ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
@@ -66,7 +66,7 @@ export function TokenBucketSim() {
         <Stat label="Accepted" value={accepted} />
         <Stat label="Rejected (429)" value={log.length - accepted} tone={log.length - accepted ? "text-rose-600" : ""} />
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-ink-500">
         Notice: bursts up to the capacity are allowed, but sustained traffic above the refill rate gets throttled.
       </p>
     </SimFrame>

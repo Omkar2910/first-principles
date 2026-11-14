@@ -105,9 +105,9 @@ export function GoDeeper(props: BlockProps) {
     <Block
       label="Go deeper"
       icon="deeper"
-      tone="border-slate-200 bg-slate-50/70 dark:border-slate-700/70 dark:bg-slate-800/30"
-      chip="bg-slate-200/70 text-slate-700 dark:bg-slate-700/60 dark:text-slate-300"
-      marker="[&_li]:marker:text-slate-400"
+      tone="border-ink-200 bg-ink-50/70 dark:border-ink-700/70 dark:bg-ink-800/30"
+      chip="bg-ink-200/70 text-ink-700 dark:bg-ink-700/60 dark:text-ink-300"
+      marker="[&_li]:marker:text-ink-400"
       {...props}
     />
   );
@@ -117,7 +117,7 @@ export function Tradeoffs({ good, bad }: { good: string[]; bad: string[] }) {
   const column = (title: string, items: string[], sign: string, tone: string, signTone: string) => (
     <div className={`rounded-2xl border p-5 ${tone}`}>
       <div className="mb-3 text-xs font-semibold tracking-wider uppercase">{title}</div>
-      <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+      <ul className="space-y-2 text-sm text-ink-700 dark:text-ink-300">
         {items.map((g) => (
           <li key={g} className="flex gap-2.5">
             <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none font-bold ${signTone}`} aria-hidden>
@@ -150,7 +150,7 @@ export function Tradeoffs({ good, bad }: { good: string[]; bad: string[] }) {
 }
 
 const LEVELS = [
-  { key: "junior", label: "Junior", bar: "w-1/4", tone: "bg-slate-400 dark:bg-slate-500" },
+  { key: "junior", label: "Junior", bar: "w-1/4", tone: "bg-ink-400 dark:bg-ink-500" },
   { key: "mid", label: "Mid", bar: "w-2/4", tone: "bg-sky-500" },
   { key: "senior", label: "Senior", bar: "w-3/4", tone: "bg-violet-500" },
   { key: "lead", label: "Tech Lead", bar: "w-full", tone: "bg-amber-500" },
@@ -159,18 +159,18 @@ const LEVELS = [
 /** How the expectation around this topic grows with seniority: a small ladder, one rung per level. */
 export function LevelTags(props: Partial<Record<(typeof LEVELS)[number]["key"], string>>) {
   return (
-    <section className="not-prose my-8 rounded-2xl border border-slate-200 p-5 sm:p-6 dark:border-slate-800">
-      <div className="mb-4 text-xs font-semibold tracking-wider text-slate-500 uppercase">How this grows with your level</div>
+    <section className="not-prose my-8 rounded-2xl border border-ink-200 p-5 sm:p-6 dark:border-ink-800">
+      <div className="mb-4 text-xs font-semibold tracking-wider text-ink-500 uppercase">How this grows with your level</div>
       <dl className="space-y-4">
         {LEVELS.filter((l) => props[l.key]).map((l) => (
           <div key={l.key} className="grid gap-1.5 sm:grid-cols-[7rem_1fr] sm:gap-4">
             <dt className="pt-0.5">
               <div className="text-xs font-semibold">{l.label}</div>
-              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="mt-1.5 h-1 w-full rounded-full bg-ink-100 dark:bg-ink-800">
                 <div className={`h-full rounded-full ${l.bar} ${l.tone}`} />
               </div>
             </dt>
-            <dd className="text-sm text-slate-700 dark:text-slate-300">{props[l.key]}</dd>
+            <dd className="text-sm text-ink-700 dark:text-ink-300">{props[l.key]}</dd>
           </div>
         ))}
       </dl>

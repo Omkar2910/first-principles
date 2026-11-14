@@ -95,7 +95,7 @@ function DueSession({ cards }: { cards: ReviewCard[] }) {
   if (!queue) {
     const total = dueIds.length + Math.min(freshIds.length, NEW_PER_SESSION);
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900/40">
+      <div className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8 dark:border-ink-800 dark:bg-ink-900/40">
         <div className="grid grid-cols-3 gap-4 text-center">
           <Stat value={dueIds.length} label="due today" />
           <Stat value={freshIds.length} label="new" />
@@ -112,13 +112,13 @@ function DueSession({ cards }: { cards: ReviewCard[] }) {
             Start review · {total} card{total === 1 ? "" : "s"}
           </button>
         ) : (
-          <p className="mt-6 text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-sm text-ink-500">
             {scheduled === 0
               ? "Lessons join your review rotation when you mark them complete."
               : "Nothing due. Come back tomorrow, or use Browse all to cram."}
           </p>
         )}
-        <p className="mt-4 text-center text-xs text-slate-500">
+        <p className="mt-4 text-center text-xs text-ink-500">
           Rate how well you recalled each lesson. Cards you know well come back less often; the ones you forget come back
           sooner.
         </p>
@@ -131,7 +131,7 @@ function DueSession({ cards }: { cards: ReviewCard[] }) {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-500/30 dark:bg-emerald-500/10">
         <div className="text-3xl">✓</div>
         <h2 className="mt-2 text-xl font-semibold">Session complete</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-1 text-sm text-ink-600 dark:text-ink-400">
           {reviewed} review{reviewed === 1 ? "" : "s"} done. Your next cards are scheduled.
         </p>
         <div className="mt-5 flex justify-center gap-3 text-sm">
@@ -149,7 +149,7 @@ function DueSession({ cards }: { cards: ReviewCard[] }) {
   const state = srs[queue[0]];
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
+      <div className="mb-3 flex items-center justify-between text-sm text-ink-500">
         <span>{queue.length} left in session</span>
         <span>{state ? `Seen ${state.reps + state.lapses}×` : "New card"}</span>
       </div>
@@ -159,7 +159,7 @@ function DueSession({ cards }: { cards: ReviewCard[] }) {
             {RATINGS.map((r) => (
               <button key={r.rating} onClick={() => answer(r.rating)} className={`rounded-lg border px-3 py-2 text-sm ${r.tone}`}>
                 <div className="font-medium">{r.label}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-ink-500">
                   {previewInterval(state, r.rating)} <Kbd className="ml-1">{r.key}</Kbd>
                 </div>
               </button>
@@ -200,7 +200,7 @@ function Browse({ cards, tracks }: { cards: ReviewCard[]; tracks: { slug: string
         <select
           value={track}
           onChange={(e) => { setTrack(e.target.value); restart(); }}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-sm shadow-xs dark:border-slate-700 dark:bg-slate-900"
+          className="h-9 rounded-lg border border-ink-300 bg-white px-2.5 text-sm shadow-xs dark:border-ink-700 dark:bg-ink-900"
         >
           <option value="all">All tracks</option>
           {tracks.map((t) => (
@@ -214,17 +214,17 @@ function Browse({ cards, tracks }: { cards: ReviewCard[]; tracks: { slug: string
         <button onClick={() => { setSeed((s) => s + 1); restart(); }} className={buttonClass("secondary", "sm")}>
           Shuffle
         </button>
-        <span className="text-slate-500">{deck.length ? `Card ${(i % deck.length) + 1} of ${deck.length}` : ""}</span>
+        <span className="text-ink-500">{deck.length ? `Card ${(i % deck.length) + 1} of ${deck.length}` : ""}</span>
       </div>
 
       {!card ? (
-        <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500 dark:border-slate-700">
+        <p className="rounded-xl border border-dashed border-ink-300 p-8 text-center text-ink-500 dark:border-ink-700">
           No cards yet. Complete some lessons, or untick &ldquo;only completed&rdquo;.
         </p>
       ) : (
         <CardFace card={card} revealed={revealed}>
           {!revealed && <RevealButton onClick={() => setRevealed(true)} />}
-          <div className="mt-6 flex justify-end border-t border-slate-200 pt-4 dark:border-slate-800">
+          <div className="mt-6 flex justify-end border-t border-ink-200 pt-4 dark:border-ink-800">
             <button onClick={next} className={buttonClass("secondary")}>
               Next card →
             </button>
@@ -239,17 +239,17 @@ function Browse({ cards, tracks }: { cards: ReviewCard[]; tracks: { slug: string
 
 function CardFace({ card, revealed, children }: { card: ReviewCard; revealed: boolean; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900/40">
+    <div className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8 dark:border-ink-800 dark:bg-ink-900/40">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs font-medium text-slate-500">{card.trackTitle}</div>
+          <div className="text-xs font-medium text-ink-500">{card.trackTitle}</div>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight">{card.title}</h2>
         </div>
         <Link href={`/tracks/${card.track}/${card.slug}`} className="shrink-0 text-sm text-sky-700 underline dark:text-sky-400">
           Re-read
         </Link>
       </div>
-      <p className="mt-3 text-slate-600 dark:text-slate-400">
+      <p className="mt-3 text-ink-600 dark:text-ink-400">
         Before revealing: explain the key ideas of this lesson out loud, as if teaching a teammate.
       </p>
       {revealed && (
@@ -270,7 +270,7 @@ function CardFace({ card, revealed, children }: { card: ReviewCard; revealed: bo
 function RevealButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} className={buttonClass("primary", "md", "mt-6")}>
-      Reveal key takeaways <Kbd className="ml-1 border-white/30 bg-white/10 text-white/70 dark:border-slate-300 dark:bg-slate-100 dark:text-slate-500">space</Kbd>
+      Reveal key takeaways <Kbd className="ml-1 border-white/30 bg-white/10 text-white/70 dark:border-ink-300 dark:bg-ink-100 dark:text-ink-500">space</Kbd>
     </button>
   );
 }
@@ -279,7 +279,7 @@ function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div>
       <div className="text-3xl font-semibold tabular-nums">{value}</div>
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-xs text-ink-500">{label}</div>
     </div>
   );
 }

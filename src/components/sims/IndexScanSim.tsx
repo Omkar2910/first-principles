@@ -32,7 +32,7 @@ export function IndexScanSim() {
           <code className="text-xs">CREATE INDEX ON users(email)</code>
         </label>
       </div>
-      <p className="mt-1 text-xs text-slate-500">{rows.toLocaleString()} rows</p>
+      <p className="mt-1 text-xs text-ink-500">{rows.toLocaleString()} rows</p>
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         <Stat label="Rows examined" value={indexed ? "1" : rows.toLocaleString()} />
@@ -40,36 +40,36 @@ export function IndexScanSim() {
         <Stat label="Approx. time" value={fmt(ms)} tone={ms > 100 ? "text-rose-600" : "text-emerald-600"} />
       </div>
 
-      <div className="mt-5 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/60">
+      <div className="mt-5 rounded-lg bg-ink-50 p-4 dark:bg-ink-800/60">
         {indexed ? (
           <>
-            <div className="mb-2 text-xs font-medium text-slate-500">B-tree path (fan-out ≈ {FANOUT}): one page per level</div>
+            <div className="mb-2 text-xs font-medium text-ink-500">B-tree path (fan-out ≈ {FANOUT}): one page per level</div>
             <div className="flex flex-col items-center gap-1.5">
               {levels.map((count, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-16 text-right text-slate-500">{i === 0 ? "root" : i === depth - 1 ? "leaf" : `level ${i}`}</span>
+                  <span className="w-16 text-right text-ink-500">{i === 0 ? "root" : i === depth - 1 ? "leaf" : `level ${i}`}</span>
                   <span className="rounded border-2 border-emerald-500 bg-emerald-100 px-2 py-0.5 font-mono dark:bg-emerald-500/20">1 page read</span>
-                  <span className="text-slate-400">of {count.toLocaleString()} page{count > 1 ? "s" : ""}</span>
+                  <span className="text-ink-400">of {count.toLocaleString()} page{count > 1 ? "s" : ""}</span>
                 </div>
               ))}
               <div className="flex items-center gap-2 text-xs">
-                <span className="w-16 text-right text-slate-500">heap</span>
+                <span className="w-16 text-right text-ink-500">heap</span>
                 <span className="rounded border-2 border-sky-500 bg-sky-100 px-2 py-0.5 font-mono dark:bg-sky-500/20">fetch row</span>
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
+            <p className="mt-3 text-xs text-ink-600 dark:text-ink-400">
               Depth grows with log(rows): a billion rows is still only ~{Math.ceil(9 / Math.log10(FANOUT))}–4 levels.
             </p>
           </>
         ) : (
           <>
-            <div className="mb-2 text-xs font-medium text-slate-500">Sequential scan: read every page, check every row</div>
+            <div className="mb-2 text-xs font-medium text-ink-500">Sequential scan: read every page, check every row</div>
             <div className="flex flex-wrap gap-0.5">
               {Array.from({ length: 120 }).map((_, i) => (
                 <span key={i} className="h-3 w-3 rounded-sm bg-rose-400/70" />
               ))}
             </div>
-            <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">Cost grows linearly: 10× the rows = 10× the time.</p>
+            <p className="mt-3 text-xs text-ink-600 dark:text-ink-400">Cost grows linearly: 10× the rows = 10× the time.</p>
           </>
         )}
       </div>

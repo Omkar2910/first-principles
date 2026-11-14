@@ -73,10 +73,10 @@ export function SelfAssessment() {
       <div className="space-y-6">
         {areas.map((area) => (
           <div key={area}>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{area}</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">{area}</h4>
             <div className="space-y-3">
               {COMPETENCIES.filter((c) => c.area === area).map((c) => (
-                <div key={c.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <div key={c.id} className="rounded-lg border border-ink-200 p-3 dark:border-ink-700">
                   <div className="mb-2 text-sm font-medium">{c.name}</div>
                   <div className="grid gap-1.5 sm:grid-cols-4">
                     {c.levels.map((desc, i) => {
@@ -87,11 +87,11 @@ export function SelfAssessment() {
                           key={i}
                           onClick={() => setRatings((r) => ({ ...r, [c.id]: lvl }))}
                           className={`rounded-md border p-2 text-left text-xs transition ${
-                            on ? "border-violet-500 bg-violet-50 dark:bg-violet-500/15" : "border-slate-200 hover:border-slate-400 dark:border-slate-700"
+                            on ? "border-violet-500 bg-violet-50 dark:bg-violet-500/15" : "border-ink-200 hover:border-ink-400 dark:border-ink-700"
                           } ${lvl === target ? "ring-1 ring-amber-400/60" : ""}`}
                         >
                           <span className="mb-0.5 block font-semibold">{LEVEL_NAMES[lvl]}</span>
-                          <span className="text-slate-600 dark:text-slate-400">{desc}</span>
+                          <span className="text-ink-600 dark:text-ink-400">{desc}</span>
                         </button>
                       );
                     })}
@@ -103,12 +103,12 @@ export function SelfAssessment() {
         ))}
       </div>
 
-      <div className="mt-6 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/60">
+      <div className="mt-6 rounded-lg bg-ink-50 p-4 dark:bg-ink-800/60">
         <div className="mb-2 text-sm font-semibold">
           Your growth plan ({rated.length}/{COMPETENCIES.length} rated, target {LEVEL_NAMES[target]})
         </div>
         {rated.length === 0 ? (
-          <p className="text-sm text-slate-500">Rate a few competencies to see your gaps.</p>
+          <p className="text-sm text-ink-500">Rate a few competencies to see your gaps.</p>
         ) : gaps.length === 0 ? (
           <p className="text-sm text-emerald-700 dark:text-emerald-400">
             No gaps in what you&apos;ve rated. Collect evidence (see the promotions lesson) and talk to your manager.
@@ -118,7 +118,7 @@ export function SelfAssessment() {
             {gaps.map((g) => (
               <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-medium">{g.name}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-ink-500">
                   {LEVEL_NAMES[ratings[g.id]]} → {LEVEL_NAMES[target]}: “{g.levels[target - 1]}”
                 </span>
                 <Link href={g.learn} className="text-xs text-sky-700 underline dark:text-sky-400">
@@ -129,7 +129,7 @@ export function SelfAssessment() {
           </ul>
         )}
         {rated.length > 0 && (
-          <button onClick={() => setRatings(() => ({}))} className="mt-3 text-xs text-slate-500 underline">
+          <button onClick={() => setRatings(() => ({}))} className="mt-3 text-xs text-ink-500 underline">
             Clear my answers
           </button>
         )}

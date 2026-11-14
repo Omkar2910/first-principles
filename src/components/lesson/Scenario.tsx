@@ -16,7 +16,7 @@ export function Scenario({ situation, choices }: { situation: string; choices: C
       <div className="space-y-2">
         {choices.map((c, i) => {
           const shown = picked !== null;
-          let tone = "border-slate-200 bg-white hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500/50";
+          let tone = "border-ink-200 bg-white hover:border-brand-400 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-brand-500/50";
           if (shown && c.best) tone = "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10";
           else if (shown && i === picked) tone = "border-amber-500 bg-amber-50 dark:bg-amber-500/10";
           return (
@@ -27,7 +27,7 @@ export function Scenario({ situation, choices }: { situation: string; choices: C
             >
               <span className="font-medium">{c.text}</span>
               {shown && (i === picked || c.best) && (
-                <span className="mt-1.5 block text-slate-700 dark:text-slate-300">
+                <span className="mt-1.5 block text-ink-700 dark:text-ink-300">
                   {c.best ? "✓ Strongest move. " : ""}
                   {c.feedback}
                 </span>
@@ -37,7 +37,7 @@ export function Scenario({ situation, choices }: { situation: string; choices: C
         })}
       </div>
       {picked !== null && (
-        <button onClick={() => setPicked(null)} className="mt-3 text-xs text-slate-500 underline">
+        <button onClick={() => setPicked(null)} className="mt-3 text-xs text-ink-500 underline">
           Reset
         </button>
       )}

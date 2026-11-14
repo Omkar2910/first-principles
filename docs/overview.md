@@ -19,7 +19,7 @@ First Principles takes the opposite approach. Every concept starts with **the pr
 
 ## What's in it
 
-**12 tracks · 131 lessons · 115 quizzes · 19 interactive simulators**, arranged in four stages:
+**12 tracks · 131 lessons · 115 quizzes · 19 interactive simulators · 66 interview questions · 12 design drills**, arranged in four stages:
 
 | Stage | Tracks |
 |---|---|
@@ -27,6 +27,8 @@ First Principles takes the opposite approach. Every concept starts with **the pr
 | 2 · Core | Data · Scaling Building Blocks · Low-Level Design |
 | 3 · Scale | Distributed Systems · High-Level Design · Cloud & Infrastructure · Reliability & Operations · Security |
 | 4 · Beyond | AI-Native Engineering · Career Ladder |
+
+An **Interview prep** section sits alongside the tracks: a question bank with model answers, timed system design and LLD drills, and one-page revision notes per track. It's built on the same lessons, so practising for interviews and learning the material reinforce each other.
 
 Code examples are Java-flavored (Spring) where a language matters, but the ideas are language-agnostic.
 

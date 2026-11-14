@@ -30,9 +30,9 @@ function Field({ label, value, onChange, step = 1, suffix }: { label: string; va
           step={step}
           min={0}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 tabular-nums dark:border-slate-600 dark:bg-slate-800"
+          className="w-full rounded-md border border-ink-300 bg-white px-2 py-1 tabular-nums dark:border-ink-600 dark:bg-ink-800"
         />
-        {suffix && <span className="shrink-0 text-xs text-slate-500">{suffix}</span>}
+        {suffix && <span className="shrink-0 text-xs text-ink-500">{suffix}</span>}
       </span>
     </label>
   );
@@ -70,7 +70,7 @@ export function EstimationCalculator() {
     <SimFrame title="Back-of-envelope estimator" hint="Pick a preset or enter your own assumptions. The point is the order of magnitude, not precision.">
       <div className="mb-4 flex flex-wrap gap-1.5">
         {Object.entries(PRESETS).map(([name, p]) => (
-          <button key={name} onClick={() => apply(p)} className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600">
+          <button key={name} onClick={() => apply(p)} className="rounded-md border border-ink-300 px-2 py-1 text-xs dark:border-ink-600">
             {name}
           </button>
         ))}
@@ -95,7 +95,7 @@ export function EstimationCalculator() {
         <Stat label="App servers @1k QPS each" value={`~${servers.toLocaleString()}`} />
       </div>
 
-      <div className="mt-5 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-400">
+      <div className="mt-5 rounded-lg bg-ink-50 p-3 text-xs text-ink-600 dark:bg-ink-800/60 dark:text-ink-400">
         <b>Handy numbers:</b> 1 day ≈ 86,400 s ≈ 10⁵ s · 1M requests/day ≈ 12 QPS · 1B/day ≈ 12K QPS · 2³² ≈ 4.3B · 62⁷ ≈ 3.5T ·
         one app server ≈ 1–10K simple QPS · one Postgres primary ≈ 10K+ simple writes/s · Redis ≈ 100K+ ops/s per node
       </div>

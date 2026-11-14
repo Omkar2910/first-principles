@@ -85,13 +85,13 @@ export function ThreadPoolSim() {
         <Stat label="Memory for concurrency" value={`~${memoryMb.toLocaleString()} MB`} />
       </div>
 
-      <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div className="mt-4 h-3 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
         <div
           className={`h-full transition-all ${overloaded ? "bg-rose-500" : util > 0.8 ? "bg-amber-500" : "bg-emerald-500"}`}
           style={{ width: `${util * 100}%` }}
         />
       </div>
-      <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
+      <p className="mt-3 text-sm text-ink-700 dark:text-ink-300">
         {overloaded ? (
           <>
             <b className="text-rose-600">Overloaded.</b> Requests arrive faster than they finish, so the queue grows by{" "}

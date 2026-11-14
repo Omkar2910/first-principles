@@ -163,6 +163,34 @@ Guidelines:
 - Keep simulations deterministic enough that the lesson text's claims hold.
 - If a simulator persists anything, use `createStore` from `src/lib/store.ts` with a `fp:` key so backups include it.
 
+## Adding interview questions
+
+Questions live in `content/interview/<track>.md`, one file per track. Each `##` heading is one question, followed by a meta line and the answer:
+
+```markdown
+## Why are stateless services easier to scale?
+> round: concepts | level: mid | lessons: scaling/stateless-and-stateful-services, scaling/load-balancing
+
+The model answer, in plain markdown: what you'd actually say, in a few short paragraphs.
+
+### A strong answer covers
+- The points an interviewer listens for
+
+### Likely follow-ups
+- Questions they'd ask next
+```
+
+- `round` is one of `concepts`, `hld`, `lld`, `behavioral`. `level` is `junior`, `mid`, `senior` or `lead`.
+- `lessons` lists `track/slug` pairs. The build fails if one doesn't exist, and each listed lesson shows the question at its end.
+- A question's ID is its track plus the slug of its text, and learners' ratings are keyed by it. Rewording a question resets its history.
+- Model answers must agree with the lessons they cite. They're held to the same fact-checking standard: if you state a number, default or version, check it against a primary source.
+- For behavioral questions, describe what the interviewer is assessing and what a good story shows. Don't invent example stories with made-up numbers.
+- The files are MDX: write `&lt;` or use backticks for a literal `<` or `{`.
+
+## Adding a design drill
+
+Drills are defined in `src/lib/drills.ts`: a prompt, the clarifications an interviewer would give, a `kind` (`hld` uses the six-step framework phases, `lld` the LLD approach), and a rubric. Every rubric item links to the lesson that teaches it (`track/slug`), and the build fails if that lesson doesn't exist. Draw rubric items from the case-study lesson so the checklist and the lesson never disagree.
+
 ## Adding a track
 
 1. Add an entry to `tracks` in `src/lib/tracks.ts` (`slug`, `number`, `title`, `tagline`, `description`, `stage`, `topics`).

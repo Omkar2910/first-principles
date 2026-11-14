@@ -212,6 +212,14 @@ export function getQuizzes(track: string, slug: string): QuizItem[] {
   });
 }
 
+/** The `good`/`bad` lists of a lesson's <Tradeoffs> block, for revision notes. */
+export function getTradeoffs(track: string, slug: string): { good: string[]; bad: string[] } | null {
+  const m = getLesson(track, slug)?.body.match(/<Tradeoffs\b([\s\S]*?)\/>/);
+  if (!m) return null;
+  const a = parseJsxAttributes(m[1]);
+  return { good: (a.good as string[]) ?? [], bad: (a.bad as string[]) ?? [] };
+}
+
 /** Every quiz in the course, in roadmap order. */
 export function getAllQuizzes(): QuizItem[] {
   return getAllLessons().flatMap((l) => getQuizzes(l.track, l.slug));

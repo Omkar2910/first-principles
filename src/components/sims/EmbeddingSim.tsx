@@ -60,7 +60,7 @@ export function EmbeddingSim() {
       </div>
 
       <div className="mt-4 flex flex-col gap-4 sm:flex-row">
-        <svg viewBox={`0 0 ${W} ${W}`} className="w-full max-w-[320px] shrink-0 rounded-lg bg-slate-50 dark:bg-slate-800/60">
+        <svg viewBox={`0 0 ${W} ${W}`} className="w-full max-w-[320px] shrink-0 rounded-lg bg-ink-50 dark:bg-ink-800/60">
           {mode === "semantic" &&
             top.map((d) => (
               <line key={d.text} x1={q.x * W} y1={(1 - q.y) * W} x2={d.x * W} y2={(1 - d.y) * W} stroke="#10b981" strokeWidth={2} strokeDasharray="4 3" />
@@ -77,7 +77,7 @@ export function EmbeddingSim() {
         </svg>
 
         <div className="flex-1 text-sm">
-          <div className="mb-2 text-xs font-medium text-slate-500">Top results for the ◆ query</div>
+          <div className="mb-2 text-xs font-medium text-ink-500">Top results for the ◆ query</div>
           {top.length === 0 ? (
             <p className="rounded-lg bg-rose-50 p-3 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
               No keyword overlap. Keyword search finds nothing, even though relevant articles exist.
@@ -85,15 +85,15 @@ export function EmbeddingSim() {
           ) : (
             <ol className="space-y-2">
               {top.map((d) => (
-                <li key={d.text} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <li key={d.text} className="rounded-lg border border-ink-200 p-2 dark:border-ink-700">
                   <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[d.topic] }} />
                   {d.text}
-                  <span className="ml-2 text-xs text-slate-500">{mode === "semantic" ? `similarity ${d.sim.toFixed(2)}` : `${d.overlap} shared word(s)`}</span>
+                  <span className="ml-2 text-xs text-ink-500">{mode === "semantic" ? `similarity ${d.sim.toFixed(2)}` : `${d.overlap} shared word(s)`}</span>
                 </li>
               ))}
             </ol>
           )}
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-500">
             {Object.entries(COLORS).map(([k, c]) => (
               <span key={k}><span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: c }} />{k}</span>
             ))}

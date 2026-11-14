@@ -37,7 +37,7 @@ export function LlmCostCalculator() {
         <Stat label="Per month" value={`$${perMonth.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} tone="text-violet-600" />
         <Stat label="Input share of cost" value={`${Math.round(inputShare * 100)}%`} />
       </div>
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-ink-500">
         Try: cut retrieved context from 20k to 4k tokens, or raise the cache hit rate. Context size and caching usually move the bill more than the model choice.
       </p>
     </SimFrame>

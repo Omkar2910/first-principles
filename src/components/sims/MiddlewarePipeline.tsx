@@ -40,7 +40,7 @@ export function MiddlewarePipeline() {
       <div className="mb-4 flex flex-wrap gap-1.5">
         <button
           onClick={() => { setFailAt(null); setStep(-1); }}
-          className={`rounded-md border px-2 py-1 text-xs ${failAt === null ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 dark:border-slate-600"}`}
+          className={`rounded-md border px-2 py-1 text-xs ${failAt === null ? "border-emerald-600 bg-emerald-600 text-white" : "border-ink-300 dark:border-ink-600"}`}
         >
           Happy path
         </button>
@@ -49,7 +49,7 @@ export function MiddlewarePipeline() {
             <button
               key={s.name}
               onClick={() => { setFailAt(i); setStep(-1); }}
-              className={`rounded-md border px-2 py-1 text-xs ${failAt === i ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 dark:border-slate-600"}`}
+              className={`rounded-md border px-2 py-1 text-xs ${failAt === i ? "border-rose-600 bg-rose-600 text-white" : "border-ink-300 dark:border-ink-600"}`}
             >
               {s.fail.label}
             </button>
@@ -72,14 +72,14 @@ export function MiddlewarePipeline() {
                   : reached
                     ? "border-emerald-500/60 bg-emerald-50 dark:bg-emerald-500/10"
                     : skipped && finished
-                      ? "border-slate-200 opacity-40 dark:border-slate-800"
-                      : "border-slate-200 dark:border-slate-800"
+                      ? "border-ink-200 opacity-40 dark:border-ink-800"
+                      : "border-ink-200 dark:border-ink-800"
               }`}
             >
               <span className="w-5 shrink-0 text-center">{failedHere ? "✕" : reached ? "✓" : i + 1}</span>
               <span>
                 <b>{s.name}</b>
-                <span className="block text-xs text-slate-600 dark:text-slate-400">
+                <span className="block text-xs text-ink-600 dark:text-ink-400">
                   {failedHere ? `Short-circuits: responds ${s.fail!.status} ${s.fail!.msg}. Later stages never run.` : s.desc}
                 </span>
               </span>

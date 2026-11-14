@@ -82,12 +82,12 @@ export function LoadBalancerSim() {
           <div key={s.name} className="flex items-center gap-3 text-xs">
             <button
               onClick={() => setServers((prev) => prev.map((x, j) => (j === i ? { ...x, alive: !x.alive, queue: 0 } : x)))}
-              className={`w-32 shrink-0 rounded-md border px-2 py-1 text-left ${s.alive ? "border-slate-300 dark:border-slate-600" : "border-rose-500 bg-rose-50 text-rose-700 line-through dark:bg-rose-500/10"}`}
+              className={`w-32 shrink-0 rounded-md border px-2 py-1 text-left ${s.alive ? "border-ink-300 dark:border-ink-600" : "border-rose-500 bg-rose-50 text-rose-700 line-through dark:bg-rose-500/10"}`}
               title="Click to kill / revive"
             >
               {s.alive ? "🟢" : "💀"} {s.name}
             </button>
-            <div className="relative h-5 flex-1 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+            <div className="relative h-5 flex-1 overflow-hidden rounded bg-ink-100 dark:bg-ink-800">
               <div
                 className={`h-full transition-all ${s.queue > 15 ? "bg-rose-500" : s.queue > 6 ? "bg-amber-500" : "bg-emerald-500"}`}
                 style={{ width: `${(s.queue / MAX_QUEUE) * 100}%` }}
@@ -96,7 +96,7 @@ export function LoadBalancerSim() {
             <span className="w-24 shrink-0 text-right tabular-nums">queue {s.queue} · cap {s.cap}</span>
           </div>
         ))}
-        <p className="text-[11px] text-slate-500">Click a server name to kill or revive it. A full queue ({MAX_QUEUE}) rejects requests.</p>
+        <p className="text-[11px] text-ink-500">Click a server name to kill or revive it. A full queue ({MAX_QUEUE}) rejects requests.</p>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-3">

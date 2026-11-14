@@ -53,7 +53,7 @@ export function RetryStormSim() {
         <Stat label="Only the top layer retries" value={`${topOnly}×`} tone="text-emerald-600" />
         <Stat label="With a 10% retry budget" value={`≤${(1.1 ** layers).toFixed(2)}×`} tone="text-emerald-600" />
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-ink-500">
         Calls hitting the failing service per user request. A struggling service getting {everyLayer}× its normal traffic will never recover.
       </p>
 
@@ -62,13 +62,13 @@ export function RetryStormSim() {
           <span className="text-sm font-medium">When do {CLIENTS} clients that failed at t=0 retry?</span>
           <Segmented value={backoff} onChange={setBackoff} options={[{ value: "fixed", label: "Fixed 1s" }, { value: "exp", label: "Exponential" }, { value: "jitter", label: "Exponential + jitter" }]} />
         </div>
-        <div className="flex h-32 items-end gap-0.5 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+        <div className="flex h-32 items-end gap-0.5 rounded-lg bg-ink-50 p-2 dark:bg-ink-800/60">
           {histogram.map((v, i) => (
             <div key={i} className="flex-1 rounded-t bg-sky-500 transition-all" style={{ height: `${(v / peak) * 100}%` }} title={`${(i * 0.5).toFixed(1)}s: ${v} retries`} />
           ))}
         </div>
-        <div className="mt-1 flex justify-between text-[10px] text-slate-500"><span>0s</span><span>8s</span><span>16s</span></div>
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        <div className="mt-1 flex justify-between text-[10px] text-ink-500"><span>0s</span><span>8s</span><span>16s</span></div>
+        <p className="mt-2 text-xs text-ink-600 dark:text-ink-400">
           {backoff === "jitter"
             ? "Jitter spreads retries out, so the recovering service sees a gentle trickle instead of synchronized waves."
             : "Without jitter, every client retries at the same instant: synchronized spikes that knock a recovering service over again."}

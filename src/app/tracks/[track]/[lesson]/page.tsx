@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTrack, tracks } from "@/lib/tracks";
 import { getAllLessonParams, getHeadings, getLesson, getLessons, groupBySection } from "@/lib/content";
 import { renderLesson } from "@/components/mdx";
+import { getAllInterviewQuestions } from "@/lib/interview";
 import { LessonLink, MarkComplete, TrackProgress } from "@/components/site/client";
 import { Badge, Eyebrow, LevelBadge } from "@/components/ui";
 import { OnThisPage, ReadingProgress } from "@/components/site/OnThisPage";
@@ -39,6 +40,7 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
         .find((t) => t.first);
   const headings = getHeadings(lesson.body);
   const content = await renderLesson(lesson.body);
+  const interviewQs = getAllInterviewQuestions().filter((q) => q.lessons.includes(`${trackSlug}/${slug}`));
 
   const nextHref = next
     ? { href: `/tracks/${trackSlug}/${next.slug}`, title: next.title }
@@ -46,7 +48,7 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
 
   const lessonNav = groupBySection(lessons).map((group) => (
     <div key={group.section ?? "all"}>
-      {group.section && <Eyebrow className="mt-4 mb-1.5 px-2.5 text-[11px] text-slate-400 dark:text-slate-500">{group.section}</Eyebrow>}
+      {group.section && <Eyebrow className="mt-4 mb-1.5 px-2.5 text-[11px] text-ink-400 dark:text-ink-500">{group.section}</Eyebrow>}
       <div className="space-y-0.5">
         {group.lessons.map((l) => (
           <LessonLink key={l.slug} track={trackSlug} slug={l.slug} title={l.title} index={lessons.indexOf(l) + 1} active={l.slug === slug} />
@@ -60,8 +62,8 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
       <ReadingProgress />
       <aside className="hidden w-64 shrink-0 lg:block">
         <div className="sticky top-20">
-          <Link href={`/tracks/${trackSlug}`} className="group mb-3 block rounded-xl px-2.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800/60">
-            <div className="font-mono text-[11px] text-slate-400">Track {String(track.number).padStart(2, "0")}</div>
+          <Link href={`/tracks/${trackSlug}`} className="group mb-3 block rounded-xl px-2.5 py-2 hover:bg-ink-100 dark:hover:bg-ink-800/60">
+            <div className="font-mono text-[11px] text-ink-400">Track {String(track.number).padStart(2, "0")}</div>
             <div className="text-sm font-semibold group-hover:text-brand-700 dark:group-hover:text-brand-300">{track.title}</div>
             <div className="mt-2">
               <TrackProgress track={trackSlug} slugs={lessons.map((l) => l.slug)} />
@@ -75,14 +77,14 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
 
       <article className="min-w-0 flex-1">
         <div className="mx-auto max-w-3xl">
-          <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-slate-500">
-            <Link href="/#roadmap" className="hover:text-slate-900 dark:hover:text-white">Roadmap</Link>
-            <span className="text-slate-300 dark:text-slate-600">/</span>
-            <Link href={`/tracks/${trackSlug}`} className="hover:text-slate-900 dark:hover:text-white">{track.title}</Link>
+          <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-ink-500">
+            <Link href="/#roadmap" className="hover:text-ink-900 dark:hover:text-white">Roadmap</Link>
+            <span className="text-ink-300 dark:text-ink-600">/</span>
+            <Link href={`/tracks/${trackSlug}`} className="hover:text-ink-900 dark:hover:text-white">{track.title}</Link>
           </nav>
           <h1 className="text-3xl font-bold tracking-tight text-balance sm:text-[2.6rem] sm:leading-tight">{lesson.meta.title}</h1>
-          <p className="mt-3 text-lg text-pretty text-slate-600 dark:text-slate-400">{lesson.meta.description}</p>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <p className="mt-3 text-lg text-pretty text-ink-600 dark:text-ink-400">{lesson.meta.description}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-ink-500">
             <Badge>
               Lesson {idx + 1} of {lessons.length}
             </Badge>
@@ -101,17 +103,32 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
           </div>
 
           {/* Phones and tablets get the track's lesson list as a collapsible menu. */}
-          <details className="group mt-6 rounded-xl border border-slate-200 lg:hidden dark:border-slate-800">
+          <details className="group mt-6 rounded-xl border border-ink-200 lg:hidden dark:border-ink-800">
             <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium">
               All lessons in {track.title}
-              <span className="text-slate-400 transition group-open:rotate-180" aria-hidden>▾</span>
+              <span className="text-ink-400 transition group-open:rotate-180" aria-hidden>▾</span>
             </summary>
-            <nav className="border-t border-slate-200 p-2 dark:border-slate-800">{lessonNav}</nav>
+            <nav className="border-t border-ink-200 p-2 dark:border-ink-800">{lessonNav}</nav>
           </details>
 
-          <div className="prose prose-slate mt-10 max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-headings:tracking-tight prose-h2:mt-14 prose-h2:text-2xl prose-a:font-medium prose-a:text-brand-700 prose-a:decoration-brand-300 prose-a:underline-offset-2 hover:prose-a:decoration-brand-500 prose-strong:font-semibold dark:prose-a:text-brand-300 dark:prose-a:decoration-brand-500/50">
+          <div className="prose prose-stone mt-10 max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-headings:tracking-tight prose-h2:mt-14 prose-h2:text-2xl prose-a:font-medium prose-a:text-brand-700 prose-a:decoration-brand-300 prose-a:underline-offset-2 hover:prose-a:decoration-brand-500 prose-strong:font-semibold dark:prose-a:text-brand-300 dark:prose-a:decoration-brand-500/50">
             {content}
           </div>
+
+          {interviewQs.length > 0 && (
+            <section className="mt-14 rounded-2xl border border-brand-200 bg-brand-50/60 p-5 dark:border-brand-500/30 dark:bg-brand-500/5">
+              <div className="text-xs font-semibold tracking-wider text-brand-700 uppercase dark:text-brand-300">Interview questions on this topic</div>
+              <ul className="mt-3 space-y-2">
+                {interviewQs.map((q) => (
+                  <li key={q.id}>
+                    <Link href={`/interview/questions#${q.id.replace("/", "--")}`} className="font-medium hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+                      {q.question} →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <div className="mt-14">
             <MarkComplete track={trackSlug} slug={slug} next={nextHref || undefined} />
@@ -120,9 +137,9 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
             {prev ? (
               <Link
                 href={`/tracks/${trackSlug}/${prev.slug}`}
-                className="group rounded-xl border border-slate-200 p-4 transition-colors hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-900/50"
+                className="group rounded-xl border border-ink-200 p-4 transition-colors hover:border-ink-300 hover:bg-ink-50 dark:border-ink-800 dark:hover:border-ink-700 dark:hover:bg-ink-900/50"
               >
-                <div className="text-xs text-slate-500">← Previous</div>
+                <div className="text-xs text-ink-500">← Previous</div>
                 <div className="mt-0.5 font-medium group-hover:text-brand-700 dark:group-hover:text-brand-300">{prev.title}</div>
               </Link>
             ) : (
@@ -131,9 +148,9 @@ export default async function LessonPage({ params }: PageProps<"/tracks/[track]/
             {next && (
               <Link
                 href={`/tracks/${trackSlug}/${next.slug}`}
-                className="group rounded-xl border border-slate-200 p-4 text-right transition-colors hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-900/50"
+                className="group rounded-xl border border-ink-200 p-4 text-right transition-colors hover:border-ink-300 hover:bg-ink-50 dark:border-ink-800 dark:hover:border-ink-700 dark:hover:bg-ink-900/50"
               >
-                <div className="text-xs text-slate-500">Next →</div>
+                <div className="text-xs text-ink-500">Next →</div>
                 <div className="mt-0.5 font-medium group-hover:text-brand-700 dark:group-hover:text-brand-300">{next.title}</div>
               </Link>
             )}

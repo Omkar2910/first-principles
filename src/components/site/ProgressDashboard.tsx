@@ -41,7 +41,7 @@ export function ProgressDashboard({ tracks }: { tracks: TrackSummary[] }) {
   const activity = useActivity();
   // Dates depend on the viewer's clock, so render only in the browser.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
-  if (!mounted) return <div className="h-96 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />;
+  if (!mounted) return <div className="h-96 animate-pulse rounded-xl bg-ink-100 dark:bg-ink-900" />;
   const today = dayNumber();
 
   const totalLessons = tracks.reduce((a, t) => a + t.lessons.length, 0);
@@ -63,16 +63,16 @@ export function ProgressDashboard({ tracks }: { tracks: TrackSummary[] }) {
       </div>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">Activity · last {WEEKS} weeks</h2>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-ink-500">Activity · last {WEEKS} weeks</h2>
         <Heatmap activity={activity} today={today} />
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">By track</h2>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/40">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-ink-500">By track</h2>
+        <div className="overflow-x-auto rounded-2xl border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900/40">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-slate-500">
-              <tr className="border-b border-slate-200 dark:border-slate-800">
+            <thead className="text-left text-xs text-ink-500">
+              <tr className="border-b border-ink-200 dark:border-ink-800">
                 <th className="px-4 py-2 font-medium">Track</th>
                 <th className="w-2/5 px-4 py-2 font-medium">Lessons</th>
                 <th className="px-4 py-2 text-right font-medium">Quiz accuracy</th>
@@ -85,19 +85,19 @@ export function ProgressDashboard({ tracks }: { tracks: TrackSummary[] }) {
                 const s = attempts.reduce((a, r) => a + r.seen, 0);
                 const c = attempts.reduce((a, r) => a + r.correct, 0);
                 return (
-                  <tr key={t.slug} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                  <tr key={t.slug} className="border-b border-ink-100 last:border-0 dark:border-ink-800/60">
                     <td className="px-4 py-2.5">
                       <Link href={`/tracks/${t.slug}`} className="hover:underline">
-                        <span className="mr-2 font-mono text-xs text-slate-400">{String(t.number).padStart(2, "0")}</span>
+                        <span className="mr-2 font-mono text-xs text-ink-400">{String(t.number).padStart(2, "0")}</span>
                         {t.title}
                       </Link>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
                           <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(d / t.lessons.length) * 100}%` }} />
                         </div>
-                        <span className="w-12 text-right text-xs tabular-nums text-slate-500">
+                        <span className="w-12 text-right text-xs tabular-nums text-ink-500">
                           {d}/{t.lessons.length}
                         </span>
                       </div>
@@ -106,7 +106,7 @@ export function ProgressDashboard({ tracks }: { tracks: TrackSummary[] }) {
                       {s ? (
                         <span title={`${c} of ${s} answers correct`}>{Math.round((c / s) * 100)}%</span>
                       ) : (
-                        <span className="text-slate-400">–</span>
+                        <span className="text-ink-400">–</span>
                       )}
                     </td>
                   </tr>
@@ -124,12 +124,12 @@ export function ProgressDashboard({ tracks }: { tracks: TrackSummary[] }) {
 
 function Tile({ value, sub, label, href }: { value: string; sub?: string; label: string; href?: string }) {
   const body = (
-    <div className={`h-full rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40 ${href ? "hover:border-slate-400 dark:hover:border-slate-600" : ""}`}>
+    <div className={`h-full rounded-2xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900/40 ${href ? "hover:border-ink-400 dark:hover:border-ink-600" : ""}`}>
       <div className="flex items-baseline gap-1.5">
         <span className="text-3xl font-semibold tabular-nums">{value}</span>
-        {sub && <span className="text-xs text-slate-500">{sub}</span>}
+        {sub && <span className="text-xs text-ink-500">{sub}</span>}
       </div>
-      <div className="mt-1 text-xs text-slate-500">{label}</div>
+      <div className="mt-1 text-xs text-ink-500">{label}</div>
     </div>
   );
   return href ? <Link href={href}>{body}</Link> : body;
@@ -137,7 +137,7 @@ function Tile({ value, sub, label, href }: { value: string; sub?: string; label:
 
 /** One emerald hue, light → dark by activity count. Level 0 is the empty-cell gray. */
 const LEVELS = [
-  "bg-slate-100 dark:bg-slate-800",
+  "bg-ink-100 dark:bg-ink-800",
   "bg-emerald-200 dark:bg-emerald-900",
   "bg-emerald-400 dark:bg-emerald-700",
   "bg-emerald-600 dark:bg-emerald-500",
@@ -164,7 +164,7 @@ function Heatmap({ activity, today }: { activity: Record<number, number>; today:
     new Date(day * DAY_MS).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40">
+    <div className="relative rounded-2xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900/40">
       <div className="flex gap-[3px] overflow-x-auto pb-1" onMouseLeave={() => setHover(null)}>
         {columns.map((week) => (
           <div key={week[0]} className="flex flex-col gap-[3px]">
@@ -181,7 +181,7 @@ function Heatmap({ activity, today }: { activity: Record<number, number>; today:
                     const parent = e.currentTarget.closest(".relative")!.getBoundingClientRect();
                     setHover({ day, x: box.left - parent.left + 6, y: box.top - parent.top });
                   }}
-                  className={`h-3 w-3 rounded-[3px] ${LEVELS[level(activity[day] ?? 0)]} ${day === today ? "ring-1 ring-slate-400" : ""}`}
+                  className={`h-3 w-3 rounded-[3px] ${LEVELS[level(activity[day] ?? 0)]} ${day === today ? "ring-1 ring-ink-400" : ""}`}
                 />
               ),
             )}
@@ -190,13 +190,13 @@ function Heatmap({ activity, today }: { activity: Record<number, number>; today:
       </div>
       {hover && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md bg-slate-900 px-2 py-1 text-xs whitespace-nowrap text-white shadow dark:bg-white dark:text-slate-900"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md bg-ink-900 px-2 py-1 text-xs whitespace-nowrap text-white shadow dark:bg-white dark:text-ink-900"
           style={{ left: hover.x, top: hover.y - 4 }}
         >
           <span className="font-semibold">{activity[hover.day] ?? 0}</span> {(activity[hover.day] ?? 0) === 1 ? "activity" : "activities"} · {fmt(hover.day)}
         </div>
       )}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
         <span>Lessons completed, quiz answers and reviews all count.</span>
         <span className="flex items-center gap-1">
           Less
@@ -215,9 +215,9 @@ function Backup() {
   const [message, setMessage] = useState<string | null>(null);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/40">
+    <section className="rounded-2xl border border-ink-200 bg-white p-5 sm:p-6 dark:border-ink-800 dark:bg-ink-900/40">
       <h2 className="font-semibold">Your data</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      <p className="mt-1 text-sm text-ink-600 dark:text-ink-400">
         Progress lives only in this browser. Download a backup to move it to another device or keep it safe.
       </p>
       <div className="mt-4 flex flex-wrap gap-2 text-sm">

@@ -107,8 +107,36 @@ The **Progress** page shows:
 - **Streak**: consecutive days with any activity (completing a lesson, answering a quiz or reviewing a card). Today's streak stays alive until midnight.
 - **Quiz accuracy** across every answer you've given.
 - **Ready to review**: cards waiting in your deck.
+
+Interview-prep progress (questions tried, questions due, drills completed) is shown on the **Interview** hub.
 - An **activity heatmap** of the last 20 weeks. Hover a square for the date and count.
 - A **per-track table** of completion and quiz accuracy, which is a quick way to find your weakest area.
+
+## Interview prep
+
+**Interview** in the top navigation opens the prep hub. It has three tools and a six-week plan that strings them together.
+
+### Question bank
+
+Interviewer-style questions for every track, such as "Why are stateless services easier to scale?" or "A payment request times out. What do you do?". Each is tagged with its round (concepts, system design, low-level design, behavioral) and level.
+
+1. Read the question and **answer it out loud first**, or jot down your key points. That's the skill the interview tests.
+2. Press **Reveal model answer**. You'll see the answer, *what a strong answer covers*, the *likely follow-ups*, and links to the lessons that teach it.
+3. Rate yourself: **Missed it**, **Shaky**, **Solid** or **Nailed it**. The question is scheduled again using the same spaced-repetition rules as the review deck, so weak answers come back sooner.
+
+Filter by track and round, or choose **Due** to practise only what's come round again. Lessons link to their related questions at the bottom of the page.
+
+### Design drills
+
+Mock rounds with a real clock. Pick a prompt (URL shortener, rate limiter, chat system, payment system, parking lot and more), press start, and talk through your design out loud for 45 minutes. The timer walks you through each step of the framework and tells you when to move on. Type key decisions into the notes box; they're saved in your browser.
+
+When you finish, tick off what you actually covered. Anything you missed links to the lesson that teaches it, and your score is saved so you can see improvement over attempts.
+
+### Revision notes
+
+One page per track with every lesson's key takeaways and trade-offs, generated from the lessons themselves. Read it the night before an interview, or use **Print / save as PDF** for a paper copy.
+
+Coding (DSA) rounds aren't covered by this platform; keep a separate daily coding practice alongside it.
 
 ## Career self-assessment
 

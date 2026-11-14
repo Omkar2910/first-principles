@@ -66,15 +66,15 @@ export function LruCacheSim() {
 
       <div className="mt-4 flex flex-wrap gap-1.5">
         {KEYS.map((k, i) => (
-          <button key={k} onClick={() => click(k)} className="rounded-md border border-slate-300 px-3 py-1.5 font-mono text-sm hover:border-slate-500 dark:border-slate-600">
+          <button key={k} onClick={() => click(k)} className="rounded-md border border-ink-300 px-3 py-1.5 font-mono text-sm hover:border-ink-500 dark:border-ink-600">
             GET {k}
-            <span className="ml-1 text-[10px] text-slate-400">{WEIGHTS[i]}%</span>
+            <span className="ml-1 text-[10px] text-ink-400">{WEIGHTS[i]}%</span>
           </button>
         ))}
       </div>
 
       <div className="mt-5">
-        <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+        <div className="mb-1.5 flex justify-between text-xs text-ink-500">
           <span>Most recent →</span>
           <span>→ evicted next</span>
         </div>
@@ -86,7 +86,7 @@ export function LruCacheSim() {
               <div
                 key={i}
                 className={`flex h-14 flex-1 items-center justify-center rounded-lg border-2 font-mono text-lg font-semibold transition ${
-                  k ? (isNew ? (last!.hit ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10" : "border-amber-500 bg-amber-50 dark:bg-amber-500/10") : "border-slate-300 dark:border-slate-600") : "border-dashed border-slate-200 text-slate-300 dark:border-slate-700"
+                  k ? (isNew ? (last!.hit ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10" : "border-amber-500 bg-amber-50 dark:bg-amber-500/10") : "border-ink-300 dark:border-ink-600") : "border-dashed border-ink-200 text-ink-300 dark:border-ink-700"
                 }`}
               >
                 {k ?? "·"}
@@ -110,7 +110,7 @@ export function LruCacheSim() {
         <Stat label="Misses" value={misses} />
         <Stat label="Hit rate" value={total ? `${Math.round((hits / total) * 100)}%` : "-"} tone="text-emerald-600" />
       </div>
-      <p className="mt-2 text-xs text-slate-500">Try capacity 2 vs 4 with the skewed simulation. A small cache of the hottest keys captures most reads.</p>
+      <p className="mt-2 text-xs text-ink-500">Try capacity 2 vs 4 with the skewed simulation. A small cache of the hottest keys captures most reads.</p>
     </SimFrame>
   );
 }

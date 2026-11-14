@@ -74,12 +74,12 @@ export function Practice({ quizzes, tracks }: { quizzes: QuizItem[]; tracks: { s
         <StatTile value={String(weakCount)} label="weak spots" />
       </div>
 
-      <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900/40">
+      <div className="space-y-5 rounded-2xl border border-ink-200 bg-white p-6 dark:border-ink-800 dark:bg-ink-900/40">
         <Field label="From">
           <select
             value={scope}
             onChange={(e) => setScope(e.target.value)}
-            className="w-full sm:w-auto h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-sm shadow-xs dark:border-slate-700 dark:bg-slate-900"
+            className="w-full sm:w-auto h-9 rounded-lg border border-ink-300 bg-white px-2.5 text-sm shadow-xs dark:border-ink-700 dark:bg-ink-900"
           >
             <option value="all">All tracks</option>
             <option value="completed">Lessons I&apos;ve completed</option>
@@ -102,7 +102,7 @@ export function Practice({ quizzes, tracks }: { quizzes: QuizItem[]; tracks: { s
           {pool.length ? `Start · ${Math.min(size, pool.length)} question${Math.min(size, pool.length) === 1 ? "" : "s"}` : "No questions match"}
         </button>
         {!pool.length && mode === "weak" && (
-          <p className="text-center text-sm text-slate-500">No weak spots here. Nice work. Try Mixed or Unseen.</p>
+          <p className="text-center text-sm text-ink-500">No weak spots here. Nice work. Try Mixed or Unseen.</p>
         )}
       </div>
     </div>
@@ -154,21 +154,21 @@ function Session({
     const score = results.filter(Boolean).length;
     const missed = items.filter((_, i) => !results[i]);
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900/40">
+      <div className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8 dark:border-ink-800 dark:bg-ink-900/40">
         <div className="text-center">
           <div className="text-5xl font-semibold tabular-nums">
             {score}/{items.length}
           </div>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-ink-600 dark:text-ink-400">
             {score === items.length ? "Perfect round." : score / items.length >= 0.7 ? "Solid. Review the misses below." : "Worth revisiting the lessons below."}
           </p>
         </div>
         {missed.length > 0 && (
           <div className="mt-6">
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-500">Re-read</h3>
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-ink-500">Re-read</h3>
             <ul className="space-y-2">
               {missed.map((m) => (
-                <li key={m.question} className="rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800">
+                <li key={m.question} className="rounded-lg border border-ink-200 p-3 text-sm dark:border-ink-800">
                   <p>{m.question}</p>
                   <p className="mt-1 text-emerald-700 dark:text-emerald-400">✓ {m.options[m.answer]}</p>
                   <Link href={`/tracks/${m.track}/${m.slug}`} className="mt-1 inline-block text-xs text-sky-700 underline dark:text-sky-400">
@@ -188,26 +188,26 @@ function Session({
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-3 text-sm text-slate-500">
+      <div className="mb-3 flex items-center gap-3 text-sm text-ink-500">
         <button onClick={onExit} className="hover:underline">← Exit</button>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
           <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(results.length / items.length) * 100}%` }} />
         </div>
         <span className="tabular-nums">
           {index + 1}/{items.length}
         </span>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900/40">
-        <Link href={`/tracks/${q.track}/${q.slug}`} className="text-xs font-medium text-slate-500 hover:underline">
+      <div className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8 dark:border-ink-800 dark:bg-ink-900/40">
+        <Link href={`/tracks/${q.track}/${q.slug}`} className="text-xs font-medium text-ink-500 hover:underline">
           {q.lessonTitle}
         </Link>
         <p className="mt-2 text-lg font-medium">{q.question}</p>
         <div className="mt-5 space-y-2">
           {q.options.map((opt, i) => {
-            let tone = "border-slate-200 hover:border-brand-300 hover:bg-brand-50/40 dark:border-slate-700 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5";
+            let tone = "border-ink-200 hover:border-brand-300 hover:bg-brand-50/40 dark:border-ink-700 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5";
             if (picked !== null && i === q.answer) tone = "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10";
             else if (picked !== null && i === picked) tone = "border-rose-500 bg-rose-50 dark:bg-rose-500/10";
-            else if (picked !== null) tone = "border-slate-200 opacity-60 dark:border-slate-700";
+            else if (picked !== null) tone = "border-ink-200 opacity-60 dark:border-ink-700";
             return (
               <button
                 key={opt}
@@ -226,7 +226,7 @@ function Session({
             <p className={picked === q.answer ? "font-semibold text-emerald-700 dark:text-emerald-400" : "font-semibold text-rose-700 dark:text-rose-400"}>
               {picked === q.answer ? "Correct." : "Not quite."}
             </p>
-            <p className="mt-1 text-slate-700 dark:text-slate-300">{q.explanation}</p>
+            <p className="mt-1 text-ink-700 dark:text-ink-300">{q.explanation}</p>
             <button onClick={next} className={buttonClass("brand", "md", "mt-4")}>
               {results.length === items.length ? "See results" : "Next question"} →
             </button>

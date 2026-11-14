@@ -31,7 +31,7 @@ export function ThemeToggle() {
           localStorage.setItem("fp:theme", next ? "dark" : "light");
         } catch {}
       }}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-ink-200 text-ink-500 transition-colors hover:text-ink-900 dark:border-ink-700 dark:text-ink-400 dark:hover:text-white"
     >
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
         {dark ? (
@@ -58,12 +58,12 @@ export function MarkComplete({ track, slug, next }: { track: string; slug: strin
       className={`flex flex-col gap-4 rounded-2xl border p-5 transition-colors sm:flex-row sm:items-center sm:justify-between ${
         done
           ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/5"
-          : "border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/40"
+          : "border-ink-200 bg-ink-50/60 dark:border-ink-800 dark:bg-ink-900/40"
       }`}
     >
       <div>
         <div className="font-semibold">{done ? "Lesson complete" : "Finished reading?"}</div>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-ink-600 dark:text-ink-400">
           {done ? "It's now in your spaced review rotation." : "Mark it complete to track progress and add it to your review deck."}
         </p>
       </div>
@@ -92,7 +92,7 @@ export function TrackProgress({ track, slugs }: { track: string; slugs: string[]
   const done = slugs.filter((s) => completed.includes(lessonId(track, s))).length;
   const pct = slugs.length ? (done / slugs.length) * 100 : 0;
   return (
-    <div className="flex items-center gap-3 text-xs text-slate-500">
+    <div className="flex items-center gap-3 text-xs text-ink-500">
       <ProgressBar value={pct} className="flex-1" />
       <span className="tabular-nums">
         {done}/{slugs.length}
@@ -115,7 +115,7 @@ export function TrackStatus({ track, slugs }: { track: string; slugs: string[] }
         <div className={`font-medium ${done === slugs.length ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
           {done === 0 ? "Not started" : done === slugs.length ? "Complete" : "In progress"}
         </div>
-        <div className="text-slate-500">
+        <div className="text-ink-500">
           {done}/{slugs.length} lessons
         </div>
       </div>
@@ -157,7 +157,7 @@ export function LessonLink({
       className={`group flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
         active
           ? "bg-brand-50 font-medium text-brand-900 dark:bg-brand-500/10 dark:text-brand-100"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-white"
+          : "text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800/60 dark:hover:text-white"
       }`}
     >
       <LessonDot done={done} active={active} index={index} />
@@ -174,7 +174,7 @@ export function LessonDot({ done, active, index }: { done: boolean; active?: boo
           ? "bg-emerald-500 text-white"
           : active
             ? "bg-brand-600 text-white"
-            : "border border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400"
+            : "border border-ink-300 text-ink-500 dark:border-ink-600 dark:text-ink-400"
       }`}
     >
       {done ? "✓" : index}
@@ -202,12 +202,12 @@ export function LessonRow({
   return (
     <Link
       href={`/tracks/${track}/${slug}`}
-      className="group flex gap-4 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5 dark:hover:bg-slate-800/40"
+      className="group flex gap-4 px-4 py-4 transition-colors hover:bg-ink-50 sm:px-5 dark:hover:bg-ink-800/40"
     >
       <LessonDot done={done} index={index} />
       <div className="min-w-0 flex-1">
         <div className="font-medium group-hover:text-brand-700 dark:group-hover:text-brand-300">{title}</div>
-        <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+        <p className="mt-0.5 text-sm text-ink-500">{description}</p>
       </div>
       <div className="hidden shrink-0 flex-col items-end gap-1.5 sm:flex">{meta}</div>
     </Link>
@@ -230,4 +230,14 @@ export function DueBadge() {
 export function useDueCount() {
   const { due, fresh } = dueQueue(useSrs(), useCompletions());
   return due.length + fresh.length;
+}
+
+/* ---------- Printing ---------- */
+
+export function PrintButton() {
+  return (
+    <button onClick={() => window.print()} className={buttonClass("secondary", "md")}>
+      Print / save as PDF
+    </button>
+  );
 }

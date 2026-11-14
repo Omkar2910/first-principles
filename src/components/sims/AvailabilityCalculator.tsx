@@ -35,7 +35,7 @@ export function AvailabilityCalculator() {
       <div className="mb-5 overflow-x-auto">
         <table className="w-full min-w-[480px] text-xs">
           <thead>
-            <tr className="text-left text-slate-500">
+            <tr className="text-left text-ink-500">
               <th className="pb-2">Component (in series)</th>
               <th className="pb-2">Availability each</th>
               <th className="pb-2">Redundant copies</th>
@@ -44,15 +44,15 @@ export function AvailabilityCalculator() {
           </thead>
           <tbody>
             {deps.map((d, i) => (
-              <tr key={d.name} className="border-t border-slate-100 dark:border-slate-800">
+              <tr key={d.name} className="border-t border-ink-100 dark:border-ink-800">
                 <td className="py-2 font-medium">{d.name}</td>
                 <td>
-                  <select value={d.avail} onChange={(e) => update(i, { avail: Number(e.target.value) })} className="rounded border border-slate-300 bg-white px-1 py-0.5 dark:border-slate-600 dark:bg-slate-800">
+                  <select value={d.avail} onChange={(e) => update(i, { avail: Number(e.target.value) })} className="rounded border border-ink-300 bg-white px-1 py-0.5 dark:border-ink-600 dark:bg-ink-800">
                     {NINES.map((n) => <option key={n} value={n}>{n}%</option>)}
                   </select>
                 </td>
                 <td>
-                  <select value={d.replicas} onChange={(e) => update(i, { replicas: Number(e.target.value) })} className="rounded border border-slate-300 bg-white px-1 py-0.5 dark:border-slate-600 dark:bg-slate-800">
+                  <select value={d.replicas} onChange={(e) => update(i, { replicas: Number(e.target.value) })} className="rounded border border-ink-300 bg-white px-1 py-0.5 dark:border-ink-600 dark:bg-ink-800">
                     {[1, 2, 3].map((n) => <option key={n} value={n}>{n} {n > 1 ? "(independent)" : ""}</option>)}
                   </select>
                 </td>
@@ -70,17 +70,17 @@ export function AvailabilityCalculator() {
       </div>
 
       <div className="mt-5">
-        <div className="mb-1 text-xs font-medium text-slate-500">Reference: what each target allows</div>
+        <div className="mb-1 text-xs font-medium text-ink-500">Reference: what each target allows</div>
         <div className="grid grid-cols-3 gap-1 text-xs sm:grid-cols-6">
           {NINES.map((n) => (
-            <div key={n} className="rounded bg-slate-50 p-2 text-center dark:bg-slate-800/60">
+            <div key={n} className="rounded bg-ink-50 p-2 text-center dark:bg-ink-800/60">
               <div className="font-semibold">{n}%</div>
-              <div className="text-slate-500">{downtime(n).month}/mo</div>
+              <div className="text-ink-500">{downtime(n).month}/mo</div>
             </div>
           ))}
         </div>
       </div>
-      <p className="mt-3 text-xs text-slate-500">Assumes independent failures. Real replicas often share failure modes (same bad deploy, same AZ), so true gains are smaller.</p>
+      <p className="mt-3 text-xs text-ink-500">Assumes independent failures. Real replicas often share failure modes (same bad deploy, same AZ), so true gains are smaller.</p>
     </SimFrame>
   );
 }

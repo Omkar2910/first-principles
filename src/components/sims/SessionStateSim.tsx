@@ -145,25 +145,25 @@ export function SessionStateSim() {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         {s.servers.map((x, i) => (
-          <div key={x.name} className={`rounded-lg border p-3 text-xs ${x.alive ? "border-slate-200 dark:border-slate-700" : "border-rose-500 bg-rose-50 dark:bg-rose-500/10"}`}>
+          <div key={x.name} className={`rounded-lg border p-3 text-xs ${x.alive ? "border-ink-200 dark:border-ink-700" : "border-rose-500 bg-rose-50 dark:bg-rose-500/10"}`}>
             <div className="flex items-center justify-between">
               <span className="font-semibold">{x.alive ? "🟢" : "💀"} {x.name}</span>
-              <button onClick={() => toggleServer(i)} className="rounded border border-slate-300 px-1.5 py-0.5 dark:border-slate-600">
+              <button onClick={() => toggleServer(i)} className="rounded border border-ink-300 px-1.5 py-0.5 dark:border-ink-600">
                 {x.alive ? "Kill" : "Revive"}
               </button>
             </div>
-            <div className="mt-2 text-slate-500">{holdsState ? "Sessions in memory" : "Holds no session state"}</div>
+            <div className="mt-2 text-ink-500">{holdsState ? "Sessions in memory" : "Holds no session state"}</div>
             <div className="mt-1 min-h-5">{holdsState ? x.sessions.join(", ") || "—" : "—"}</div>
-            {mode === "sticky" && <div className="mt-1 text-slate-500">pinned users: {load[i]}</div>}
+            {mode === "sticky" && <div className="mt-1 text-ink-500">pinned users: {load[i]}</div>}
           </div>
         ))}
       </div>
 
       {mode === "redis" && (
-        <div className={`mt-3 rounded-lg border p-3 text-xs ${s.redis.alive ? "border-slate-200 dark:border-slate-700" : "border-rose-500 bg-rose-50 dark:bg-rose-500/10"}`}>
+        <div className={`mt-3 rounded-lg border p-3 text-xs ${s.redis.alive ? "border-ink-200 dark:border-ink-700" : "border-rose-500 bg-rose-50 dark:bg-rose-500/10"}`}>
           <div className="flex items-center justify-between">
             <span className="font-semibold">{s.redis.alive ? "🟢" : "💀"} Redis (shared session store)</span>
-            <button onClick={() => setS((p) => ({ ...p, redis: { ...p.redis, alive: !p.redis.alive } }))} className="rounded border border-slate-300 px-1.5 py-0.5 dark:border-slate-600">
+            <button onClick={() => setS((p) => ({ ...p, redis: { ...p.redis, alive: !p.redis.alive } }))} className="rounded border border-ink-300 px-1.5 py-0.5 dark:border-ink-600">
               {s.redis.alive ? "Kill" : "Revive"}
             </button>
           </div>
@@ -175,9 +175,9 @@ export function SessionStateSim() {
         <table className="w-full text-xs">
           <tbody>
             {USERS.map((u) => (
-              <tr key={u} className="border-t border-slate-100 dark:border-slate-800">
+              <tr key={u} className="border-t border-ink-100 dark:border-ink-800">
                 <td className="py-1 pr-3 font-medium">{u}</td>
-                <td className="py-1 pr-3 text-slate-500">{s.last[u]?.server ?? "not sent yet"}</td>
+                <td className="py-1 pr-3 text-ink-500">{s.last[u]?.server ?? "not sent yet"}</td>
                 <td className={`py-1 ${s.last[u] ? OUTCOME[s.last[u].outcome].tone : ""}`}>{s.last[u] ? OUTCOME[s.last[u].outcome].label : ""}</td>
               </tr>
             ))}

@@ -34,7 +34,7 @@ flowchart LR
 | UI | React 19.3, TypeScript 5 | Server components by default; `"use client"` only where needed |
 | Content | MDX via `next-mdx-remote/rsc` | `remark-gfm` (tables), `rehype-slug` (heading ids), `rehype-pretty-code` + Shiki (dual light/dark code themes) |
 | Styling | Tailwind CSS v4, `@tailwindcss/typography` | Configured in CSS (`src/app/globals.css`), wired through Turbopack in `next.config.ts` |
-| Fonts | Geist Sans / Geist Mono via `next/font` | |
+| Fonts | Geist Sans / Geist Mono, Bricolage Grotesque for headings, via `next/font` | |
 | Headings | `github-slugger` | Produces the same ids as `rehype-slug`, for the "On this page" outline |
 
 ## Directory layout
@@ -77,6 +77,10 @@ src/
 | `/practice` | Static | Cross-course quiz sessions |
 | `/progress` | Static (client-rendered body) | Stats, heatmap, per-track table, backup |
 | `/guide` | Static | Renders `docs/user-guide.md` |
+| `/interview` | Static | Interview prep hub: tools, rounds by level, six-week plan |
+| `/interview/questions` | Static | Question bank; model answers compiled from `content/interview/*.md` at build time |
+| `/interview/drills/[id]` | SSG (one per drill) | Timed design drill with self-grading rubric (drills defined in `lib/drills.ts`) |
+| `/interview/notes/[track]` | SSG (one per track) | Printable revision notes generated from each lesson's takeaways and trade-offs |
 
 Dynamic routes set `dynamicParams = false`, so any path not produced by `generateStaticParams` returns 404.
 
@@ -106,6 +110,9 @@ There is no backend; everything a learner does is persisted in `localStorage` un
 | `fp:quiz:v1` | `lib/quizStats.ts` | `{ "<question text>": { seen, correct, lastCorrect, at } }` |
 | `fp:activity:v1` | `lib/store.ts` | `{ <dayNumber>: eventCount }`, for streaks and the heatmap |
 | `fp:self-assessment:v1` | `sims/SelfAssessment.tsx` | Competency ratings and target level |
+| `fp:interview-srs:v1` | `lib/interviewState.ts` | `{ "<track>/<question-slug>": CardState }`: interview question self-ratings, scheduled like review cards |
+| `fp:drills:v1` | `lib/interviewState.ts` | `{ "<drill-id>": [{ at, checked, total, minutes }] }` |
+| `fp:drill-notes:v1` | `lib/interviewState.ts` | `{ "<drill-id>": "notes text" }` |
 | `fp:theme` | `layout.tsx`, `site/client.tsx` | `"light"` or `"dark"` |
 
 ### The store pattern
@@ -149,7 +156,14 @@ Pages and layouts are **server components**. They read content and pass plain da
 
 ### Design system
 
-- **Tokens.** `globals.css` defines a `brand` color ramp (currently aliased to indigo) in `@theme`. Changing those eleven lines rebrands the app. Emerald is reserved for completion and correct answers, and rose for wrong answers.
+- **Tokens.** `globals.css` defines three groups in `@theme`:
+  - `ink-*`, the warm neutral scale used for all text, borders and surfaces (aliased to Tailwind's stone). Use `ink-*`, never `slate-*` or `gray-*`.
+  - `brand-*`, the "ember" accent, a custom OKLCH ramp. White text passes WCAG AA on `brand-600` and darker, so filled brand buttons use 600 in both themes; `brand-600` text passes on the light paper background and `brand-400` on the dark one.
+  - `paper`, the off-white light-mode page background that white cards sit on.
+
+  Emerald is reserved for completion and correct answers, and rose for wrong answers.
+- **Type.** Body text is Geist Sans, code is Geist Mono, and headings (`h1`, `h2`, prose `h3`, or the `font-display` class) use Bricolage Grotesque, all loaded with `next/font`.
+- **Form controls.** `select` elements get a custom chevron with room around it in `globals.css`, because the native arrow ignores padding.
 - **Primitives.** `components/ui.tsx` provides `Button`/`ButtonLink`/`buttonClass`, `Card`, `Badge`, `LevelBadge`, `Eyebrow`, `PageHeader`, `Kbd`, `ProgressBar`, `ProgressRing`, `StatTile` and `Segmented`. New UI should compose these, not repeat long class strings.
 - **Dark mode** is class-based (`.dark` on `<html>`). An inline script in the layout applies the saved or system theme before first paint to avoid a flash.
 - **Lesson typography** comes from Tailwind Typography (`prose`). Callout blocks (`Problem`, `MentalModel`, …) deliberately stay *inside* the prose scope so lists and links in them keep their styling. Self-contained widgets (`Quiz`, `Tradeoffs`, simulators) opt out with `not-prose`.

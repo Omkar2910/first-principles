@@ -4,6 +4,7 @@ import { STORE_PREFIX, reloadActivity } from "./store";
 import { reloadProgress } from "./progress";
 import { reloadSrs } from "./srs";
 import { reloadQuizStats } from "./quizStats";
+import { reloadDrills, reloadQuestionSrs } from "./interviewState";
 
 const FORMAT = "first-principles-backup";
 
@@ -16,6 +17,8 @@ function reloadAll() {
   reloadSrs();
   reloadQuizStats();
   reloadActivity();
+  reloadQuestionSrs();
+  reloadDrills();
 }
 
 /** Every `fp:*` key (progress, reviews, quiz history, self-assessment, theme) as a JSON file. */

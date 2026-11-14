@@ -115,7 +115,7 @@ export function IsolationPlayground() {
         <Segmented value={sid} onChange={(v) => { setSid(v); setStep(-1); }} options={SCENARIOS.map((s) => ({ value: s.id, label: s.name }))} />
         <Segmented value={level} onChange={(v) => { setLevel(v); setStep(-1); }} options={LEVELS} />
       </div>
-      <p className="mt-3 font-mono text-xs text-slate-500">Initial: {sc.setup}</p>
+      <p className="mt-3 font-mono text-xs text-ink-500">Initial: {sc.setup}</p>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold">
         <div className="rounded bg-sky-100 px-2 py-1 text-sky-900 dark:bg-sky-500/20 dark:text-sky-200">Transaction A</div>
@@ -126,7 +126,7 @@ export function IsolationPlayground() {
           const shown = i <= step;
           const res = s.result ? (s.result[level] ?? s.result.all) : undefined;
           const cell = (
-            <div className={`rounded-md border p-2 font-mono text-[11px] transition ${shown ? "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800" : "border-dashed border-slate-200 text-slate-400 dark:border-slate-800"}`}>
+            <div className={`rounded-md border p-2 font-mono text-[11px] transition ${shown ? "border-ink-300 bg-white dark:border-ink-600 dark:bg-ink-800" : "border-dashed border-ink-200 text-ink-400 dark:border-ink-800"}`}>
               {s.sql}
               {shown && res && <div className={`mt-1 font-semibold ${res.includes("ERROR") || res.includes("!") ? "text-rose-600" : "text-emerald-700 dark:text-emerald-400"}`}>{res}</div>}
             </div>

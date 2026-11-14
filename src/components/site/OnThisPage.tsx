@@ -27,8 +27,8 @@ export function OnThisPage({ headings }: { headings: Heading[] }) {
 
   return (
     <nav aria-label="On this page" className="text-sm">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">On this page</div>
-      <ul className="space-y-1 border-l border-slate-200 dark:border-slate-800">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-400">On this page</div>
+      <ul className="space-y-1 border-l border-ink-200 dark:border-ink-800">
         {headings.map((h) => (
           <li key={h.id}>
             <a
@@ -36,7 +36,7 @@ export function OnThisPage({ headings }: { headings: Heading[] }) {
               className={`-ml-px block border-l py-0.5 transition ${h.depth === 3 ? "pl-6" : "pl-3"} ${
                 active === h.id
                   ? "border-brand-500 font-medium text-brand-700 dark:border-brand-400 dark:text-brand-300"
-                  : "border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  : "border-transparent text-ink-500 hover:text-ink-900 dark:hover:text-white"
               }`}
             >
               {h.text}

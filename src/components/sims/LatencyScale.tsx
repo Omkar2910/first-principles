@@ -52,8 +52,8 @@ export function LatencyScale() {
           const tier = o.ns < 200 ? "bg-emerald-500" : o.ns < 100_000 ? "bg-sky-500" : o.ns < 10_000_000 ? "bg-amber-500" : "bg-rose-500";
           return (
             <div key={o.op} className="flex items-center gap-3 text-xs">
-              <div className="w-48 shrink-0 truncate text-slate-700 dark:text-slate-300 sm:w-60">{o.op}</div>
-              <div className="relative h-4 flex-1 rounded bg-slate-100 dark:bg-slate-800">
+              <div className="w-48 shrink-0 truncate text-ink-700 dark:text-ink-300 sm:w-60">{o.op}</div>
+              <div className="relative h-4 flex-1 rounded bg-ink-100 dark:bg-ink-800">
                 <div className={`h-4 rounded ${tier}`} style={{ width: `${w}%` }} />
               </div>
               <div className="w-24 shrink-0 text-right tabular-nums">{human ? fmtHuman(o.ns) : fmtReal(o.ns)}</div>
@@ -61,7 +61,7 @@ export function LatencyScale() {
           );
         })}
       </div>
-      <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
+      <div className="mt-4 flex flex-wrap gap-3 text-xs text-ink-500">
         <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />CPU</span>
         <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-sky-500" />Memory / local SSD</span>
         <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" />Network in DC / disk</span>

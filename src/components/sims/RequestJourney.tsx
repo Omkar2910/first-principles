@@ -119,9 +119,9 @@ export function RequestJourney() {
   let offset = 0;
 
   return (
-    <section className="not-prose my-8 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Interactive · Request journey</div>
-      <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+    <section className="not-prose my-8 rounded-xl border border-ink-200 bg-white p-5 dark:border-ink-700 dark:bg-ink-900">
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-500">Interactive · Request journey</div>
+      <p className="mb-4 text-sm text-ink-600 dark:text-ink-400">
         Press play to follow one request. Then change the toggles and watch where the time goes.
       </p>
 
@@ -129,7 +129,7 @@ export function RequestJourney() {
       <div className="overflow-x-auto">
         <svg viewBox="0 0 680 130" className="min-w-[560px] w-full" role="img" aria-label="Request path diagram">
           {NODES.slice(0, -1).map((n, i) => (
-            <line key={n.id} x1={n.x} y1={50} x2={NODES[i + 1].x} y2={50} className="stroke-slate-300 dark:stroke-slate-700" strokeWidth={2} strokeDasharray="4 4" />
+            <line key={n.id} x1={n.x} y1={50} x2={NODES[i + 1].x} y2={50} className="stroke-ink-300 dark:stroke-ink-700" strokeWidth={2} strokeDasharray="4 4" />
           ))}
           {current && current.ms > 0 && (
             <line
@@ -152,15 +152,15 @@ export function RequestJourney() {
                   cx={n.x}
                   cy={50}
                   r={22}
-                  className={on ? "" : "fill-white stroke-slate-300 dark:fill-slate-900 dark:stroke-slate-600"}
+                  className={on ? "" : "fill-white stroke-ink-300 dark:fill-ink-900 dark:stroke-ink-600"}
                   fill={on ? current!.color : undefined}
                   stroke={on ? current!.color : undefined}
                   strokeWidth={2}
                 />
-                <text x={n.x} y={92} textAnchor="middle" className="fill-slate-800 text-[12px] font-semibold dark:fill-slate-100">
+                <text x={n.x} y={92} textAnchor="middle" className="fill-ink-800 text-[12px] font-semibold dark:fill-ink-100">
                   {n.label}
                 </text>
-                <text x={n.x} y={108} textAnchor="middle" className="fill-slate-500 text-[10px]">
+                <text x={n.x} y={108} textAnchor="middle" className="fill-ink-500 text-[10px]">
                   {n.sub}
                 </text>
               </g>
@@ -170,16 +170,16 @@ export function RequestJourney() {
       </div>
 
       {/* Current step narration */}
-      <div className="my-4 min-h-[72px] rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+      <div className="my-4 min-h-[72px] rounded-lg bg-ink-50 p-3 text-sm dark:bg-ink-800/60">
         {current ? (
           <>
             <div className="font-semibold" style={{ color: current.color }}>
               Step {active + 1}/{steps.length} · {current.label} · {current.ms} ms
             </div>
-            <div className="mt-1 text-slate-700 dark:text-slate-300">{current.skipped ? `Skipped: ${current.skipped}.` : current.detail}</div>
+            <div className="mt-1 text-ink-700 dark:text-ink-300">{current.skipped ? `Skipped: ${current.skipped}.` : current.detail}</div>
           </>
         ) : (
-          <div className="text-slate-500">Ready. A user in another city opens your product page…</div>
+          <div className="text-ink-500">Ready. A user in another city opens your product page…</div>
         )}
       </div>
 
@@ -189,7 +189,7 @@ export function RequestJourney() {
             setActive(-1);
             setPlaying(true);
           }}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-slate-900"
+          className="rounded-lg bg-ink-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-ink-900"
         >
           ▶ Play
         </button>
@@ -198,7 +198,7 @@ export function RequestJourney() {
             setPlaying(false);
             setActive((a) => Math.min(a + 1, steps.length - 1));
           }}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600"
+          className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm dark:border-ink-600"
         >
           Step →
         </button>
@@ -207,7 +207,7 @@ export function RequestJourney() {
             setPlaying(false);
             setActive(-1);
           }}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600"
+          className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm dark:border-ink-600"
         >
           Reset
         </button>
@@ -222,7 +222,7 @@ export function RequestJourney() {
               <button
                 key={p.rtt}
                 onClick={() => setRtt(p.rtt)}
-                className={`rounded-md border px-2 py-1 text-xs ${rtt === p.rtt ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900" : "border-slate-300 dark:border-slate-600"}`}
+                className={`rounded-md border px-2 py-1 text-xs ${rtt === p.rtt ? "border-ink-900 bg-ink-900 text-white dark:border-white dark:bg-white dark:text-ink-900" : "border-ink-300 dark:border-ink-600"}`}
               >
                 {p.label} · {p.rtt}ms
               </button>
@@ -260,8 +260,8 @@ export function RequestJourney() {
             offset += s.ms;
             return (
               <div key={s.id} className="flex items-center gap-3 text-xs">
-                <div className={`w-44 shrink-0 truncate ${i === active ? "font-semibold" : "text-slate-600 dark:text-slate-400"}`}>{s.label}</div>
-                <div className="relative h-4 flex-1 rounded bg-slate-100 dark:bg-slate-800">
+                <div className={`w-44 shrink-0 truncate ${i === active ? "font-semibold" : "text-ink-600 dark:text-ink-400"}`}>{s.label}</div>
+                <div className="relative h-4 flex-1 rounded bg-ink-100 dark:bg-ink-800">
                   {s.ms > 0 && (
                     <div className="absolute h-4 rounded transition-all duration-500" style={{ left: `${left}%`, width: `${Math.max(width, 0.8)}%`, background: s.color }} />
                   )}

@@ -74,7 +74,7 @@ export function HashRingSim() {
 
       <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
         <svg viewBox="0 0 300 300" className="w-64 shrink-0">
-          <circle cx={150} cy={150} r={120} fill="none" className="stroke-slate-300 dark:stroke-slate-700" strokeWidth={2} />
+          <circle cx={150} cy={150} r={120} fill="none" className="stroke-ink-300 dark:stroke-ink-700" strokeWidth={2} />
           {KEYS.map((k) => {
             const [x, y] = pt(hash(k), 108);
             return <circle key={k} cx={x} cy={y} r={3} fill={COLORS[ring.map[k]]} />;
@@ -89,13 +89,13 @@ export function HashRingSim() {
             <div key={n} className="flex items-center gap-2 text-xs">
               <span className="h-3 w-3 rounded-full" style={{ background: COLORS[n] }} />
               <span className="w-16">server {n}</span>
-              <div className="h-3 flex-1 rounded bg-slate-100 dark:bg-slate-800">
+              <div className="h-3 flex-1 rounded bg-ink-100 dark:bg-ink-800">
                 <div className="h-3 rounded" style={{ width: `${(counts[i] / KEYS.length) * 100}%`, background: COLORS[n] }} />
               </div>
               <span className="w-12 text-right tabular-nums">{counts[i]} keys</span>
             </div>
           ))}
-          <p className="pt-1 text-[11px] text-slate-500">Ideal: {(KEYS.length / nodes.length).toFixed(0)} keys each. Without virtual nodes, the split is often very uneven.</p>
+          <p className="pt-1 text-[11px] text-ink-500">Ideal: {(KEYS.length / nodes.length).toFixed(0)} keys each. Without virtual nodes, the split is often very uneven.</p>
         </div>
       </div>
 

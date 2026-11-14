@@ -6,19 +6,39 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bricolage);
 
-  /* Brand accent: actions, links, focus and "you are here". Swap the ramp here to rebrand. */
-  --color-brand-50: var(--color-indigo-50);
-  --color-brand-100: var(--color-indigo-100);
-  --color-brand-200: var(--color-indigo-200);
-  --color-brand-300: var(--color-indigo-300);
-  --color-brand-400: var(--color-indigo-400);
-  --color-brand-500: var(--color-indigo-500);
-  --color-brand-600: var(--color-indigo-600);
-  --color-brand-700: var(--color-indigo-700);
-  --color-brand-800: var(--color-indigo-800);
-  --color-brand-900: var(--color-indigo-900);
-  --color-brand-950: var(--color-indigo-950);
+  /* Neutrals: warm "ink on paper" greys used for text, borders and surfaces. */
+  --color-ink-50: var(--color-stone-50);
+  --color-ink-100: var(--color-stone-100);
+  --color-ink-200: var(--color-stone-200);
+  --color-ink-300: var(--color-stone-300);
+  --color-ink-400: var(--color-stone-400);
+  --color-ink-500: var(--color-stone-500);
+  --color-ink-600: var(--color-stone-600);
+  --color-ink-700: var(--color-stone-700);
+  --color-ink-800: var(--color-stone-800);
+  --color-ink-900: var(--color-stone-900);
+  --color-ink-950: var(--color-stone-950);
+
+  /* Page background in light mode: off-white paper, so white cards sit on top of it. */
+  --color-paper: oklch(0.985 0.006 80);
+}
+
+/* Brand accent ("ember"): actions, links, focus and "you are here". Swap the ramp here to rebrand.
+   Contrast-checked: white text passes AA on 600 and darker; 600 text passes on paper, 400 on ink-950. */
+@theme {
+  --color-brand-50: oklch(0.975 0.015 45);
+  --color-brand-100: oklch(0.945 0.035 45);
+  --color-brand-200: oklch(0.89 0.07 42);
+  --color-brand-300: oklch(0.81 0.11 40);
+  --color-brand-400: oklch(0.72 0.16 38);
+  --color-brand-500: oklch(0.63 0.19 36);
+  --color-brand-600: oklch(0.555 0.19 34);
+  --color-brand-700: oklch(0.49 0.17 33);
+  --color-brand-800: oklch(0.42 0.14 33);
+  --color-brand-900: oklch(0.36 0.11 33);
+  --color-brand-950: oklch(0.25 0.08 33);
 }
 
 html {
@@ -26,11 +46,22 @@ html {
 }
 
 body {
-  @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  @apply bg-paper text-ink-900 dark:bg-ink-950 dark:text-ink-100;
 }
 
 ::selection {
   @apply bg-brand-200 text-brand-950 dark:bg-brand-500/40 dark:text-white;
+}
+
+/* Dropdowns: the native arrow ignores padding and hugs the edge, so draw our own chevron with room
+   around it. `!important` on padding-right beats the px-* utilities set on individual selects. */
+select:not([multiple]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%2378716c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 12px;
+  padding-right: 2.25rem !important;
 }
 
 /* One focus style everywhere, only for keyboard users. */
@@ -38,11 +69,21 @@ body {
   @apply rounded-md outline-2 outline-offset-2 outline-brand-500;
 }
 
+/* Display face for headings, including lesson prose. */
+h1,
+h2,
+.prose h3,
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
 /* Faint engineering-paper grid used behind hero areas. */
 .bg-grid {
   background-image:
-    linear-gradient(to right, rgb(15 23 42 / 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgb(41 37 36 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(41 37 36 / 0.06) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, black 40%, transparent 100%);
 }
@@ -58,7 +99,7 @@ figure[data-rehype-pretty-code-figure] {
 }
 figure[data-rehype-pretty-code-figure] pre {
   /* Explicit text color: unhighlighted blocks (```text) would otherwise inherit prose's light pre color. */
-  @apply my-0 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 py-4 text-[13px] leading-relaxed text-slate-800 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-200;
+  @apply my-0 overflow-x-auto rounded-xl border border-ink-200 bg-ink-50 py-4 text-[13px] leading-relaxed text-ink-800 dark:border-ink-800 dark:bg-ink-900/70 dark:text-ink-200;
 }
 figure[data-rehype-pretty-code-figure] pre > code {
   @apply grid;
@@ -77,7 +118,7 @@ code[data-theme] span {
   content: none;
 }
 .prose :not(pre) > code {
-  @apply rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.85em] font-normal dark:border-slate-700/70 dark:bg-slate-800/70;
+  @apply rounded-md border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[0.85em] font-normal dark:border-ink-700/70 dark:bg-ink-800/70;
 }
 
 /* Tables in lessons: contained, scrollable on phones, quiet header. */
@@ -85,5 +126,5 @@ code[data-theme] span {
   @apply block overflow-x-auto text-sm sm:table;
 }
 .prose thead th {
-  @apply text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400;
+  @apply text-xs font-semibold tracking-wide text-ink-500 uppercase dark:text-ink-400;
 }

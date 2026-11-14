@@ -18,7 +18,7 @@ npm run check:links  # verify every external link in content/ and docs/
 
 ## What's inside
 
-**12 tracks · 131 lessons (~117k words) · 19 interactive simulators**
+**12 tracks · 131 lessons (~117k words) · 19 interactive simulators · 66 interview questions · 12 design drills**
 
 | # | Track | Lessons |
 |---|---|---|

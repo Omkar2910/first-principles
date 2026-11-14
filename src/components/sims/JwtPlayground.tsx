@@ -43,17 +43,17 @@ export function JwtPlayground() {
         value={payload}
         onChange={(e) => setPayload(e.target.value)}
         rows={2}
-        className="w-full rounded-lg border border-slate-300 bg-slate-50 p-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
+        className="w-full rounded-lg border border-ink-300 bg-ink-50 p-2 font-mono text-xs dark:border-ink-600 dark:bg-ink-800"
       />
-      <button onClick={() => setPayload(ORIGINAL)} className="mt-1 text-xs text-slate-500 underline">
+      <button onClick={() => setPayload(ORIGINAL)} className="mt-1 text-xs text-ink-500 underline">
         Reset payload
       </button>
 
-      <div className="mt-4 break-all rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed dark:bg-slate-800/60">
+      <div className="mt-4 break-all rounded-lg bg-ink-50 p-3 font-mono text-[11px] leading-relaxed dark:bg-ink-800/60">
         <span className="text-rose-600">{enc(HEADER)}</span>.<span className="text-violet-600 dark:text-violet-400">{enc(payload)}</span>.
         <span className="text-sky-600">{issuedSig}</span>
       </div>
-      <div className="mt-1 flex gap-4 text-[11px] text-slate-500">
+      <div className="mt-1 flex gap-4 text-[11px] text-ink-500">
         <span className="text-rose-600">header</span>
         <span className="text-violet-600 dark:text-violet-400">payload</span>
         <span className="text-sky-600">signature (from login)</span>

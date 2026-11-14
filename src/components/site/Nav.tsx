@@ -9,6 +9,7 @@ export const NAV = [
   { href: "/#roadmap", match: "/tracks", label: "Roadmap" },
   { href: "/review", match: "/review", label: "Review", badge: true },
   { href: "/practice", match: "/practice", label: "Practice" },
+  { href: "/interview", match: "/interview", label: "Interview" },
   { href: "/progress", match: "/progress", label: "Progress" },
   { href: "/guide", match: "/guide", label: "Guide" },
 ];
@@ -31,8 +32,8 @@ export function NavLinks() {
             aria-current={active ? "page" : undefined}
             className={`relative flex items-center rounded-md px-2.5 py-1.5 transition-colors ${
               active
-                ? "font-medium text-slate-900 dark:text-white"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white"
+                ? "font-medium text-ink-900 dark:text-white"
+                : "text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800/70 dark:hover:text-white"
             }`}
           >
             {n.label}
@@ -71,29 +72,29 @@ export function MobileMenu() {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 text-ink-600 dark:border-ink-700 dark:text-ink-300"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
           {open ? <path d="M4 4l8 8M12 4l-8 8" /> : <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />}
         </svg>
       </button>
-      {open && <div className="fixed inset-0 top-14 bg-slate-950/40 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />}
+      {open && <div className="fixed inset-0 top-14 bg-ink-950/40 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />}
       {open && (
-        <div className="absolute inset-x-0 top-14 border-b border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+        <div className="absolute inset-x-0 top-14 border-b border-ink-200 bg-white px-4 py-3 shadow-lg dark:border-ink-800 dark:bg-ink-950">
           <nav className="flex flex-col">
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
                 className={`flex items-center rounded-lg px-3 py-2.5 ${
-                  isActive(n.match) ? "bg-slate-100 font-medium dark:bg-slate-800" : "text-slate-600 dark:text-slate-300"
+                  isActive(n.match) ? "bg-ink-100 font-medium dark:bg-ink-800" : "text-ink-600 dark:text-ink-300"
                 }`}
               >
                 {n.label}
                 {n.badge && <DueBadge />}
               </Link>
             ))}
-            <Link href="/tracks/career-ladder/self-assessment" className="rounded-lg px-3 py-2.5 text-slate-600 dark:text-slate-300">
+            <Link href="/tracks/career-ladder/self-assessment" className="rounded-lg px-3 py-2.5 text-ink-600 dark:text-ink-300">
               Self-assessment
             </Link>
           </nav>

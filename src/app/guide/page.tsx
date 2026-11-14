@@ -17,7 +17,7 @@ export default async function GuidePage() {
           <PageHeader eyebrow="Help" title="How to use First Principles">
             {doc.description}
           </PageHeader>
-          <div className="prose prose-slate max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-headings:tracking-tight prose-h2:mt-14 prose-h2:text-2xl prose-a:text-brand-700 dark:prose-a:text-brand-300 prose-td:align-top">
+          <div className="prose prose-stone max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-headings:tracking-tight prose-h2:mt-14 prose-h2:text-2xl prose-a:text-brand-700 dark:prose-a:text-brand-300 prose-td:align-top">
             {content}
           </div>
         </div>

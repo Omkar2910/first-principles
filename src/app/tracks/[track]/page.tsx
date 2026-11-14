@@ -27,19 +27,19 @@ export default async function TrackPage({ params }: PageProps<"/tracks/[track]">
 
   return (
     <div>
-      <section className="relative overflow-hidden border-b border-slate-200/70 dark:border-slate-800/70">
+      <section className="relative overflow-hidden border-b border-ink-200/70 dark:border-ink-800/70">
         <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto max-w-4xl px-4 pt-10 pb-10 sm:px-6">
-          <nav aria-label="Breadcrumb" className="text-sm text-slate-500">
-            <Link href="/#roadmap" className="hover:text-slate-900 dark:hover:text-white">
+          <nav aria-label="Breadcrumb" className="text-sm text-ink-500">
+            <Link href="/#roadmap" className="hover:text-ink-900 dark:hover:text-white">
               Roadmap
             </Link>
-            <span className="mx-2 text-slate-300 dark:text-slate-600">/</span>
+            <span className="mx-2 text-ink-300 dark:text-ink-600">/</span>
             <span>Track {String(track.number).padStart(2, "0")}</span>
           </nav>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">{track.title}</h1>
           <p className="mt-2 text-lg font-medium text-brand-700 dark:text-brand-300">{track.tagline}</p>
-          <p className="mt-4 max-w-2xl text-pretty text-slate-600 dark:text-slate-400">{track.description}</p>
+          <p className="mt-4 max-w-2xl text-pretty text-ink-600 dark:text-ink-400">{track.description}</p>
           <div className="mt-5 flex flex-wrap gap-1.5">
             {track.topics.map((t) => (
               <Badge key={t}>{t}</Badge>
@@ -49,7 +49,7 @@ export default async function TrackPage({ params }: PageProps<"/tracks/[track]">
             <TrackCta track={slug} slugs={slugs} />
             <div className="flex-1 sm:max-w-sm">
               <TrackProgress track={slug} slugs={slugs} />
-              <div className="mt-1.5 text-xs text-slate-500">
+              <div className="mt-1.5 text-xs text-ink-500">
                 {lessons.length} lessons · about {Math.round(minutes / 60)} hours
               </div>
             </div>
@@ -61,7 +61,7 @@ export default async function TrackPage({ params }: PageProps<"/tracks/[track]">
         {groupBySection(lessons).map((group) => (
           <section key={group.section ?? "all"} className="mb-8">
             {group.section && <Eyebrow className="mb-3">{group.section}</Eyebrow>}
-            <Card className="divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
+            <Card className="divide-y divide-ink-100 overflow-hidden dark:divide-ink-800">
               {group.lessons.map((l) => (
                 <LessonRow
                   key={l.slug}
@@ -72,7 +72,7 @@ export default async function TrackPage({ params }: PageProps<"/tracks/[track]">
                   index={lessons.indexOf(l) + 1}
                   meta={
                     <>
-                      <span className="text-xs tabular-nums text-slate-500">{l.minutes} min</span>
+                      <span className="text-xs tabular-nums text-ink-500">{l.minutes} min</span>
                       <LevelBadge level={l.level} />
                     </>
                   }
